@@ -49,3 +49,6 @@ recon/LineOfSightAwareness.config.json
 tools/roster/enemies.json
 EndlessMode/data/*.config
 EndlessMode/data/*.config.json
+
+# QuantumBreakRenewed is a separate mod (a port of nanodanc's QuantumBreak) kept out of this repository entirely
+QuantumBreakRenewed/
