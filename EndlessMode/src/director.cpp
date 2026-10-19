@@ -1242,6 +1242,13 @@ namespace director {
         level = g_results_level;
         return true;
     }
+    std::vector<std::pair<std::string, uintptr_t>> LiveEntities() {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        std::vector<std::pair<std::string, uintptr_t>> out;
+        for (const auto& en : g_enemies)
+            if (en.entity && en.path) out.push_back({ roster::ShortName(en.path), en.entity });
+        return out;
+    }
     std::vector<std::string> UnitsInPlay() {
         std::lock_guard<std::mutex> lock(g_mutex);
         return { g_unit_preloads.begin(), g_unit_preloads.end() };

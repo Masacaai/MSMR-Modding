@@ -252,6 +252,8 @@ namespace {
             return;
         }
         g_callback(ui, hash, args, count);
+        // A preset rewrote other rows: build the tabs again so every row shows its new value (as after RESET ALL).
+        if (g_built == 1 && settings::TakeRebuild()) reinterpret_cast<void(__fastcall*)(void*)>(g_base + kOpenOptions)(ui);
     }
     int __fastcall TypeHook(void* sys, int setting) {   // 0 a list, 5 a heading
         const int r = RowOf(setting);

@@ -107,3 +107,26 @@ Also in the repo (possible later use, none needed now): audio through Windows MC
 (`19bb430`), hero/dodge managers, bot/allegiance RTTI lists (`SimpleAllegiance` kBlueTeam/kPolice/kFisk/kMaggia/kSableEnemy), Havok/body details,
 and a tools/ folder of in-game probe scripts (the same command-file style as ours). Music: the sound posted through SendEvent with hash `0x4b5f5740` hints
 that sounds may be posted as events through the Event system - to confirm with the recorder.
+
+## 4. Findings of 2026-10-19 (static, not yet run in game)
+
+**Music: the exe exports the Wwise API.** `Spider-Man.exe` has a PE export table of 381 entries and they are the Wwise SDK's C++ names
+(`?PostEvent@SoundEngine@AK@@...`, `SetState`, `SetSwitch`, `SetRTPCValue`, `ExecuteActionOnEvent`, `StopPlayingID`, `PostTrigger`, `StopAll`...), so
+`GetProcAddress` finds them; no signatures needed. `src/audio.cpp` hooks them as a recorder (`audio on` / `audio off` / `audio mark <text>`), writing
+`EndlessMode_audio.txt` (ids, game object, caller) to the data folder, and can post (`audio post <event> [obj]`, `audio state <group> <state>`,
+`audio switch`, `audio rtpc`). Wwise ids are FNV-1 of the lower-cased name (checked: 2167 of the first 3000 names in `Events.wwiselookup` have their id in the file);
+`tools/assets/wwise_names.py` turns a recording back into names. Needed from the maintainer: record a crime and a hideout, then play the Arena briefly.
+Open: which game object the music plays on, whether the bank for a cue is loaded in the arena (the lookup auto-loads banks when its events are referenced), the
+intensity states and RTPCs the combat music reacts to.
+
+**Customization: SpidyVR** (section 3) is the way in; built as `menu.cpp` + `settings.cpp`: a PRESET row, run, difficulty, rewards, curses, you, enemy mix, factions
+(switches, order, slots, budget), bosses (per faction), Horde. Boons and curses are fully configurable; pool lists can also be edited in `EndlessArena_pools.txt`.
+
+**Allegiance** (allies, no infighting): every fighter has a `SimpleAllegiance` component (vtable `exe+4f89dc0`, team int at `+0x48`); the mission action that
+changes it calls `exe+2117e00 (this, value)`. Enum (order of the names at `exe+39470d8`): 0 kNeutral, 1 kBlueTeam (the hero), 2 kRedTeam, 3 kSuperFriends,
+4 kBaseDestructables, 5 kHeroOnlyTarget, 6 kFreeForAll, 7 kPolice, 8 kInnerDemons, 9 kSableFriendly, 10 kSableEnemy, 11 kFisk, 12 kTaskmaster, 13 kPrisoner,
+14 kHammerhead, 15 kMaggia. There are also `Team` components with `SetTeamEvent` / `ToggleTeamEvent` / `GetTeamEvent`, and `AllyBot` companions (Silver Sable's ally
+fight). `alleg` (dev command) lists the hero's and every live enemy's side and changes them; the experiments to run: (1) `alleg set kBlueTeam` - do they stop attacking
+you, and do they attack the rest? (2) `alleg set kFisk` (one common side) - does infighting stop? (3) `alleg set kFreeForAll` - do they all fight each other?
+
+**Boss phases (Kingpin):** see docs/GAME_INTERNALS.md. The director now steps Kingpin through his health phases.

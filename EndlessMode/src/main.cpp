@@ -25,6 +25,7 @@
 #include "score.h"
 #include "ui.h"
 #include "uilog.h"
+#include "allegiance.h"
 #include "audio.h"
 #include "menu.h"
 #include "progress.h"
@@ -1124,6 +1125,35 @@ static void RunCommand(const std::string& line) {
         std::string text;
         in >> type >> std::quoted(text);
         ui::ShowTypedMessage(type, text);
+    } else if (cmd == "alleg") {
+        // alleg                     : the hero's allegiance and every live enemy's
+        // alleg set <value|name>    : every live enemy joins that side (0-15 or kBlueTeam ... kFreeForAll; the hero is kBlueTeam)
+        // alleg one <n> <value>     : only the n-th enemy of the list
+        // Recon 2026-10-19 (allegiance.h): does an enemy on the hero's side fight the others, and does infighting stop if all share a side?
+        std::string sub;
+        in >> sub;
+        if (!gamethread::Installed()) { LOG("alleg: hook not installed"); return; }
+        HeroInfo h = ReadHero();
+        auto list = director::LiveEntities();
+        int target = -1, which = -1;
+        if (sub == "set") { std::string v; in >> v; target = allegiance::Parse(v); if (target < 0) { LOG("alleg: unknown side '%s'", v.c_str()); return; } }
+        if (sub == "one") { std::string v; in >> which >> v; target = allegiance::Parse(v); if (target < 0 || which < 0) { LOG("alleg: usage: alleg one <n> <side>"); return; } }
+        uintptr_t hero = h.actor;
+        gamethread::Post([list, hero, target, which] {
+            int hv = -1;
+            if (hero && allegiance::Get(hero, hv)) LOG("alleg: hero is %d (%s)", hv, allegiance::Name(hv));
+            else LOG("alleg: hero allegiance unreadable");
+            for (size_t i = 0; i < list.size(); i++) {
+                int v = -1;
+                bool have = allegiance::Get(list[i].second, v);
+                std::string what = have ? std::string(allegiance::Name(v)) : "no SimpleAllegiance";
+                if (target >= 0 && (which < 0 || which == (int)i) && have) {
+                    bool ok = allegiance::Set(list[i].second, target);
+                    what += ok ? std::string(" -> ") + allegiance::Name(target) : " (set failed)";
+                }
+                LOG("alleg: [%zu] %s: %s", i, list[i].first.c_str(), what.c_str());
+            }
+        });
     } else if (cmd == "audio") {
         // audio on | off | mark <text> | post <event> [obj] | state <group> <state> | switch <group> <switch> [obj] | rtpc <name> <value> [obj]
         // Records the game's Wwise calls to <data folder>\EndlessMode_audio.txt, or makes one (see audio.h).

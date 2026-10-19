@@ -47,6 +47,8 @@ namespace director {
     void SetPaused(bool on);   // freezes the director's loops (spawns, checks) while the world is frozen by a prompt
     // Horde results of the run that just ended (score breakdown, best, final rank), once; false if none waiting.
     bool TakeResults(score::Results& out, int& level);
+    // The entities of the enemies the run has spawned (name, entity); for dev commands.
+    std::vector<std::pair<std::string, uintptr_t>> LiveEntities();
     std::vector<std::string> UnitsInPlay();   // goon types currently preloaded by the run (for `parade`)
     void LogStatus();
     void SetForceAggro(bool on);

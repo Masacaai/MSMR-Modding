@@ -210,3 +210,8 @@ Alongside some bugfixing:
 - Ideas from the maintainer: (a) faction allegiances - allies and bosses fighting beside the player, and toggling enemy infighting. Lead: `SimpleAllegiance`
   (kBlueTeam = the hero, kPolice, kFisk, kMaggia, kSableEnemy...) and `Target::TargetData` RTTI in SpidyVR/docs/REFERENCE.md; field offsets unknown.
   Needs recon. (b) reuse SpidyVR as much as possible, with credit.
+
+### 2026-10-19 (evening plan)
+- Built, not yet run in game: settings tab with presets, boon/curse/reward customization, damage and wave-heal settings, boss phase stepping (Kingpin), Wwise recorder
+  (`audio`), allegiance experiments (`alleg`). See docs/NEXT_RELEASE_RECON.md section 4.
+- To try first: open Settings, see the ENDLESS ARENA tab; then `audio on` while in a crime/hideout; then `alleg set kBlueTeam` with enemies up.

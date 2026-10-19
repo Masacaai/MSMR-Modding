@@ -34,4 +34,10 @@ namespace settings {
     bool Changed();                                        // anything differs from the defaults
 
     void LogAll();
+
+    // Presets: a PRESET row whose choice sets many other rows at once (the settings you changed since are kept as you left them).
+    // Choosing one applies it; the menu rebuilds so every row shows its new value. 0 PICK ONE (nothing happens) ... see settings.cpp.
+    bool ApplyPreset(int index);              // false for 0 or an unknown preset
+    bool SetValue(const std::string& key, int value);   // the choice whose value is `value`
+    bool TakeRebuild();                       // a preset was applied: the menu should be rebuilt (true once)
 }

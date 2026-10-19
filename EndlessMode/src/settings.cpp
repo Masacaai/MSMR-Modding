@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <atomic>
 #include <mutex>
 
 namespace settings {
@@ -41,6 +42,10 @@ namespace settings {
         }
 
         void Build() {
+            Head("PRESETS");
+            List("preset", "PRESET", "Pick one to set many rows at once. DEFAULT puts everything back. You can still change any row afterwards. Row changes you make before choosing a preset are replaced.",
+                 { "PICK ONE", "DEFAULT", "CASUAL", "BRUTAL", "CHAOS", "BOSS FOCUS", "GLASS CANNON" }, {}, 0);
+
             Head("RUN");
             List("countdown", "COUNTDOWN", "Seconds of Get Ready before a run starts.", { "3", "5", "10", "15", "30" }, { 3, 5, 10, 15, 30 }, 0);
             Switch("boons", "BOONS AND CURSES", "Campaign: pick a power-up after each wave, and take the curse that comes with it. OFF: no picks, you start with your normal suit and gadgets.", true);
@@ -174,6 +179,52 @@ namespace settings {
         }
     }
 
+    static std::atomic<bool> g_rebuild{ false };
+    bool TakeRebuild() { return g_rebuild.exchange(false); }
+
+    const std::vector<Row>& Rows();
+    bool SetValue(const std::string& key, int value) {
+        const auto& rows = Rows();
+        for (size_t i = 0; i < rows.size(); i++) {
+            if (rows[i].key != key) continue;
+            if (rows[i].choices.empty()) { SetIndex(i, value ? 1 : 0); return true; }
+            for (size_t k = 0; k < rows[i].choices.size(); k++) {
+                int v = k < rows[i].values.size() ? rows[i].values[k] : (int)k;
+                if (v == value) { SetIndex(i, (int)k); return true; }
+            }
+            LOG("settings: no choice %d in row %s", value, key.c_str());
+            return false;
+        }
+        return false;
+    }
+
+    bool ApplyPreset(int index) {
+        struct Pair { const char* key; int value; };
+        static const std::vector<std::vector<Pair>> presets = {
+            /* 0 */ {},
+            /* 1 DEFAULT */ {},
+            /* 2 CASUAL */ { { "count", 75 }, { "field", 24 }, { "crew", 50 }, { "elites", 50 }, { "dmg_in", 50 }, { "wave_heal", 25 },
+                             { "mix_rocket", 50 }, { "mix_sniper", 50 }, { "mix_heavy", 50 }, { "curse_when", 2 } },
+            /* 3 BRUTAL */ { { "count", 150 }, { "field", 60 }, { "crew", 200 }, { "elites", 200 }, { "dmg_in", 150 }, { "curse_when", 1 },
+                             { "curse_forced", 1 }, { "curse_strength", 150 }, { "bosscount", 2 } },
+            /* 4 CHAOS */ { { "count", 200 }, { "field", 80 }, { "chapter", 2 }, { "bosscount", 3 }, { "crew", 300 }, { "elites", 200 },
+                            { "mix_melee", 200 }, { "mix_ranged", 200 }, { "mix_shield", 200 }, { "mix_rocket", 200 }, { "mix_sniper", 200 },
+                            { "mix_heavy", 200 }, { "mix_special", 200 }, { "order", 1 }, { "perrun", 6 }, { "budget", 50 },
+                            { "dmg_out", 200 }, { "reward_every", 1 }, { "reward_choices", 4 }, { "curse_when", 1 } },
+            /* 5 BOSS FOCUS */ { { "chapter", 2 }, { "bosscount", 2 }, { "crew", 50 }, { "count", 75 }, { "mix_melee", 50 }, { "mix_ranged", 50 },
+                                 { "mix_shield", 50 }, { "mix_rocket", 50 }, { "mix_sniper", 50 }, { "mix_heavy", 50 }, { "mix_special", 50 } },
+            /* 6 GLASS CANNON */ { { "dmg_out", 300 }, { "dmg_in", 300 }, { "wave_heal", 10 } },
+        };
+        if (index <= 0 || index >= (int)presets.size()) return false;
+        const auto& rows = Rows();
+        for (size_t i = 0; i < rows.size(); i++)
+            if (!rows[i].heading() && rows[i].key != "preset") SetIndex(i, rows[i].def);
+        for (const auto& p : presets[(size_t)index]) SetValue(p.key, p.value);
+        g_rebuild = true;
+        LOG("settings: preset %d applied", index);
+        return true;
+    }
+
     const std::vector<Row>& Rows() {
         std::lock_guard<std::mutex> lock(g_mutex);
         if (g_rows.empty()) { Build(); g_index.assign(g_rows.size(), 0); for (size_t i = 0; i < g_rows.size(); i++) g_index[i] = g_rows[i].def; }
@@ -201,13 +252,18 @@ namespace settings {
 
     void SetIndex(size_t row, int index) {
         Rows();
-        std::lock_guard<std::mutex> lock(g_mutex);
-        if (row >= g_rows.size() || g_rows[row].heading()) return;
-        int n = g_rows[row].choices.empty() ? 2 : (int)g_rows[row].choices.size();
-        index = std::clamp(index, 0, n - 1);
-        if (g_index[row] == index) return;
-        g_index[row] = index;
-        Save(row);
+        bool preset = false;
+        {
+            std::lock_guard<std::mutex> lock(g_mutex);
+            if (row >= g_rows.size() || g_rows[row].heading()) return;
+            int n = g_rows[row].choices.empty() ? 2 : (int)g_rows[row].choices.size();
+            index = std::clamp(index, 0, n - 1);
+            if (g_index[row] == index) return;
+            g_index[row] = index;
+            Save(row);
+            preset = g_rows[row].key == "preset";
+        }
+        if (preset) ApplyPreset(index);
     }
 
     void ResetRow(size_t row) { Rows(); SetIndex(row, g_rows[row].def); }
