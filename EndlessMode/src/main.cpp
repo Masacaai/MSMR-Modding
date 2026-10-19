@@ -25,6 +25,7 @@
 #include "score.h"
 #include "ui.h"
 #include "uilog.h"
+#include "audio.h"
 #include "menu.h"
 #include "progress.h"
 #include "settings.h"
@@ -1123,6 +1124,19 @@ static void RunCommand(const std::string& line) {
         std::string text;
         in >> type >> std::quoted(text);
         ui::ShowTypedMessage(type, text);
+    } else if (cmd == "audio") {
+        // audio on | off | mark <text> | post <event> [obj] | state <group> <state> | switch <group> <switch> [obj] | rtpc <name> <value> [obj]
+        // Records the game's Wwise calls to <data folder>\EndlessMode_audio.txt, or makes one (see audio.h).
+        std::string sub;
+        in >> sub;
+        if (sub == "on") audio::Record(true);
+        else if (sub == "off") audio::Record(false);
+        else if (sub == "mark") { std::string rest; std::getline(in, rest); audio::Mark(rest); }
+        else if (sub == "post") { std::string ev; unsigned long long obj = 0; in >> ev >> std::hex >> obj; audio::Install(); LOG("audio: post %s -> play id %u", ev.c_str(), audio::Post(ev.c_str(), obj)); }
+        else if (sub == "state") { std::string g, st; in >> g >> st; audio::Install(); LOG("audio: state %s=%s -> %d", g.c_str(), st.c_str(), (int)audio::SetState(g.c_str(), st.c_str())); }
+        else if (sub == "switch") { std::string g, sw; unsigned long long obj = 0; in >> g >> sw >> std::hex >> obj; audio::Install(); LOG("audio: switch %s=%s -> %d", g.c_str(), sw.c_str(), (int)audio::SetSwitch(g.c_str(), sw.c_str(), obj)); }
+        else if (sub == "rtpc") { std::string n; float v = 0; unsigned long long obj = 0; in >> n >> v >> std::hex >> obj; audio::Install(); LOG("audio: rtpc %s=%.2f -> %d", n.c_str(), v, (int)audio::SetRtpc(n.c_str(), v, obj)); }
+        else LOG("audio: usage: audio on|off|mark <text>|post <event> [obj]|state <group> <state>|switch <group> <switch> [obj]|rtpc <name> <value> [obj]");
     } else if (cmd == "secret") {
         // secret seen all | secret status : the lifetime progress that unlocks the secret chapter (src/SECRET.md)
         std::string sub;
