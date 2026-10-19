@@ -32,7 +32,7 @@ namespace score {
     };
     // Score needed for the results panel's three tier banners (it prints AMAZING / SPECTACULAR / ULTIMATE LEVEL).
     constexpr int kTierScores[3] = { 2000, 5000, 10000 };   // both modes (Horde used 8000/20000/40000 before 2026-10-16)
-    Results CampaignEnd(int wave, int kills, int hits_dealt, int hits_taken);   // summary of a Campaign run (best kills kept in a file)
+    Results CampaignEnd(int wave, int kills, int hits_dealt, int hits_taken, int secret_bonus = 0);   // summary of a Campaign run (best kills kept in a file)
     Results End(unsigned now_ms, int kills);                 // kills go into the history file
 
     // Finished Horde runs, oldest first (scripts\EndlessMode_horde_scores.csv).

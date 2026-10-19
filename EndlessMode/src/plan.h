@@ -49,6 +49,12 @@ namespace plan {
         std::array<float, 10> role_mult{ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };   // per Role: weight and cap (0 = never)
         // Per faction id: "" random, "none", or the name of the boss it always sends (even if untested).
         std::map<std::string, std::string> boss_pick;
+
+        // The secret Sinister Six chapter (src/SECRET.md; not in any public document). sinister_at is the
+        // chapter number (counted from 0 over the whole run) the event takes; chapters after it move on by one.
+        int sinister_at = -1;
+        std::shared_ptr<roster::Faction> sinister;                 // the curated crowd of the six factions
+        std::vector<const roster::Boss*> sinister_bosses;          // the finale's bosses
     };
 
     struct WavePlan {
@@ -63,6 +69,7 @@ namespace plan {
         float elite_chance = 0.0f;   // chance a goon is drawn from the faction's Elite units instead
         std::array<float, kRoles> weights{};
         std::array<int, kRoles> caps{};   // max alive per role (readability: few snipers/rockets at once)
+        bool sinister = false;       // a wave of the secret Sinister Six chapter
         std::string kind;            // "skirmish", "assault", "full force", "boss", "boss+goons", "multi-boss"
         std::string title;           // HUD banner
         std::shared_ptr<roster::Faction> mixed;      // Horde: the merged roster of all factions in play (owns faction)

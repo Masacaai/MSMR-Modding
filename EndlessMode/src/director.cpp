@@ -15,6 +15,7 @@
 #include "plan.h"
 #include "score.h"
 #include "scan.h"
+#include "progress.h"
 #include "settings.h"
 #include "spawn.h"
 #include "stats.h"
@@ -73,6 +74,8 @@ namespace director {
         bool never_left_checked = false;   // the "never left its spawn spot" check (cages) was done
         int spawn_point = -1;         // arena point it spawned at (any role), for blacklisting stragglers
         DWORD floor_since = 0;        // boss finisher: when it first sat at <= 1 HP
+        DWORD phase_check = 0;        // boss phases: last time we looked for a boss pinned at its phase floor
+        bool phase_logged = false;
         spawn::Vec3 anchor{};         // straggler check: where it last was 2 m away from
         DWORD anchor_time = 0;
         uintptr_t head = 0;           // separate head actor (found once it's alive), removed along with the body
@@ -423,6 +426,19 @@ namespace director {
                 }
                 if (readable && hp != en.last_health) { en.last_health = hp; en.last_change = now; }
                 if (readable && hp > 0.0f) en.seen_alive = true;
+                // The secret finale must never deadlock: a boss that has not lost health for 90 s (and has been out for two minutes)
+                // is finished, once (Kingpin is the one nobody has beaten outside the story yet).
+                if (g_plan.sinister && en.boss && readable && hp > 0.0f && en.last_change && now - en.spawn_time > 120000 &&
+                    now - en.last_change > 90000 && now - en.floor_since > 0 && en.floor_since < now) {
+                    uintptr_t e = en.entity;
+                    gamethread::Post([e] {
+                        using SetFn = void (*)(uintptr_t, float);
+                        auto set = (SetFn)natives::Get(natives::HealthSet);
+                        if (uintptr_t hc = entity::HealthComponent(e); hc && set) set(hc, 0.0f);
+                    });
+                    LOG("director: %s finished after 90 s without losing health (sinister finale)", en.boss->name);
+                    en.last_change = now + 3600000;   // once
+                }
                 // Boss finisher: outside their missions bosses stop taking damage at a known gate (1 HP for most,
                 // a fraction of max for some: Hammerhead 55%), waiting for a scripted phase change. Reaching the gate
                 // = defeated: drop them to 0 (verified on Taskmaster, Sable, Hammerhead, 2026-10-13).
@@ -442,6 +458,28 @@ namespace director {
                         }
                     } else {
                         en.floor_since = 0;
+                    }
+                }
+                // Boss phases: in a story mission a script moves a boss from phase to phase; here nobody does, so a boss pins at
+                // the floor of its current phase and takes no more damage (Kingpin: no damage at all). Move it on.
+                if (en.boss && now - en.spawn_time > 3000) {
+                    if (!en.phase_logged) {
+                        en.phase_logged = true;
+                        uintptr_t e = en.entity;
+                        const char* nm = en.boss->name;
+                        gamethread::Post([e, nm] { LOG("director: %s health components: %s", nm, entity::DescribeHealth(e).c_str()); });
+                    }
+                    // Only Kingpin for now: the others are proven with their floor-and-finisher handling (docs/GAME_INTERNALS.md (boss phases));
+                    // [secret] phase_all=1 in the ini lets every boss take the phase steps.
+                    static const bool phase_all = GetPrivateProfileIntA("secret", "phase_all", 0, (DataDir() + "\EndlessMode.ini").c_str()) != 0;
+                    if ((phase_all || !strcmp(en.boss->name, "Kingpin")) && now - en.phase_check > 1000) {
+                        en.phase_check = now;
+                        uintptr_t e = en.entity;
+                        const char* nm = en.boss->name;
+                        gamethread::Post([e, nm] {
+                            std::string what;
+                            if (entity::AdvanceBossPhase(e, &what)) LOG("director: %s %s", nm, what.c_str());
+                        });
                     }
                 }
                 if (en.seen_alive && !en.head_checked && readable && hp > 0.0f && now - en.spawn_time > 3000) {
@@ -576,7 +614,10 @@ namespace director {
         std::vector<std::string> load;
         {
             std::lock_guard<std::mutex> lock(g_mutex);   // UnitsInPlay reads it from the command thread
-            for (auto& path : want) if (g_unit_preloads.insert(path).second) { load.push_back(path); added++; }
+            for (auto& path : want) {
+                g_release_pending.erase(path);
+                if (g_unit_preloads.insert(path).second) { load.push_back(path); added++; }
+            }
         }
         for (auto& p : load) spawn::Ready(p);
         std::string names;
@@ -684,6 +725,77 @@ namespace director {
         (void)opt;
     }
 
+    // ---- the secret chapter (src/SECRET.md) ----
+
+    static int SecretInt(const char* key, int def) {
+        return (int)GetPrivateProfileIntA("secret", key, def, (DataDir() + "\\EndlessMode.ini").c_str());
+    }
+    static bool g_sinister_done = false;   // this run beat the finale
+
+    // The crowd of the six factions: a handful of unit types from each (about 24 in all, so the models of the whole chapter
+    // fit in memory at once), and the six bosses.
+    static void BuildSinister(plan::Config& cfg) {
+        auto crowd = std::make_shared<roster::Faction>();
+        crowd->id = "sinister";
+        crowd->name = "The Sinister Six";
+        for (const char* id : { "fisk", "demons", "sable", "hammerhead", "tombstone", "taskmaster" }) {
+            const roster::Faction* f = roster::FindFaction(id);
+            if (!f) continue;
+            bool melee = false, pistol = false, rifle = false, extra = false;
+            for (const auto& u : f->units) {
+                using R = roster::Role;
+                if (u.role == R::Melee && !melee) { melee = true; crowd->units.push_back(u); }
+                else if (u.role == R::Pistol && !pistol) { pistol = true; crowd->units.push_back(u); }
+                else if (u.role == R::Rifle && !rifle) { rifle = true; crowd->units.push_back(u); }
+                else if (!extra && (u.role == R::Special || u.role == R::Rocket || u.role == R::Shield)) { extra = true; crowd->units.push_back(u); }
+            }
+        }
+        cfg.sinister = crowd;
+        cfg.sinister_bosses.clear();
+        for (const char* name : { "Kingpin", "Mister Negative", "Tombstone", "Taskmaster", "Hammerhead", "Silver Sable" }) {
+            if (!strcmp(name, "Kingpin") && !SecretInt("kingpin", 1)) continue;
+            if (const roster::Boss* b = roster::FindBoss(name)) cfg.sinister_bosses.push_back(b);
+        }
+    }
+
+    // After a Campaign wave is cleared: if the next wave opens a chapter, the player has played long enough and has seen
+    // every faction's chapter at least once, the secret chapter may take that place (chance per chapter, once a run).
+    static void MaybeStartSinister(int next_wave) {
+        if (g_cfg.mode != plan::Mode::Campaign || g_cfg.sinister_at >= 0 || !g_cfg.sinister) return;
+        const int per = std::max(1, g_cfg.waves_per_chapter);
+        if ((next_wave - 1) % per != 0) return;
+        const int chapter = (next_wave - 1) / per;
+        if (chapter < SecretInt("min_chapters", 5)) return;
+        if (!SecretInt("ignore_seen", 0))
+            for (const auto& f : roster::Factions())
+                if (!progress::Seen(f.id)) return;
+        if ((int)(g_rng() % 100) >= SecretInt("chance", 20)) return;
+        g_cfg.sinister_at = chapter;
+        progress::Bump("triggered");
+        stats::Event("secret", "sinister six at chapter " + std::to_string(chapter + 1));
+        LOG("director: SECRET chapter %d is the Sinister Six", chapter + 1);
+    }
+
+    // Memory: the chapter's crowd replaces the run's other unit types (queued for release once none is left on the map);
+    // the six bosses stream in well before the finale.
+    static void SyncSinister() {
+        if (!g_cfg.sinister) return;
+        std::set<std::string> want;
+        for (const auto& u : g_cfg.sinister->units) want.insert(u.path);
+        {
+            std::lock_guard<std::mutex> lock(g_mutex);
+            for (auto it = g_unit_preloads.begin(); it != g_unit_preloads.end();) {
+                if (!want.count(*it)) { g_release_pending.insert(*it); it = g_unit_preloads.erase(it); }
+                else ++it;
+            }
+        }
+        SyncPreloads({ g_cfg.sinister.get() });
+        for (const auto* b : g_cfg.sinister_bosses) {
+            spawn::Preload(b->path);
+            if (b->head && *b->head) spawn::Preload(b->head);
+        }
+    }
+
     static plan::Config MakeConfig(const Options& opt, std::mt19937& rng) {
         plan::Config cfg;
         cfg.riot = opt.riot || g_riot_max > 0;
@@ -709,6 +821,10 @@ namespace director {
             cfg.mode = opt.mode == "bossrush" ? plan::Mode::BossRush : plan::Mode::Campaign;
             cfg.order = opt.player_settings ? SettingsOrder(opt, rng, false) : plan::CampaignOrder(opt.shuffle, rng, opt.max_types);
         }
+        if (cfg.mode == plan::Mode::Campaign) {
+            BuildSinister(cfg);
+            if (opt.sinister) cfg.sinister_at = std::max(0, (std::max(opt.first_wave, 1) - 1) / std::max(1, cfg.waves_per_chapter));
+        }
         return cfg;
     }
 
@@ -728,7 +844,9 @@ namespace director {
 
     static void StartWave(int wave) {
         g_plan = plan::Make(g_cfg, wave, g_rng);
-        if (g_cfg.mode != plan::Mode::BossRush) SyncCampaignPreloads(g_plan.chapter);
+        if (g_plan.sinister) SyncSinister();
+        else if (g_cfg.mode != plan::Mode::BossRush) SyncCampaignPreloads(g_plan.chapter);
+        if (g_cfg.mode == plan::Mode::Campaign && !g_plan.sinister && g_plan.step == 0 && g_plan.faction) progress::MarkSeen(g_plan.faction->id);
         boons::AdjustWave(g_plan, g_cfg.horde_max);   // curses: more enemies, mix, elites (never more health)
         g_remaining = g_plan.count;
         g_boss_queue = g_plan.bosses;
@@ -760,7 +878,7 @@ namespace director {
             // and hiding it first left the results panel without buttons, with placeholder tiers, or invisible (user, 2026-10-16).
         } else {
             // Campaign summary (user, 2026-10-15): the same results panel, shown after the run.
-            g_results = score::CampaignEnd(g_plan.wave, l.kills, l.hits_dealt, l.hits_taken);
+            g_results = score::CampaignEnd(g_plan.wave, l.kills, l.hits_dealt, l.hits_taken, g_sinister_done ? 2000 : 0);
             g_results_level = g_plan.wave;
             g_results_ready = true;
         }
@@ -900,6 +1018,7 @@ namespace director {
         g_cfg = MakeConfig(opt, g_rng);
         boons::SetPlayerSettings(opt.player_settings);
         g_kills = 0;
+        g_sinister_done = false;
         g_plan = {};
         g_cull_blocked = g_roam_ok = false;
         g_run_strikes.clear();
@@ -1020,6 +1139,13 @@ namespace director {
                         shown_left = -1;
                         stats::WaveCleared(g_plan.wave);
                         boons::OnWaveCleared(g_plan.wave, g_plan.boss_wave);
+                        if (g_plan.sinister && g_plan.step == std::max(1, g_cfg.waves_per_chapter) - 1) {
+                            g_sinister_done = true;
+                            progress::Bump("defeated");
+                            stats::Event("secret", "sinister six defeated");
+                            hud::Banner("THE SINISTER SIX ARE DOWN", 6.0f);
+                        }
+                        MaybeStartSinister(g_plan.wave + 1);
                         int next_step = (g_plan.step + 1) % std::max(1, g_cfg.waves_per_chapter);
                         bool chapter_end = g_cfg.mode != plan::Mode::BossRush && next_step == 0;
                         next_delay = chapter_end ? kChapterIntermissionMs : kIntermissionMs;
@@ -1044,7 +1170,10 @@ namespace director {
                 if (!chapter_announced && now - cleared_at > next_delay / 2 && g_cfg.mode == plan::Mode::Campaign) {
                     chapter_announced = true;
                     plan::WavePlan peek = plan::Make(g_cfg, wave + 1, g_rng);   // rng use only affects boss order
-                    if (peek.step == 0 && peek.faction) {
+                    if (peek.step == 0 && peek.sinister) {
+                        hud::Banner("CHAPTER " + std::to_string(peek.chapter + 1) + ": THE SINISTER SIX", 5.0f);
+                        hud::Show("The bosses you beat have joined hands. They are coming for you.", 6.0f);
+                    } else if (peek.step == 0 && peek.faction) {
                         char buf[128];
                         snprintf(buf, sizeof(buf), "CHAPTER %d: %s%s", peek.chapter + 1, peek.faction->name,
                                  peek.cycle ? " (they're tougher now)" : "");

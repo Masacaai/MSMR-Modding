@@ -24,6 +24,17 @@ namespace entity {
     uintptr_t HealthComponent(uintptr_t entity);
     bool ReadHealth(uintptr_t entity, float& health, float& max_health);
 
+    // Boss health phases (found 2026-10-19 by disassembly, docs/GAME_INTERNALS.md (boss phases)): a boss's health component (class BossHealth,
+    // vtable exe+3839d38) splits its health into phases: +0x100 phase count, +0x110 current phase, +0x80 max, +0x88 current,
+    // fractions of max at ([+0xb8 + 0x40])[i]. Damage cannot take health below the floor of the current phase (the sum of
+    // the later phases' fractions); in the story a mission script moves to the next phase (SetPhase, exe+32f060). Outside
+    // a mission nobody does, so a boss sits at its floor for good. BossHealthComponent finds the component by its vtable;
+    // DescribeHealth lists every component of the entity with "Health" in its name (vtable RVA, max, current) for the log;
+    // AdvanceBossPhase moves a boss that is pinned at its floor to the next phase. Game thread (calls game code).
+    uintptr_t BossHealthComponent(uintptr_t entity);
+    std::string DescribeHealth(uintptr_t entity);
+    bool AdvanceBossPhase(uintptr_t entity, std::string* what = nullptr);
+
     // Multiplies max health and refills to the new max (game thread: uses Health::SetHealth, which clamps to +0x80).
     // Returns the new max, or 0 on failure.
     float ScaleHealth(uintptr_t entity, float mult);

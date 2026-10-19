@@ -9,6 +9,7 @@
 #include <Windows.h>
 #include <atomic>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
 namespace entity {
@@ -47,14 +48,83 @@ namespace entity {
         return c && memory::Read(c + 0x88, health);
     }
 
+    constexpr uintptr_t kBossHealthVtable = 0x3839d38, kPhaseFloorRva = 0x32efb0, kSetPhaseRva = 0x32f060;
+
+    static uintptr_t VtableOf(uintptr_t inst) {
+        uintptr_t vt = 0;
+        return inst && memory::Read(inst, vt) ? vt : 0;
+    }
+
+    uintptr_t BossHealthComponent(uintptr_t entity) {
+        uintptr_t found = 0;
+        ForEachComponent(entity, [&](const std::string&, uintptr_t inst) {
+            if (!found && inst && VtableOf(inst) == scan::FromRva(kBossHealthVtable)) found = inst;
+        });
+        return found;
+    }
+
+    std::string DescribeHealth(uintptr_t entity) {
+        std::string out;
+        ForEachComponent(entity, [&](const std::string& n, uintptr_t inst) {
+            if (n.find("Health") == std::string::npos && n.find("Boss") == std::string::npos) return;
+            float mx = 0, cur = 0, mx90 = 0, cur98 = 0;
+            memory::Read(inst + 0x80, mx); memory::Read(inst + 0x88, cur);
+            memory::Read(inst + 0x90, mx90); memory::Read(inst + 0x98, cur98);
+            char buf[256];
+            snprintf(buf, sizeof(buf), "%s[vt exe+%llx 80=%.1f 88=%.1f 90=%.1f 98=%.1f]", n.c_str(),
+                     (unsigned long long)(VtableOf(inst) - scan::Game().base), mx, cur, mx90, cur98);
+            out += (out.empty() ? "" : " ") + std::string(buf);
+            if (VtableOf(inst) == scan::FromRva(kBossHealthVtable)) {
+                uint32_t count = 0, phase = 0;
+                uintptr_t arr = 0;
+                memory::Read(inst + 0x100, count); memory::Read(inst + 0x110, phase); memory::Read(inst + 0xb8 + 0x40, arr);
+                snprintf(buf, sizeof(buf), " phases=%u at=%u fractions:", count, phase);
+                out += buf;
+                for (uint32_t i = 0; i < count && i < 12 && arr; i++) {
+                    float f = 0;
+                    memory::Read(arr + i * 4, f);
+                    snprintf(buf, sizeof(buf), " %.3f", f);
+                    out += buf;
+                }
+            }
+        });
+        return out;
+    }
+
+    bool AdvanceBossPhase(uintptr_t entity, std::string* what) {
+        static const unsigned char floor_bytes[] = { 0x40, 0x57, 0x48, 0x83, 0xec, 0x30, 0x0f, 0x29, 0x74, 0x24, 0x20, 0x48 };
+        static const unsigned char set_bytes[] = { 0x4c, 0x8b, 0xdc, 0x49, 0x89, 0x5b, 0x08, 0x57, 0x48, 0x81, 0xec, 0xa0 };
+        static int checked = 0;   // 1 both functions are the expected code, -1 not
+        if (!checked) {
+            unsigned char a[12] = {}, b[12] = {};
+            checked = memory::SafeRead(scan::FromRva(kPhaseFloorRva), a, 12) && memory::SafeRead(scan::FromRva(kSetPhaseRva), b, 12) &&
+                      !memcmp(a, floor_bytes, 12) && !memcmp(b, set_bytes, 12) ? 1 : -1;
+        }
+        if (checked != 1) return false;
+        uintptr_t c = BossHealthComponent(entity);
+        uint32_t count = 0, phase = 0;
+        float hp = 0;
+        if (!c || !memory::Read(c + 0x100, count) || !memory::Read(c + 0x110, phase) || !memory::Read(c + 0x88, hp)) return false;
+        if (count < 2 || phase + 1 >= count || hp <= 0.0f) return false;
+        float floor_hp = reinterpret_cast<float (*)(uintptr_t, int)>(scan::FromRva(kPhaseFloorRva))(c, (int)phase);
+        if (!(hp <= floor_hp + 2.0f)) return false;
+        reinterpret_cast<void (*)(uintptr_t, int)>(scan::FromRva(kSetPhaseRva))(c, (int)phase + 1);
+        if (what) {
+            char buf[96];
+            snprintf(buf, sizeof(buf), "phase %u -> %u of %u (hp %.0f, floor %.0f)", phase, phase + 1, count, hp, floor_hp);
+            *what = buf;
+        }
+        return true;
+    }
+
     uintptr_t HealthComponent(uintptr_t entity) {
-        uintptr_t bot = 0, any = 0;
+        uintptr_t bot = 0, any = 0, boss = BossHealthComponent(entity);
         ForEachComponent(entity, [&](const std::string& n, uintptr_t inst) {
             if (!inst) return;
             if (n == "BotHealth" && !bot) bot = inst;
             if (!any && n.size() >= 6 && n.compare(n.size() - 6, 6, "Health") == 0 && n != "HeroHealth") any = inst;
         });
-        return bot ? bot : any;
+        return bot ? bot : boss ? boss : any;
     }
 
     bool ReadHealth(uintptr_t entity, float& health, float& max_health) {

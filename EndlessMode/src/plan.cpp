@@ -107,19 +107,77 @@ namespace plan {
         return false;
     }
 
+    // One wave of the Sinister Six chapter: every wave a mix of the six factions' units, the last all the bosses at once.
+    static WavePlan MakeSinister(const Config& cfg, int wave, int per) {
+        WavePlan p;
+        p.wave = wave;
+        p.sinister = true;
+        p.chapter = (wave - 1) / per;
+        p.step = (wave - 1) % per;
+        const int F = std::max<int>(1, (int)cfg.order.size());
+        p.cycle = p.chapter / F;
+        p.faction = cfg.sinister.get();
+        p.mixed = cfg.sinister;
+        p.health_mult = 1.0f;
+        p.boss_health_mult = 1.0f;
+        p.count = (int)std::lround(GoonCount(cfg, wave, std::min(p.step, 3), p.cycle) * cfg.count_mult);
+        p.max_alive = MaxAlive(cfg, wave, p.cycle);
+        for (int r = 0; r < kRoles; r++) {
+            Role role = (Role)r;
+            bool on = role == Role::Melee || role == Role::Baton || role == Role::Pistol || role == Role::Rifle ||
+                      (p.step >= 1 && (role == Role::Shield || role == Role::Rocket || role == Role::Special)) ||
+                      (p.step >= 2 && (role == Role::Sniper || role == Role::Heavy));
+            p.weights[r] = on ? kBaseWeight[r] : 0.0f;
+            p.caps[r] = 99;
+        }
+        p.caps[(int)Role::Sniper] = 3;
+        p.caps[(int)Role::Rocket] = 4;
+        p.caps[(int)Role::Heavy] = 3;
+        p.caps[(int)Role::Special] = 5;
+        ApplyRoleMult(cfg, p);
+        static const char* const kNames[] = { "The Gathering", "The Alliance", "No Mercy" };
+        char buf[200];
+        if (p.step == per - 1) {
+            for (auto* b : cfg.sinister_bosses)
+                if (b && !cfg.failed_bosses.count(b->name)) p.bosses.push_back(b);
+            p.kind = "sinister finale";
+            p.boss_wave = true;
+            p.count = (int)std::lround(std::max(18.0f, (float)p.count) * cfg.crew_mult);
+            if (cfg.crew_mult <= 0) p.count = 0;
+            p.max_alive = (int)p.bosses.size() + std::min(std::max(12, p.max_alive / 2), std::max(4, cfg.horde_max - (int)p.bosses.size()));
+            std::string names;
+            for (size_t i = 0; i < p.bosses.size(); i++) names += std::string(i ? (i + 1 == p.bosses.size() ? " & " : ", ") : "") + p.bosses[i]->name;
+            snprintf(buf, sizeof(buf), "THE SINISTER SIX - %s", names.c_str());
+        } else {
+            p.kind = "sinister";
+            p.max_alive = std::min(p.max_alive + 4, std::max(8, cfg.horde_max));
+            snprintf(buf, sizeof(buf), "SINISTER SIX - %s", kNames[std::min(p.step, 2)]);
+        }
+        p.title = buf;
+        return p;
+    }
+
     WavePlan Make(const Config& cfg, int wave, std::mt19937& rng) {
         WavePlan p;
         p.wave = wave;
         const int F = std::max<int>(1, (int)cfg.order.size());
         const int per = std::max(1, cfg.waves_per_chapter);
+        // The secret chapter takes `per` waves from sinister_at on; the chapters after it carry on as if it never happened.
+        int shift = 0;
+        if (cfg.sinister_at >= 0 && cfg.mode == Mode::Campaign && cfg.sinister) {
+            const int raw = (wave - 1) / per;
+            if (raw == cfg.sinister_at) return MakeSinister(cfg, wave, per);
+            if (raw > cfg.sinister_at) shift = per;
+        }
+        const int w_eff = wave - shift;
         int boss_index = 0;   // how many boss waves came before this one
         if (cfg.mode == Mode::BossRush) {
             p.chapter = wave - 1;
             p.step = per - 1;
             boss_index = wave - 1;
         } else {
-            p.chapter = (wave - 1) / per;
-            p.step = (wave - 1) % per;
+            p.chapter = (w_eff - 1) / per;
+            p.step = (w_eff - 1) % per;
             boss_index = p.chapter;
         }
         p.cycle = p.chapter / F;

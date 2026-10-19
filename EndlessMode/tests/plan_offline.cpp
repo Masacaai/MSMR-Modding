@@ -26,6 +26,17 @@ int main(int argc, char** argv) {
         if (!cfg.order[0]) { printf("unknown faction\n"); return 1; }
     }
 
+    if (mode == "sinister") {   // the secret chapter in the middle of a campaign (chapter 2 of the run)
+        auto crowd = std::make_shared<roster::Faction>();
+        crowd->id = "sinister"; crowd->name = "The Sinister Six";
+        for (const char* id : { "fisk", "demons", "sable", "hammerhead", "tombstone", "taskmaster" })
+            if (auto* f = roster::FindFaction(id)) for (size_t i = 0; i < f->units.size() && i < 4; i++) crowd->units.push_back(f->units[i]);
+        cfg.sinister = crowd;
+        for (const char* n : { "Kingpin", "Mister Negative", "Tombstone", "Taskmaster", "Hammerhead", "Silver Sable" })
+            if (auto* b = roster::FindBoss(n)) cfg.sinister_bosses.push_back(b);
+        cfg.sinister_at = 1;
+        cfg.allow_unverified_bosses = true;
+    }
     if (mode == "horde") {
         cfg.mode = plan::Mode::Horde;
         cfg.order = plan::CampaignOrder(true, rng);

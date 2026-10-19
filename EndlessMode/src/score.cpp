@@ -140,13 +140,14 @@ namespace score {
         return out;
     }
 
-    Results CampaignEnd(int wave, int kills, int hits_dealt, int hits_taken) {
+    Results CampaignEnd(int wave, int kills, int hits_dealt, int hits_taken, int secret_bonus) {
         Results r;
         r.campaign = true;
         r.wave = wave;
         (void)hits_dealt;
         // Score (user, 2026-10-16: getting hit must cost points): 10 per enemy, 100 per wave reached, minus 5 per hit taken.
         r.rows = { { "Enemy Score", kills * 10 }, { "Wave Bonus", wave * 100 }, { "Hits Taken", -5 * hits_taken } };
+        if (secret_bonus > 0) r.rows.push_back({ "Sinister Six Defeated", secret_bonus });
         for (auto& row : r.rows) r.total += row.value;
         if (r.total < 0) r.total = 0;
         std::string file = DataDir() + "\\EndlessMode_campaign_best.txt";

@@ -26,6 +26,7 @@
 #include "ui.h"
 #include "uilog.h"
 #include "menu.h"
+#include "progress.h"
 #include "settings.h"
 #include "runloadout.h"
 #include "gamethread.h"
@@ -706,6 +707,7 @@ static void RunCommand(const std::string& line) {
             else if (tok == "verified") opt.allow_unverified_bosses = false;
             else if (tok == "unverified") opt.allow_unverified_bosses = true;
             else if (tok == "noboons") opt.roguelike = false;
+            else if (tok == "sinister") opt.sinister = true;
             else if (tok == "fast") opt.horde_level_ms = 15000;
             else if (tok.rfind("level_s=", 0) == 0) opt.horde_level_ms = std::clamp(atoi(tok.c_str() + 8), 5, 600) * 1000;
             else if (tok == "god") opt.god = true;
@@ -1121,6 +1123,16 @@ static void RunCommand(const std::string& line) {
         std::string text;
         in >> type >> std::quoted(text);
         ui::ShowTypedMessage(type, text);
+    } else if (cmd == "secret") {
+        // secret seen all | secret status : the lifetime progress that unlocks the secret chapter (src/SECRET.md)
+        std::string sub;
+        in >> sub;
+        if (sub == "seen") {
+            for (const auto& f : roster::Factions()) progress::MarkSeen(f.id);
+            LOG("secret: every chapter marked seen");
+        }
+        for (const auto& f : roster::Factions()) LOG("secret: %s seen=%d", f.id, (int)progress::Seen(f.id));
+        LOG("secret: triggered=%d defeated=%d", progress::Count("triggered"), progress::Count("defeated"));
     } else if (cmd == "settings") {
         settings::LogAll();
         menu::LogStatus();
