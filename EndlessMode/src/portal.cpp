@@ -9,6 +9,7 @@
 #include "timescale.h"
 #include "score.h"
 #include "settings.h"
+#include "progress.h"
 #include "input.h"
 #include "runloadout.h"
 #include "psinput.h"
@@ -480,7 +481,10 @@ namespace portal {
             if (panels::ResultsUp() && focused &&
                 (input::Pressed(input::Action::Choice4) || input::Pressed(input::Action::Interact))) {
                 panels::Hide();
-                hud::Show("Cross the line to go again, or step into the circle to leave Ryker's.", 6.0f);
+                if (progress::TakeUnlockNotice())
+                    hud::Show("The secret Sinister Six chapter is unlocked. Finish the campaign again to reach it.", 9.0f);
+                else
+                    hud::Show("Cross the line to go again, or step into the circle to leave Ryker's.", 6.0f);
             }
             panels::Tick();
 
@@ -599,7 +603,9 @@ namespace portal {
                         score::Results r;
                         int level = 0;
                         if (director::TakeResults(r, level)) panels::Results(r, level);
-                        if (!panels::ResultsUp())
+                        if (!panels::ResultsUp() && progress::TakeUnlockNotice())
+                            hud::Show("The secret Sinister Six chapter is unlocked. Finish the campaign again to reach it.", 9.0f);
+                        else if (!panels::ResultsUp())
                             hud::Show(std::string(a->title) + ": cross the line to go again, or step into the circle to leave.", 6.0f);
                     } else {
                         Leave();

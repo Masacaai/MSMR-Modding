@@ -758,19 +758,38 @@ namespace director {
         }
     }
 
-    // After a Campaign wave is cleared: if the next wave opens a chapter, the player has played long enough and has seen
-    // every faction's chapter at least once, the secret chapter may take that place (chance per chapter, once a run).
+    static bool g_sinister_first_met = false;   // this run met the chapter for the first time ever
+
+    static bool AllFactionsSeen() {
+        if (SecretInt("ignore_seen", 0)) return true;
+        for (const auto& f : roster::Factions()) if (!progress::Seen(f.id)) return false;
+        return true;
+    }
+
+    // A normal Campaign wave was cleared: the chapter's chance (once every faction has been seen) starts at 20% and compounds.
+    static void SecretWaveCleared() {
+        if (g_cfg.mode != plan::Mode::Campaign || !g_cfg.sinister || g_plan.sinister || !AllFactionsSeen()) return;
+        progress::OnWaveCleared(g_plan.wave, SecretInt("chance", 20) * 10);
+    }
+
+    // After a Campaign wave is cleared: if the next wave opens a chapter, the secret chapter may take that place, once a run.
+    // Before it has ever been met: a roll at the current chance. Afterwards: at the end of the campaign (the last chapter of the
+    // faction order), every time.
     static void MaybeStartSinister(int next_wave) {
         if (g_cfg.mode != plan::Mode::Campaign || g_cfg.sinister_at >= 0 || !g_cfg.sinister) return;
         const int per = std::max(1, g_cfg.waves_per_chapter);
         if ((next_wave - 1) % per != 0) return;
         const int chapter = (next_wave - 1) / per;
-        if (chapter < SecretInt("min_chapters", 5)) return;
-        if (!SecretInt("ignore_seen", 0))
-            for (const auto& f : roster::Factions())
-                if (!progress::Seen(f.id)) return;
-        if ((int)(g_rng() % 100) >= SecretInt("chance", 20)) return;
+        const int F = std::max<int>(1, (int)g_cfg.order.size());
+        bool go;
+        if (progress::Encountered()) go = chapter > 0 && chapter % F == 0;
+        else go = AllFactionsSeen() && progress::ChancePm() > 0 && (int)(g_rng() % 1000) < progress::ChancePm();
+        if (!go) return;
         g_cfg.sinister_at = chapter;
+        if (!progress::Encountered()) {
+            progress::SetCount("encountered", 1);
+            g_sinister_first_met = true;
+        }
         progress::Bump("triggered");
         stats::Event("secret", "sinister six at chapter " + std::to_string(chapter + 1));
         LOG("director: SECRET chapter %d is the Sinister Six", chapter + 1);
@@ -870,6 +889,7 @@ namespace director {
         if (end_reason.empty()) end_reason = g_stop_reason.empty() ? "stopped" : g_stop_reason;
     
         stats::Live l = stats::Current();
+        if (g_sinister_first_met && !g_sinister_done) progress::SetCount("notice", 1);   // told when the results are dismissed
         if (g_cfg.mode == plan::Mode::Horde) {
             g_results = score::End(GetTickCount(), l.kills);
             g_results_level = g_plan.wave;
@@ -1019,6 +1039,7 @@ namespace director {
         boons::SetPlayerSettings(opt.player_settings);
         g_kills = 0;
         g_sinister_done = false;
+        g_sinister_first_met = false;
         g_plan = {};
         g_cull_blocked = g_roam_ok = false;
         g_run_strikes.clear();
@@ -1145,6 +1166,7 @@ namespace director {
                             stats::Event("secret", "sinister six defeated");
                             hud::Banner("THE SINISTER SIX ARE DOWN", 6.0f);
                         }
+                        SecretWaveCleared();
                         MaybeStartSinister(g_plan.wave + 1);
                         int next_step = (g_plan.step + 1) % std::max(1, g_cfg.waves_per_chapter);
                         bool chapter_end = g_cfg.mode != plan::Mode::BossRush && next_step == 0;

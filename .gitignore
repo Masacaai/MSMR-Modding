@@ -55,3 +55,6 @@ QuantumBreakRenewed/
 
 # Third-party clone used for reference only
 SpidyVR/
+
+# Maintainer-only notes, never published
+EndlessMode/src/SECRET.md

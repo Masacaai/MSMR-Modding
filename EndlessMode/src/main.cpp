@@ -1176,7 +1176,10 @@ static void RunCommand(const std::string& line) {
             LOG("secret: every chapter marked seen");
         }
         for (const auto& f : roster::Factions()) LOG("secret: %s seen=%d", f.id, (int)progress::Seen(f.id));
-        LOG("secret: triggered=%d defeated=%d", progress::Count("triggered"), progress::Count("defeated"));
+        if (sub == "chance") { int pct = 0; in >> pct; progress::SetCount("chance_pm", std::clamp(pct, 0, 100) * 10); }
+        if (sub == "reset") { for (const char* k : { "chance_pm", "encountered", "notice", "triggered", "defeated" }) progress::SetCount(k, 0); }
+        LOG("secret: chance=%.1f%% encountered=%d triggered=%d defeated=%d", progress::ChancePm() / 10.0f, progress::Encountered(),
+            progress::Count("triggered"), progress::Count("defeated"));
     } else if (cmd == "settings") {
         settings::LogAll();
         menu::LogStatus();
