@@ -76,3 +76,34 @@ How a cue is actually posted (event vs state vs switch), how it fades, and what 
 2. From the recording, find the call that sends the items to `SystemOverlay` and the function that creates them; check whether a row can be appended
    (and how its changes are reported) without touching the config asset.
 3. If that is a dead end, fall back to option 3 for a first release and revisit option 1 afterwards.
+
+## 3. Prior art found: SpidyVR (read 2026-10-19)
+
+A VR mod for the same game build (4.0630.0.0, GPL-3.0; https://github.com/IlyaMez/SpidyVR, cloned to `SpidyVR/`, gitignored, not ours). Its
+`src/game_menu.cpp` + `include/spidy/game_menu.hpp` + `docs/REFERENCE.md` ("SPIDY VR tab in the game's Settings") are a working, in-game-verified
+implementation of **option 1**: an extra tab in the game's own Settings, built by the game's own row code. Read, not run here. Same build as ours; its
+`exe+16d5e80` (Spider-Sense sound) is our SendEvent, which cross-checks both projects' addresses.
+
+How it works (all RVAs for 4.0630.0.0):
+- Settings system (static) `5d96dd0`; `+0x20` the config (`UISystemMenuConfig`); tabs array at config `+0x168` (0x40 bytes each), count at `+0x170`.
+- Tab (`UISystemMenu`, vtable `3a7da68`): `+8` id, `+0x10` name tag, `+0x20` heading tag, `+0x30` items, `+0x38` count. Item (`UISystemMenuItem`, vtable
+  `3a7d988`, 0x88 bytes): `+8` setting number, `+0x10` title tag, `+0x20` help tag, `+0x48` option type (setting `3a7d6e8` / heading `3a7d838`),
+  `+0x70` choices (0x50 bytes each: `+8` name tag, `+0x18` help, `+0x28` preview), `+0x78` count. Tags are {char*, length, CRC32}.
+- It **copies** a real tab, setting and heading from the loaded config into its own memory, edits the copies (setting numbers 0x200+, its own text tags), and
+  at the moment the game calls Flash `OpenOptions` (via the UI Invoke wrapper `1d1cf30`, name literal `389f4c0`) builds the tab's Flash object with the
+  game's builder `807740` (out value, movie from `1d29690`, tab) and pushes it onto the tabs array (GFx array push = vtable slot 15).
+- Hooks for the setting numbers it owns: kind `72d640` (0 list, 1-2 slider, 3 colour, 4 command, 5 heading), value `72d650`, active `72e1d0`, default
+  `72d5f0`, default choice `72d610`, set `730ee0`, reset `730ae0`; plus the Flash callback dispatcher `7dc400` (UpdateOption / ResetOption /
+  ResetAllOptionsForCurrentOptionsMenu), and the text lookup `1749970` / `1749ae0` (answers its own CRC32 tags only while building its tab).
+- Also adds a button to the pause menu's first page (`7dd7c0`, item loop returns to `7dd8ae`) - a way to put an "Endless Arena" entry on the front page.
+- Lists with up to 9 choices, ON/OFF switches, section headings, per-row help text, X RESET and Y RESET ALL all work. Sliders (kinds 1-2) are known to
+  the type hook but not used by Spidy.
+
+What this changes for us: option 1 is now low-risk and mostly mechanical. A faction blacklist = ON/OFF switch per faction; order = a list row per slot
+(choices = factions); boss choice = list rows; all with the game's look and controller navigation. Limits to design around: 9 choices per list as written
+(the buffers are fixed-size and could be enlarged), values are choice indices or floats, no free text.
+
+Also in the repo (possible later use, none needed now): audio through Windows MCI (not the game's Wwise), per-system `RVA` tables for the TimeScaleSystem
+(`19bb430`), hero/dodge managers, bot/allegiance RTTI lists (`SimpleAllegiance` kBlueTeam/kPolice/kFisk/kMaggia/kSableEnemy), Havok/body details,
+and a tools/ folder of in-game probe scripts (the same command-file style as ours). Music: the sound posted through SendEvent with hash `0x4b5f5740` hints
+that sounds may be posted as events through the Event system - to confirm with the recorder.

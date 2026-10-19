@@ -52,3 +52,6 @@ EndlessMode/data/*.config.json
 
 # QuantumBreakRenewed is a separate mod (a port of nanodanc's QuantumBreak) kept out of this repository entirely
 QuantumBreakRenewed/
+
+# Third-party clone used for reference only
+SpidyVR/
