@@ -254,3 +254,14 @@ Full chronology, with every recording: [UI_HUNT.md](UI_HUNT.md). Summary of what
 ## Things we deliberately don't know yet
 
 See [`docs/issues/`](issues/) for the open questions drafted as issues, and [BUGS.md](BUGS.md) for raw records.
+
+## Boss phases (2026-10-19, disassembly; not yet run in game)
+- A boss's health component (`BossHealth`, vtable `exe+3839d38`) splits its health into phases: `+0x100` phase count, `+0x110` current phase,
+  `+0x114` last announced phase, `+0x80` max, `+0x88` current, `+0xac` bit 0 a minimum-health flag (`+0x84`), phase fractions of max at `([+0xb8 + 0x40])[i]`.
+- `exe+32efb0 (this, phase) -> float`: the floor of a phase = max * (sum of the fractions of the later phases) (raised to `+0x84` plus a margin when the flag is set).
+  `exe+32e7c0` is its damage handler (after the base handler it announces a phase end when health sits on the floor: event `0x29155b1`).
+- `exe+32f060 (this, phase)`: SetPhase. Clamps to `[0, count-1]`, announces `BossPhaseChangeEvent` (`0x3b239d23`), and keeps health inside the new phase's band.
+  In the story a mission script (`BossPhaseScriptAction` / `BossHealthAction`) calls it; outside a mission nobody does, which is why bosses stop taking damage at a
+  floor (Hammerhead 55%, Taskmaster and Sable 1 HP) and why Kingpin took none at all (`HealthPhaseValues` and `PhaseEndBlockConfig` in his actor).
+- The mod now logs each boss's health components and phases at spawn and, for Kingpin (or every boss with `[secret] phase_all=1`), calls SetPhase to the next phase
+  when he is pinned at his floor. Kingpin's component may not be the `BotHealth`/`+0x88` one the others use; `entity::HealthComponent` now prefers a `BossHealth`-vtable component over a name match.
