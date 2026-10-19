@@ -25,6 +25,8 @@
 #include "score.h"
 #include "ui.h"
 #include "uilog.h"
+#include "menu.h"
+#include "settings.h"
 #include "runloadout.h"
 #include "gamethread.h"
 #include "log.h"
@@ -1119,6 +1121,9 @@ static void RunCommand(const std::string& line) {
         std::string text;
         in >> type >> std::quoted(text);
         ui::ShowTypedMessage(type, text);
+    } else if (cmd == "settings") {
+        settings::LogAll();
+        menu::LogStatus();
     } else if (cmd == "uilog") {
         // uilog on|off: record the game's UI calls to scripts\EndlessMode_uilog.txt (UI hunt)
         std::string mode;
@@ -1337,6 +1342,10 @@ static void Main() {
         stats::InstallHooks();
         guards::Install();
         LoadBossFlags();
+        {
+            uint32_t m = menu::Install();   // the ENDLESS ARENA tab in the game's Settings
+            if (m) LOG("menu: settings tab not installed (%u)", m);
+        }
         gfx::InstallTextCapture();   // before the HUD loads its texts (panel titles/buttons can then be changed)
         portal::Start(HeroPosNow);
     } else {

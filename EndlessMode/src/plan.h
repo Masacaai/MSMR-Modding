@@ -5,6 +5,7 @@
 #include <array>
 #include <memory>
 #include <cstdint>
+#include <map>
 #include <random>
 #include <set>
 #include <string>
@@ -38,6 +39,16 @@ namespace plan {
         std::set<std::string> failed_bosses;         // bosses that misbehaved this run (skipped from now on)
         int waves_per_chapter = 4;
         int horde_max = 80;                          // cap on enemies on the field (stress test: hang at ~165)
+
+        // Player settings (settings.h); the defaults are the mod's own balance.
+        float count_mult = 1.0f;                     // goons per wave
+        bool boss_waves = true;                      // false: the last wave of a chapter is an elite assault
+        int boss_count = 0;                          // bosses per boss wave; 0 = the run's own escalation
+        float crew_mult = 1.0f;                      // goons beside the bosses
+        float elite_mult = 1.0f;                     // chance of an elite goon
+        std::array<float, 10> role_mult{ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };   // per Role: weight and cap (0 = never)
+        // Per faction id: "" random, "none", or the name of the boss it always sends (even if untested).
+        std::map<std::string, std::string> boss_pick;
     };
 
     struct WavePlan {
@@ -67,6 +78,9 @@ namespace plan {
     int UnitTypes(const roster::Faction& f);                       // distinct actor paths in a faction
     std::vector<const roster::Faction*> BudgetedPool(std::vector<const roster::Faction*> shuffled, int max_types, int max_factions = 5,
                                                      int min_factions = 3);
+
+    // True if the player chose this boss for a faction (settings): it is preloaded and fought even if untested.
+    bool BossForced(const Config& cfg, const roster::Boss* b);
 
     WavePlan Make(const Config& cfg, int wave, std::mt19937& rng);
 

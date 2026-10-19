@@ -199,3 +199,14 @@ Alongside some bugfixing:
 1. **Dynamic music in EndlessArena, using the game's own tracks** (user, 2026-10-18). The user can play through a crime or hideout with music on so the music calls (start, fade in/out, intensity changes) can be recorded and copied. Specific music for bosses. The few seconds between waves don't need their own music. Recon: the game uses Wwise (post-event / set-state / set-RTPC / set-switch in the exe) plus its own music-intensity system (`MusicIntensityIncreasedEvent`, `SetMusicIntensityOverrideAction`, `MusicConfig`, `HeroMusicConfig`, `MusicVolume`, `MusicCueListenerAction`). Plan: build an audio recorder (hook those calls, log with timestamps), record a crime and a hideout, then drive the same calls from the director (intensity per wave, boss themes, results sting).
 2. **User customization** (user, 2026-10-18): let players blacklist factions, set their own faction order, choose their bosses, "as much control as we can squeeze in". First task: explore options for **in-game** mod control. MSM2 has "ModSettings" (an Overstrike script, `modsettings.script`, that other scripts depend on; it injects Toggle / Slider / Option / Button / submenu rows into the game's own pause and lobby menus). No MSMR equivalent was found online. Least desirable fallback: make EndlessArena a `.modular` file and do the customization in Overstrike.
    - Findings so far: [NEXT_RELEASE_RECON.md](NEXT_RELEASE_RECON.md) (music + customization recon, 2026-10-18).
+
+### 2026-10-19 - settings tab built (customization, step 1)
+- Found SpidyVR (same game build, GPL-3.0): a working in-game Settings tab. Re-implemented for the Arena: `menu.cpp` (tab injection), `settings.cpp`
+  (the rows and the ini `EndlessArena_settings.ini` in the data folder). Credit in THIRD_PARTY_NOTICES.md.
+- Rows: run (countdown, boons, practice mode), difficulty (enemies per wave, at once, waves per faction, boss waves, bosses per wave, crew, elites),
+  enemy mix (7 role groups OFF/FEW/NORMAL/MANY), factions (9 switches, order DEFAULT/SHUFFLED/CUSTOM + 9 slots, per run, model budget),
+  bosses (per faction: random/none/a named boss, untested bosses), Horde level length. Applies to portal-started runs only (`Options::player_settings`).
+- Not run in game yet: the tab, and every setting's effect. Build OK, offline planner unchanged at defaults.
+- Ideas from the maintainer: (a) faction allegiances - allies and bosses fighting beside the player, and toggling enemy infighting. Lead: `SimpleAllegiance`
+  (kBlueTeam = the hero, kPolice, kFisk, kMaggia, kSableEnemy...) and `Target::TargetData` RTTI in SpidyVR/docs/REFERENCE.md; field offsets unknown.
+  Needs recon. (b) reuse SpidyVR as much as possible, with credit.

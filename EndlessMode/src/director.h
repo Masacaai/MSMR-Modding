@@ -35,6 +35,7 @@ namespace director {
         bool allow_unverified_bosses = false;   // benched bosses (ini [bosses] =0) stay out unless asked
         int countdown_s = 5;
         bool roguelike = true;           // campaign/faction: boons, curses, run loadout (docs/ROGUELIKE.md)
+        bool player_settings = false;    // the run follows the player's Settings tab (settings.h): factions, order, bosses, mix
         bool has_first_spawn = false;    // the first wave of the run spawns here (around the corner) and runs in
         float first_spawn[3] = {};
     };

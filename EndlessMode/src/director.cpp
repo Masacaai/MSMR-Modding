@@ -15,6 +15,7 @@
 #include "plan.h"
 #include "score.h"
 #include "scan.h"
+#include "settings.h"
 #include "spawn.h"
 #include "stats.h"
 
@@ -602,13 +603,98 @@ namespace director {
 
     // ---- run ----
 
+    // ---- the player's settings (settings.h) ----
+
+    static std::vector<const roster::Faction*> AllowedFactions() {
+        std::vector<const roster::Faction*> out;
+        for (const auto& f : roster::Factions())
+            if (settings::On(std::string("fac_") + f.id)) out.push_back(&f);
+        if (out.empty()) {
+            LOG("director: every faction is switched off in the settings; using them all");
+            for (const auto& f : roster::Factions()) out.push_back(&f);
+        }
+        return out;
+    }
+
+    // The factions of a Campaign (or Boss Rush) run, or the Horde's invasion order, from the faction settings.
+    static std::vector<const roster::Faction*> SettingsOrder(const Options& opt, std::mt19937& rng, bool horde) {
+        const auto allowed = AllowedFactions();
+        const auto& all = roster::Factions();
+        const int ord = settings::Value("order", 0);
+        std::vector<const roster::Faction*> list;
+        if (ord == 2) {
+            for (size_t s = 1; s <= all.size(); s++) {
+                int idx = settings::Value("slot_" + std::to_string(s), 0);
+                if (idx <= 0 || idx > (int)all.size()) continue;
+                const roster::Faction* f = &all[idx - 1];
+                if (std::find(allowed.begin(), allowed.end(), f) != allowed.end() &&
+                    std::find(list.begin(), list.end(), f) == list.end())
+                    list.push_back(f);
+            }
+        }
+        const bool custom = !list.empty();
+        const bool story = !custom && ord == 0 && !horde;
+        if (!custom) {
+            list = allowed;
+            if (story) std::shuffle(list.begin() + 1, list.end(), rng);   // the first one stays first, the rest are drawn
+            else std::shuffle(list.begin(), list.end(), rng);
+        } else if (horde && ord == 2) {
+            // custom order is honoured in Horde too
+        }
+        const int max_factions = custom ? (int)list.size() : horde ? (int)list.size() : settings::Value("perrun", 5);
+        auto pool = plan::BudgetedPool(list, opt.max_types, max_factions, std::min<int>(3, (int)list.size()));
+        if (story)
+            std::sort(pool.begin(), pool.end(), [&](auto* x, auto* y) {
+                return std::find(allowed.begin(), allowed.end(), x) < std::find(allowed.begin(), allowed.end(), y);
+            });
+        if (custom && pool.size() < list.size()) {
+            std::string left;
+            for (auto* f : list) if (std::find(pool.begin(), pool.end(), f) == pool.end()) left += std::string(left.empty() ? "" : ", ") + f->name;
+            LOG("director: left out to fit the memory budget (%d unit types): %s", opt.max_types, left.c_str());
+            hud::Show("Left out to fit the enemy-model budget: " + left, 6.0f);
+        }
+        return pool;
+    }
+
+    static void ApplySettings(plan::Config& cfg, const Options& opt) {
+        cfg.count_mult = settings::Value("count", 100) / 100.0f;
+        cfg.boss_waves = settings::On("bosswaves");
+        cfg.boss_count = settings::Value("bosscount", 0);
+        cfg.crew_mult = settings::Value("crew", 100) / 100.0f;
+        cfg.elite_mult = settings::Value("elites", 100) / 100.0f;
+        cfg.waves_per_chapter = settings::Value("chapter", 4);
+        using plan::Role;
+        auto set = [&](const char* key, std::initializer_list<Role> roles) {
+            float m = settings::Value(key, 100) / 100.0f;
+            for (Role r : roles) cfg.role_mult[(int)r] = m;
+        };
+        set("mix_melee", { Role::Melee, Role::Baton });
+        set("mix_ranged", { Role::Pistol, Role::Rifle });
+        set("mix_shield", { Role::Shield });
+        set("mix_rocket", { Role::Rocket });
+        set("mix_sniper", { Role::Sniper });
+        set("mix_heavy", { Role::Heavy });
+        set("mix_special", { Role::Special });
+        for (const auto& f : roster::Factions()) {
+            if (f.bosses.empty()) continue;
+            int idx = settings::Value(std::string("boss_") + f.id, 0);
+            if (idx == 1) cfg.boss_pick[f.id] = "none";
+            else if (idx >= 2 && idx - 2 < (int)f.bosses.size()) cfg.boss_pick[f.id] = f.bosses[idx - 2]->name;
+        }
+        (void)opt;
+    }
+
     static plan::Config MakeConfig(const Options& opt, std::mt19937& rng) {
         plan::Config cfg;
         cfg.riot = opt.riot || g_riot_max > 0;
         cfg.riot_max = g_riot_max > 0 ? g_riot_max.load() : opt.riot_max;
         cfg.allow_unverified_bosses = opt.allow_unverified_bosses;
         cfg.horde_max = opt.horde_max;
-        if (opt.mode == "horde") {
+        if (opt.player_settings) ApplySettings(cfg, opt);
+        if (opt.mode == "horde" && opt.player_settings) {
+            cfg.mode = plan::Mode::Horde;
+            cfg.order = SettingsOrder(opt, rng, true);
+        } else if (opt.mode == "horde") {
             cfg.mode = plan::Mode::Horde;
             std::vector<const roster::Faction*> all;
             for (const auto& f : roster::Factions()) all.push_back(&f);
@@ -621,7 +707,7 @@ namespace director {
             cfg.order = { f ? f : &roster::Factions().front() };
         } else {
             cfg.mode = opt.mode == "bossrush" ? plan::Mode::BossRush : plan::Mode::Campaign;
-            cfg.order = plan::CampaignOrder(opt.shuffle, rng, opt.max_types);
+            cfg.order = opt.player_settings ? SettingsOrder(opt, rng, false) : plan::CampaignOrder(opt.shuffle, rng, opt.max_types);
         }
         return cfg;
     }
@@ -837,7 +923,7 @@ namespace director {
         else SyncCampaignPreloads(std::max(opt.first_wave, 1) > 1 ? plan::Make(g_cfg, opt.first_wave, g_rng).chapter : 0);
         for (const auto& b : roster::Bosses()) {
             if (opt.mode == "horde") break;   // no bosses in Horde
-            if (!(b.verified || g_cfg.allow_unverified_bosses)) continue;
+            if (!(b.verified || g_cfg.allow_unverified_bosses || plan::BossForced(g_cfg, &b))) continue;
             spawn::Preload(b.path);
             if (b.head && *b.head) spawn::Preload(b.head);
         }

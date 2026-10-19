@@ -79,6 +79,29 @@ namespace plan {
         return b && (b->verified || cfg.allow_unverified_bosses) && !cfg.failed_bosses.count(b->name) && cycle >= b->min_cycle;
     }
 
+    static bool Picked(const Config& cfg, const roster::Faction* f, const roster::Boss* b) {
+        if (!f || !b) return false;
+        auto it = cfg.boss_pick.find(f->id);
+        return it != cfg.boss_pick.end() && it->second == b->name && !cfg.failed_bosses.count(b->name);
+    }
+
+    bool BossForced(const Config& cfg, const roster::Boss* b) {
+        if (!b) return false;
+        for (const auto& [fid, name] : cfg.boss_pick) if (name == b->name) return true;
+        return false;
+    }
+
+    // Applies the player's per-role settings to a plan's weights and caps.
+    static void ApplyRoleMult(const Config& cfg, WavePlan& p) {
+        for (int r = 0; r < kRoles; r++) {
+            float m = cfg.role_mult[r];
+            p.weights[r] *= m;
+            if (m <= 0.0f) p.caps[r] = 0;
+            else if (p.caps[r] < 99) p.caps[r] = std::max(1, (int)std::lround(p.caps[r] * m));
+        }
+        p.elite_chance = std::min(0.9f, p.elite_chance * cfg.elite_mult);
+    }
+
     static bool HasRole(const roster::Faction* f, Role r) {
         for (const auto& u : f->units) if (u.role == r) return true;
         return false;
@@ -101,7 +124,7 @@ namespace plan {
         }
         p.cycle = p.chapter / F;
         p.faction = cfg.order.empty() ? nullptr : cfg.order[p.chapter % F];
-        p.boss_wave = p.step == per - 1;
+        p.boss_wave = p.step == per - 1 && (cfg.boss_waves || cfg.mode == Mode::BossRush);
 
         p.count = GoonCount(cfg, wave, p.step, p.cycle);
         p.max_alive = MaxAlive(cfg, wave, p.cycle);
@@ -145,21 +168,31 @@ namespace plan {
 
         if (p.boss_wave && p.faction) {
             std::vector<const roster::Boss*> pool;
-            for (auto* b : p.faction->bosses) if (BossUsable(cfg, b, p.cycle)) pool.push_back(b);
+            auto pick = cfg.boss_pick.find(p.faction->id);
+            const bool none = pick != cfg.boss_pick.end() && pick->second == "none";
+            for (auto* b : p.faction->bosses) {
+                if (none) break;
+                if (Picked(cfg, p.faction, b)) { pool = { b }; break; }
+                if (pick != cfg.boss_pick.end() && !pick->second.empty()) continue;   // a boss was chosen but is out of play
+                if (BossUsable(cfg, b, p.cycle)) pool.push_back(b);
+            }
             if (pool.empty()) {
                 // No usable boss for this faction: an elite assault instead.
                 p.boss_wave = false;
                 p.kind = "elite assault";
                 p.elite_chance = has_elites ? 0.6f : 0.0f;
                 for (int r = (int)Role::Rocket; r < kRoles; r++) p.weights[r] *= 1.5f;
+                ApplyRoleMult(cfg, p);
+                p.count = std::max(1, (int)std::lround(p.count * cfg.count_mult));
                 snprintf(buf, sizeof(buf), "WAVE %d - %s: Elite Assault", wave, fname);
                 p.title = buf;
                 return p;
             }
             std::shuffle(pool.begin(), pool.end(), rng);
             int nb = 1;
-            if (boss_index >= 4) {
-                nb = std::min(2 + (boss_index - 4) / 3, 3);
+            if (boss_index >= 4) nb = std::min(2 + (boss_index - 4) / 3, 3);
+            if (cfg.boss_count > 0) nb = cfg.boss_count;
+            if (nb > (int)pool.size() || boss_index >= 4) {
                 // Bring back bosses from factions already met (and still usable).
                 std::vector<const roster::Boss*> met;
                 for (int c = 0; c < p.chapter && c < (int)cfg.order.size() * 4; c++)
@@ -175,13 +208,15 @@ namespace plan {
             // MSMR's bosses rely on goons and throwables to be interesting, so a boss never fights alone.
             if (p.bosses.size() <= 1) {
                 p.kind = "boss+goons";
-                p.count = (int)std::lround(p.count * 0.5f);
+                p.count = (int)std::lround(p.count * 0.5f * cfg.count_mult * cfg.crew_mult);
             } else {
                 p.kind = "multi-boss";
-                p.count = (int)std::lround(p.count * 0.4f);
+                p.count = (int)std::lround(p.count * 0.4f * cfg.count_mult * cfg.crew_mult);
             }
-            if (cfg.mode == Mode::BossRush && boss_index < 2) { p.kind = "boss"; p.count = 0; }
+            if (cfg.mode == Mode::BossRush && boss_index < 2 && cfg.crew_mult > 0) { p.kind = "boss"; p.count = 0; }
+            if (cfg.crew_mult <= 0) p.count = 0;
             if (p.count > 0 && has_elites) p.elite_chance = std::min(0.5f, 0.15f + 0.05f * p.cycle);
+            ApplyRoleMult(cfg, p);
             p.max_alive = std::min(p.max_alive, (int)p.bosses.size() + std::max(4, p.max_alive / 2));
             std::string names;
             for (size_t i = 0; i < p.bosses.size(); i++) {
@@ -194,6 +229,8 @@ namespace plan {
         }
 
         p.boss_wave = false;
+        ApplyRoleMult(cfg, p);
+        p.count = std::max(1, (int)std::lround(p.count * cfg.count_mult));
         p.kind = p.step < 3 ? kStepName[p.step] : "Full Force";
         for (auto& c : p.kind) c = (char)tolower(c);
         snprintf(buf, sizeof(buf), "WAVE %d - %s: %s", wave, fname, p.step < 3 ? kStepName[p.step] : "Full Force");
@@ -250,6 +287,7 @@ namespace plan {
         p.caps[(int)Role::Special] = 4 + level;
         p.caps[(int)Role::Elite] = 8 + 2 * level;
         p.elite_chance = level >= 3 ? std::min(0.4f, 0.05f * (level - 2)) : 0.0f;
+        ApplyRoleMult(cfg, p);
         auto before = level > 1 ? HordeFactions(cfg, level - 1) : std::vector<const roster::Faction*>{};
         const roster::Faction* newcomer = nullptr;
         for (auto* f : in_play) if (std::find(before.begin(), before.end(), f) == before.end()) newcomer = f;

@@ -96,3 +96,12 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 Overstrike and ALERT (Tkachov, GPLv3), the MSMR Script SDK (Tkachov, GPLv3), Script Hook for MSMR and the 4.0630 compatibility patch, and ArkWeb
 were read as references. No code from them is copied into the mod; `tools/toctool` re-implements the toc/hash format documented by ALERT.
 Game assets belong to their owners and are not distributed.
+
+## SpidyVR (reference and method)
+
+The ENDLESS ARENA tab in the game's Settings menu (`EndlessMode/src/menu.cpp`, `settings.cpp`) follows the method that
+**Ilya Mezerowsky's SpidyVR** (https://github.com/IlyaMez/SpidyVR, GPL-3.0) documents and uses for its SPIDY VR tab: copy a
+tab, a setting and a heading from the game's own menu config, build the tab with the game's own builder, append it to
+the tabs handed to Flash, and answer for the new setting numbers by hooking the game's per-setting functions. The
+addresses, structure layouts and hook prologues for Spider-Man.exe 4.0630.0.0 come from SpidyVR's `docs/REFERENCE.md` and
+`src/game_menu.cpp`; the code here is written for this mod. Thank you for working it out and publishing it.

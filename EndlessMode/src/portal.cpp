@@ -8,6 +8,7 @@
 #include "panels.h"
 #include "timescale.h"
 #include "score.h"
+#include "settings.h"
 #include "input.h"
 #include "runloadout.h"
 #include "psinput.h"
@@ -220,7 +221,15 @@ namespace portal {
             run.has_first_spawn = true;
             for (int i = 0; i < 3; i++) run.first_spawn[i] = a->first_spawn[i];
         }
-        run.countdown_s = 3;
+        // The player's Settings tab (settings.h) decides the rest of the run.
+        run.player_settings = true;
+        run.countdown_s = settings::Value("countdown", 3);
+        run.roguelike = settings::On("boons");
+        run.god = settings::On("practice");
+        run.horde_max = settings::Value("field", 40);
+        run.max_types = settings::Value("budget", 44);
+        run.horde_level_ms = settings::Value("horde_level", 60) * 1000;
+        if (std::string(a->mode) != "bossrush") run.allow_unverified_bosses = settings::On("unverified");
         arena::Activate(a->name);
         g_run_venue = v;
         g_portal_run = true;
