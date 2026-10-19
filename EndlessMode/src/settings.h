@@ -18,7 +18,7 @@ namespace settings {
     };
 
     const std::vector<Row>& Rows();
-    constexpr size_t kMaxRows = 80, kMaxChoices = 14;
+    constexpr size_t kMaxRows = 128, kMaxChoices = 14;
 
     // Loads the ini (call once at start-up; building the table needs the roster).
     void Load();

@@ -61,6 +61,42 @@ namespace settings {
             List("elites", "ELITE ENEMIES", "How often a goon is replaced by one of the faction's elite units.",
                  { "OFF", "RARE", "NORMAL", "OFTEN", "ALWAYS" }, { 0, 50, 100, 200, 400 }, 2);
 
+            Head("REWARDS");
+            List("reward_every", "REWARD EVERY", "How often clearing a wave offers a reward pick. Boss waves always offer their power pick.",
+                 { "WAVE", "2 WAVES", "3 WAVES", "BOSSES ONLY" }, { 1, 2, 3, 0 }, 0);
+            List("reward_choices", "CHOICES PER REWARD", "Options on every reward screen (the Riot Call curse adds one, up to 4).",
+                 { "2", "3", "4" }, { 2, 3, 4 }, 1);
+            Switch("boon_powers", "SUIT POWERS AS REWARDS", "Your first reward is a suit power, and bosses offer another.", true);
+            Switch("boss_power", "POWER PICK AFTER BOSSES", "A boss wave offers a new suit power to swap in.", true);
+            Switch("boon_mods", "SUIT MODS AS REWARDS", "Rewards can be suit mods.", true);
+            Switch("stat_power", "BOON: HEAVY HITTER", "+20% damage dealt per stack.", true);
+            Switch("stat_tough", "BOON: REINFORCED SUIT", "-15% damage taken per stack.", true);
+            Switch("stat_vamp", "BOON: ADRENALINE RUSH", "Heal 4% of max health per kill, per stack.", true);
+            Switch("stat_second", "BOON: SECOND WIND", "Heal 30% of max health after each wave, per stack.", true);
+            List("stat_stacks", "BOON STACK LIMIT", "How many times one stat boon can be taken. DEFAULT: 3, and 2 for Second Wind.",
+                 { "DEFAULT", "1", "2", "3", "5", "10" }, { 0, 1, 2, 3, 5, 10 }, 0);
+            Switch("curated", "SKIP USELESS POWERS", "Leave out the suit powers and mods that do nothing in the arena (the author's list). You can also list your own in EndlessArena_pools.txt in the data folder.", false);
+
+            Head("CURSES");
+            List("curse_when", "CURSE OFFERS", "When a bittersweet deal is offered: after boss waves, after every wave, or never.",
+                 { "AFTER BOSSES", "EVERY WAVE", "NEVER" }, { 0, 1, 2 }, 0);
+            List("curse_choices", "CURSES OFFERED", "How many different deals are on offer.", { "1", "2", "3", "4" }, { 1, 2, 3, 4 }, 1);
+            Switch("curse_forced", "CURSES ARE MANDATORY", "No NO DEAL option: you must take one.", false);
+            List("curse_strength", "CURSE STRENGTH", "How hard the downsides of the curses bite.",
+                 { "50%", "75%", "100%", "150%", "200%", "300%" }, { 50, 75, 100, 150, 200, 300 }, 2);
+            Switch("curse_glass", "CURSE: GLASS CANNON", "+40% damage dealt, +30% damage taken.", true);
+            Switch("curse_riot", "CURSE: RIOT CALL", "One more choice on every reward, 40% more enemies per wave.", true);
+            Switch("curse_open", "CURSE: OPEN SEASON", "Heal 25% after each wave, snipers and rockets from the first wave.", true);
+            Switch("curse_blood", "CURSE: BLOOD PRICE", "Heal 6% per kill, elites twice as often.", true);
+
+            Head("YOU");
+            List("dmg_out", "YOUR DAMAGE", "How hard you hit, on top of any boons.",
+                 { "50%", "75%", "100%", "150%", "200%", "300%", "500%" }, { 50, 75, 100, 150, 200, 300, 500 }, 2);
+            List("dmg_in", "DAMAGE YOU TAKE", "How hard enemies hit you, on top of any boons.",
+                 { "25%", "50%", "75%", "100%", "150%", "200%", "300%" }, { 25, 50, 75, 100, 150, 200, 300 }, 3);
+            List("wave_heal", "HEAL AFTER EACH WAVE", "Health restored when a wave is cleared.",
+                 { "NONE", "10%", "25%", "50%", "FULL" }, { 0, 10, 25, 50, 100 }, 0);
+
             Head("ENEMY MIX");
             Mix("mix_melee", "BRAWLERS", "Fist and baton fighters.");
             Mix("mix_ranged", "GUNMEN", "Pistols and rifles.");

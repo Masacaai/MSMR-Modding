@@ -819,6 +819,7 @@ namespace director {
             else LOG("director: post-run release skipped (a new run started)");
         }).detach();
         boons::End();   // restores the player's own suit power and mods
+        boons::SetPlayerSettings(false);
         LOG("director: run ended (%s) at wave %d, %d kills", end_reason.c_str(), g_plan.wave, g_kills);
         g_running = false;
         if (g_on_end) g_on_end(end_reason);
@@ -897,6 +898,7 @@ namespace director {
         uint32_t seed = opt.seed ? opt.seed : std::random_device{}();
         g_rng.seed(seed);
         g_cfg = MakeConfig(opt, g_rng);
+        boons::SetPlayerSettings(opt.player_settings);
         g_kills = 0;
         g_plan = {};
         g_cull_blocked = g_roam_ok = false;

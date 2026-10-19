@@ -10,6 +10,8 @@
 #include "natives.h"
 #include "runloadout.h"
 #include "scan.h"
+#include "settings.h"
+#include "paths.h"
 #include "stats.h"
 #include "timescale.h"
 
@@ -20,6 +22,7 @@
 #include <cmath>
 #include <cstdio>
 #include <deque>
+#include <fstream>
 #include <memory>
 #include <mutex>
 #include <random>
@@ -69,6 +72,14 @@ namespace boons {
     static DWORD g_last_refresh = 0;
     constexpr DWORD kOfferTimeoutMs = 45000;          // AFK: take a random option (curses: decline)
 
+    static std::atomic<bool> g_ps = false;   // follow the player's settings
+    static int S(const char* key, int def) { return g_ps ? settings::Value(key, def) : def; }
+    void SetPlayerSettings(bool on) { g_ps = on; }
+    static const char* const kStatKeys[4] = { "stat_power", "stat_tough", "stat_vamp", "stat_second" };
+    static const char* const kCurseKeys[4] = { "curse_glass", "curse_riot", "curse_open", "curse_blood" };
+    static float CurseStrength() { return S("curse_strength", 100) / 100.0f; }
+    static int RewardChoices() { return S("reward_choices", 3); }
+
     static bool HasCurse(Curse c) { return std::find(g_curses.begin(), g_curses.end(), c) != g_curses.end(); }
 
     // The game's own name and description for an item (cached), so rewards read exactly as in the suit menu, including a
@@ -105,16 +116,18 @@ namespace boons {
     }
 
     float OutgoingMult() {
-        if (!g_active) return 1.0f;
-        float m = 1.0f + 0.20f * g_stacks[(int)Stat::Power];
+        const float base = S("dmg_out", 100) / 100.0f;
+        if (!g_active) return base;
+        float m = base * (1.0f + 0.20f * g_stacks[(int)Stat::Power]);
         if (HasCurse(Curse::GlassCannon)) m *= 1.40f;
         return m;
     }
 
     float IncomingMult() {
-        if (!g_active) return 1.0f;
-        float m = std::pow(0.85f, (float)g_stacks[(int)Stat::Toughness]);
-        if (HasCurse(Curse::GlassCannon)) m *= 1.30f;
+        const float base = S("dmg_in", 100) / 100.0f;
+        if (!g_active) return base;
+        float m = base * std::pow(0.85f, (float)g_stacks[(int)Stat::Toughness]);
+        if (HasCurse(Curse::GlassCannon)) m *= 1.0f + 0.30f * CurseStrength();
         return m;
     }
 
@@ -158,17 +171,31 @@ namespace boons {
             // need gadgets, which are locked during runs
             "Resupply", "Battle Tech", "Scavenger", "Metabolic Converter",
         };
-        [[maybe_unused]] auto blocked = [](uint64_t id) {
+        // The player's own list: EndlessArena_pools.txt in the data folder, one item name per line (# starts a comment).
+        std::vector<std::string> mine;
+        if (g_ps) {
+            std::ifstream in(DataDir() + "\\EndlessArena_pools.txt");
+            for (std::string line; std::getline(in, line);) {
+                size_t h = line.find('#');
+                if (h != std::string::npos) line.resize(h);
+                while (!line.empty() && isspace((unsigned char)line.back())) line.pop_back();
+                size_t b = 0;
+                while (b < line.size() && isspace((unsigned char)line[b])) b++;
+                if (b < line.size()) mine.push_back(line.substr(b));
+            }
+        }
+        const bool curated = S("curated", 0) != 0;
+        auto blocked = [&](uint64_t id) {
             const inventory::ItemText& t = GameText(id);
             if (!t.ok) return false;
-            for (const char* b : kBlocked) if (_stricmp(t.name.c_str(), b) == 0) return true;
+            if (curated) for (const char* b : kBlocked) if (_stricmp(t.name.c_str(), b) == 0) return true;
+            for (const auto& b : mine) if (_stricmp(t.name.c_str(), b.c_str()) == 0) return true;
             return false;
         };
         // OFF for now (user, 2026-10-15): everything is included until the technical work is done; the user has the final say
         // on curation. Flip kCuratePools to apply the list above.
-        constexpr bool kCuratePools = false;
         size_t before_p = pools->first.size(), before_m = pools->second.size();
-        if (kCuratePools) {
+        if (curated || !mine.empty()) {
             std::erase_if(pools->first, blocked);
             std::erase_if(pools->second, blocked);
         }
@@ -209,20 +236,20 @@ namespace boons {
     static Offer MakeRewardOffer() {
         Offer o;
         o.title = "Choose a reward";
-        int n = HasCurse(Curse::RiotCall) ? 4 : 3;
+        int n = std::min(4, RewardChoices() + (HasCurse(Curse::RiotCall) ? 1 : 0));
         std::vector<Option> pool;
         uint64_t cur[5];
         inventory::Loadout(cur);
         bool power_empty = cur[1] == 0;
-        if (runloadout::FreeModSlot() >= 0)
+        if (runloadout::FreeModSlot() >= 0 && S("boon_mods", 1))
             for (uint64_t id : g_mods)
                 if (!runloadout::HasItem(id)) pool.push_back({ Kind::Mod, id, 0, Described(id) });
         for (int i = 0; i < (int)std::size(kStats); i++)
-            if (g_stacks[i] < kStats[i].max_stacks)
+            if (g_stacks[i] < (S("stat_stacks", 0) > 0 ? S("stat_stacks", 0) : kStats[i].max_stacks) && S(kStatKeys[i], 1))
                 pool.push_back({ Kind::Stat, 0, i, std::string(kStats[i].name) + " (" + kStats[i].desc + ")" });
         std::shuffle(pool.begin(), pool.end(), g_rng);
         // Until the run has a suit power, one option is always a power.
-        if (power_empty && !g_powers.empty()) {
+        if (power_empty && !g_powers.empty() && S("boon_powers", 1)) {
             uint64_t id = g_powers[std::uniform_int_distribution<size_t>(0, g_powers.size() - 1)(g_rng)];
             o.options.push_back({ Kind::Power, id, 0, Described(id) });
         }
@@ -242,7 +269,7 @@ namespace boons {
         for (uint64_t id : g_powers)
             if (id != cur[1]) pool.push_back(id);
         std::shuffle(pool.begin(), pool.end(), g_rng);
-        int n = HasCurse(Curse::RiotCall) ? 4 : 3;
+        int n = std::min(4, RewardChoices() + (HasCurse(Curse::RiotCall) ? 1 : 0));
         for (int i = 0; i < (int)pool.size() && i < n; i++)
             o.options.push_back({ Kind::Power, pool[i], 0, Described(pool[i]) + (cur[1] ? " (replaces your power)" : "") });
         return o;
@@ -254,30 +281,36 @@ namespace boons {
         o.curse = true;
         std::vector<int> pool;
         for (int i = 0; i < (int)std::size(kCurses); i++)
-            if (!HasCurse(kCurses[i].curse)) pool.push_back(i);
+            if (!HasCurse(kCurses[i].curse) && S(kCurseKeys[i], 1)) pool.push_back(i);
         std::shuffle(pool.begin(), pool.end(), g_rng);
-        for (int i = 0; i < (int)pool.size() && i < 2; i++) {
+        for (int i = 0; i < (int)pool.size() && i < S("curse_choices", 2); i++) {
             const CurseDef& c = kCurses[pool[i]];
             o.options.push_back({ Kind::Curse, 0, pool[i], std::string(c.name) + ": " + c.up + ", but " + c.down });
         }
-        if (!o.options.empty()) o.options.push_back({ Kind::Decline, 0, 0, "No deal" });
+        if (!o.options.empty() && !S("curse_forced", 0)) o.options.push_back({ Kind::Decline, 0, 0, "No deal" });
         return o;
     }
 
     void OnWaveCleared(int wave, bool boss_wave) {
-        if (!g_active) return;
+        const float base_heal = S("wave_heal", 0) / 100.0f;
+        if (!g_active) { HealHero(base_heal); return; }
         // Heals first, so they're felt during the pick.
-        float heal = 0.30f * g_stacks[(int)Stat::Recovery] + (HasCurse(Curse::OpenSeason) ? 0.25f : 0.0f);
+        float heal = base_heal + 0.30f * g_stacks[(int)Stat::Recovery] + (HasCurse(Curse::OpenSeason) ? 0.25f : 0.0f);
         HealHero(heal);
         std::lock_guard<std::mutex> lock(g_mutex);
+        const int every = S("reward_every", 1), curse_when = S("curse_when", 0);
         if (boss_wave) {
-            Offer p = MakePowerOffer();
-            if (!p.options.empty()) g_queue.push_back(p);
-            Offer c = MakeCurseOffer();
-            if (!c.options.empty()) g_queue.push_back(c);
-        } else {
+            if (S("boss_power", 1) && S("boon_powers", 1)) {
+                Offer p = MakePowerOffer();
+                if (!p.options.empty()) g_queue.push_back(p);
+            }
+        } else if (every > 0 && wave % every == 0) {
             Offer r = MakeRewardOffer();
             if (!r.options.empty()) g_queue.push_back(r);
+        }
+        if (curse_when == 1 || (curse_when == 0 && boss_wave)) {
+            Offer c = MakeCurseOffer();
+            if (!c.options.empty()) g_queue.push_back(c);
         }
         if (!g_queue.empty()) g_queue.front().ready_at = GetTickCount() + kOfferDelayMs;
         g_offering = !g_queue.empty();
@@ -356,7 +389,7 @@ namespace boons {
                 if (input::Pressed(acts[i])) { chosen = o.options[i]; have = true; break; }
             if (!have && now - o.shown_at > kOfferTimeoutMs) {
                 // Nobody's picking (AFK): curses default to "No deal", rewards to a random option.
-                chosen = o.curse ? o.options.back()
+                chosen = (o.curse && o.options.back().kind == Kind::Decline) ? o.options.back()
                                  : o.options[std::uniform_int_distribution<size_t>(0, o.options.size() - 1)(g_rng)];
                 have = true;
                 LOG("boons: offer timed out");
@@ -380,7 +413,7 @@ namespace boons {
     void AdjustWave(plan::WavePlan& p, int horde_max) {
         if (!g_active) return;
         if (HasCurse(Curse::RiotCall)) {
-            p.count = (int)std::ceil(p.count * 1.4f);
+            p.count = (int)std::ceil(p.count * (1.0f + 0.4f * CurseStrength()));
             p.max_alive = std::min(p.max_alive + 4, std::max(8, horde_max));
         }
         if (HasCurse(Curse::OpenSeason)) {
@@ -390,7 +423,7 @@ namespace boons {
             p.caps[(int)Role::Sniper] = std::max(p.caps[(int)Role::Sniper], 2);
             p.caps[(int)Role::Rocket] = std::max(p.caps[(int)Role::Rocket], 2);
         }
-        if (HasCurse(Curse::BloodPrice)) p.elite_chance = std::min(0.6f, std::max(0.1f, p.elite_chance * 2.0f));
+        if (HasCurse(Curse::BloodPrice)) p.elite_chance = std::min(0.9f, std::max(0.1f, p.elite_chance * (1.0f + CurseStrength())));
     }
 
     std::vector<std::string> Summary() {
