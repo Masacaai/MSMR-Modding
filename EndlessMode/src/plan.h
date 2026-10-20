@@ -89,6 +89,9 @@ namespace plan {
     // True if the player chose this boss for a faction (settings): it is preloaded and fought even if untested.
     bool BossForced(const Config& cfg, const roster::Boss* b);
 
+    // Fills cfg.sinister (the curated crowd) and cfg.sinister_bosses for the late chapter (src/SECRET.md).
+    void BuildSinister(Config& cfg, bool with_kingpin = true);
+
     WavePlan Make(const Config& cfg, int wave, std::mt19937& rng);
 
     // Horde mode (user design, 2026-10-13): no waves or bosses, a continuous stream that escalates by level. Level 1

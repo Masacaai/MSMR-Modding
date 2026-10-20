@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <set>
 #include <cmath>
+#include <cstring>
 #include <cstdio>
 
 namespace plan {
@@ -402,5 +403,31 @@ namespace plan {
                  p.wave, p.chapter + 1, p.cycle, p.faction ? p.faction->id : "?", p.kind.c_str(), p.count, p.max_alive,
                  p.health_mult, p.elite_chance, bosses.c_str(), p.boss_health_mult, roles.c_str());
         return buf;
+    }
+
+    // The crowd of the six factions: a handful of unit types from each (about 24 in all, so the models of the whole chapter fit in memory at
+    // once), and the six bosses (Kingpin only if with_kingpin).
+    void BuildSinister(Config& cfg, bool with_kingpin) {
+        auto crowd = std::make_shared<roster::Faction>();
+        crowd->id = "sinister";
+        crowd->name = "The Sinister Six";
+        for (const char* id : { "fisk", "demons", "sable", "hammerhead", "tombstone", "taskmaster" }) {
+            const roster::Faction* f = roster::FindFaction(id);
+            if (!f) continue;
+            bool melee = false, pistol = false, rifle = false, extra = false;
+            for (const auto& u : f->units) {
+                using R = roster::Role;
+                if (u.role == R::Melee && !melee) { melee = true; crowd->units.push_back(u); }
+                else if (u.role == R::Pistol && !pistol) { pistol = true; crowd->units.push_back(u); }
+                else if (u.role == R::Rifle && !rifle) { rifle = true; crowd->units.push_back(u); }
+                else if (!extra && (u.role == R::Special || u.role == R::Rocket || u.role == R::Shield)) { extra = true; crowd->units.push_back(u); }
+            }
+        }
+        cfg.sinister = crowd;
+        cfg.sinister_bosses.clear();
+        for (const char* name : { "Kingpin", "Mister Negative", "Tombstone", "Taskmaster", "Hammerhead", "Silver Sable" }) {
+            if (!strcmp(name, "Kingpin") && !with_kingpin) continue;
+            if (const roster::Boss* b = roster::FindBoss(name)) cfg.sinister_bosses.push_back(b);
+        }
     }
 }

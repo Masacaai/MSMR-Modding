@@ -736,31 +736,7 @@ namespace director {
     }
     static bool g_sinister_done = false;   // this run beat the finale
 
-    // The crowd of the six factions: a handful of unit types from each (about 24 in all, so the models of the whole chapter
-    // fit in memory at once), and the six bosses.
-    static void BuildSinister(plan::Config& cfg) {
-        auto crowd = std::make_shared<roster::Faction>();
-        crowd->id = "sinister";
-        crowd->name = "The Sinister Six";
-        for (const char* id : { "fisk", "demons", "sable", "hammerhead", "tombstone", "taskmaster" }) {
-            const roster::Faction* f = roster::FindFaction(id);
-            if (!f) continue;
-            bool melee = false, pistol = false, rifle = false, extra = false;
-            for (const auto& u : f->units) {
-                using R = roster::Role;
-                if (u.role == R::Melee && !melee) { melee = true; crowd->units.push_back(u); }
-                else if (u.role == R::Pistol && !pistol) { pistol = true; crowd->units.push_back(u); }
-                else if (u.role == R::Rifle && !rifle) { rifle = true; crowd->units.push_back(u); }
-                else if (!extra && (u.role == R::Special || u.role == R::Rocket || u.role == R::Shield)) { extra = true; crowd->units.push_back(u); }
-            }
-        }
-        cfg.sinister = crowd;
-        cfg.sinister_bosses.clear();
-        for (const char* name : { "Kingpin", "Mister Negative", "Tombstone", "Taskmaster", "Hammerhead", "Silver Sable" }) {
-            if (!strcmp(name, "Kingpin") && !SecretInt("kingpin", 1)) continue;
-            if (const roster::Boss* b = roster::FindBoss(name)) cfg.sinister_bosses.push_back(b);
-        }
-    }
+    static void BuildSinister(plan::Config& cfg) { plan::BuildSinister(cfg, SecretInt("kingpin", 1) != 0); }
 
     static bool g_sinister_first_met = false;   // this run met the chapter for the first time ever
 
@@ -817,6 +793,7 @@ namespace director {
             spawn::Preload(b->path);
             if (b->head && *b->head) spawn::Preload(b->head);
         }
+        g_preload_time = GetTickCount();   // bosses wait 20 s after their assets were requested; these were requested just now
     }
 
     static plan::Config MakeConfig(const Options& opt, std::mt19937& rng) {
