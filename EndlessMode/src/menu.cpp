@@ -24,7 +24,7 @@ namespace {
     constexpr uintptr_t kMovie = 0x1d29690;          // the UI movie Flash objects are made in
     constexpr uintptr_t kOpenOptionsName = 0x389f4c0, kResetAllHash = 0x6d8ed88;
     constexpr uintptr_t kSettingType = 0x3a7d6e8, kHeadingType = 0x3a7d838;   // option-type vtables
-    constexpr uint32_t kTabId = 93;                  // our tabs are 93, 94, 95; the game's are 2-10 and its RESET ALL ignores anything above
+    constexpr uint32_t kTabId = 93;                  // the game's tabs are 2-10; its RESET ALL ignores anything above
     constexpr int kFirstSetting = 0x200;             // the game's settings are 0-122
     constexpr size_t kTabBytes = 0x40, kItemBytes = 0x88, kChoiceBytes = 0x50;
     constexpr size_t kRows = settings::kMaxRows, kChoices = settings::kMaxChoices;
@@ -75,10 +75,9 @@ namespace {
     std::atomic<int> g_built{};   // the tab's items: 0 not yet, 1 ready, 2 cannot be built
     thread_local bool t_building = false;
 
-    constexpr int kTabs = settings::kTabs;
-    alignas(16) unsigned char g_tab[kTabs][kTabBytes];
+    alignas(16) unsigned char g_tab[kTabBytes];
     alignas(16) unsigned char g_items[kRows][kItemBytes];
-    alignas(16) unsigned char g_tab_items[kTabs][kRows][kItemBytes];   // each tab's own run of items (copies of g_items)
+    alignas(16) unsigned char g_tab_items[kRows][kItemBytes];   // the items on screen: the SHOWING row and the current section's rows (copies of g_items)
     alignas(16) unsigned char g_choice[kRows][kChoices][kChoiceBytes];
 
     // Texts by the hash the game looks them up with: CRC-32 of a tag of our own. They answer only while our tab is being
@@ -87,7 +86,7 @@ namespace {
     std::array<Text, 8 + kRows * (2 + kChoices)> g_texts{};
     std::array<uint16_t, 8 + kRows * (2 + kChoices)> g_by_hash{};
     size_t g_text_count = 0;
-    const Text *g_tab_name[kTabs]{}, *g_tab_heading{};
+    const Text *g_tab_name{}, *g_tab_heading{};
     const Text *g_titles[kRows]{}, *g_helps[kRows]{};
     const Text* g_choice_texts[kRows][kChoices]{};
 
@@ -111,11 +110,7 @@ namespace {
     void AddTexts() {
         if (g_text_count) return;
         const auto& rows = settings::Rows();
-        for (int t = 0; t < kTabs; t++) {
-            char tn[16];
-            snprintf(tn, sizeof(tn), "EA_TAB%d", t);
-            g_tab_name[t] = AddText(tn, settings::TabName(t));
-        }
+        g_tab_name = AddText("EA_TAB", "ENDLESS ARENA");
         g_tab_heading = AddText("EA_HEAD", "ENDLESS ARENA SETTINGS");
         char tag[24];
         for (size_t r = 0; r < rows.size(); ++r) {
@@ -195,18 +190,11 @@ namespace {
                     Put<uint64_t>(c, 0x28, 0);
                 }
             }
-            for (int t = 0; t < kTabs; t++) {
-                uint32_t n = 0;
-                for (size_t r = 0; r < rows.size(); ++r)
-                    if (rows[r].tab == t) std::memcpy(g_tab_items[t][n++], g_items[r], kItemBytes);
-                std::memcpy(g_tab[t], reinterpret_cast<const void*>(menu_tab), kTabBytes);
-                Put<uint32_t>(g_tab[t], 8, kTabId + (uint32_t)t);
-                PutTag(g_tab[t], 0x10, g_tab_name[t]);
-                PutTag(g_tab[t], 0x20, g_tab_heading);
-                Put<uint64_t>(g_tab[t], 0x30, (uint64_t)g_tab_items[t]);
-                Put<uint32_t>(g_tab[t], 0x38, n);
-                Put<uint32_t>(g_tab[t], 0x3c, n);
-            }
+            std::memcpy(g_tab, reinterpret_cast<const void*>(menu_tab), kTabBytes);
+            Put<uint32_t>(g_tab, 8, kTabId);
+            PutTag(g_tab, 0x10, g_tab_name);
+            PutTag(g_tab, 0x20, g_tab_heading);
+            Put<uint64_t>(g_tab, 0x30, (uint64_t)g_tab_items);
             return 0;
         } __except (EXCEPTION_EXECUTE_HANDLER) {
             return 9501;
@@ -226,18 +214,24 @@ namespace {
         if (!Ready()) return;
         LARGE_INTEGER t0, t1, freq;
         QueryPerformanceCounter(&t0);
+        // Only the SHOWING row and the rows of the section it is on go to the screen.
+        const auto& rows = settings::Rows();
+        const int section = settings::CurrentSection();
+        uint32_t n = 0;
+        for (size_t r = 0; r < rows.size(); ++r)
+            if (rows[r].tab == -1 || rows[r].tab == section) std::memcpy(g_tab_items[n++], g_items[r], kItemBytes);
+        Put<uint32_t>(g_tab, 0x38, n);
+        Put<uint32_t>(g_tab, 0x3c, n);
         __try {
             void* movie = reinterpret_cast<void*(__fastcall*)()>(g_base + kMovie)();
             if (!movie) return;
-            for (int t = 0; t < kTabs; t++) {
-                GfxValue value{};
-                std::memset(value.head, 0xff, sizeof(value.head));
-                t_building = true;
-                const bool made = reinterpret_cast<bool(__fastcall*)(GfxValue*, void*, const void*)>(g_base + kBuildTab)(&value, movie, g_tab[t]);
-                t_building = false;
-                if (made && PushBack(tabs, value)) ++g_tabs_built;
-                ReleaseValue(value);
-            }
+            GfxValue value{};
+            std::memset(value.head, 0xff, sizeof(value.head));
+            t_building = true;
+            const bool made = reinterpret_cast<bool(__fastcall*)(GfxValue*, void*, const void*)>(g_base + kBuildTab)(&value, movie, g_tab);
+            t_building = false;
+            if (made && PushBack(tabs, value)) ++g_tabs_built;
+            ReleaseValue(value);
         } __except (EXCEPTION_EXECUTE_HANDLER) {
             t_building = false;   // not again this session; the game's own tabs go on
             g_failure = 9503;
@@ -246,7 +240,7 @@ namespace {
         QueryPerformanceCounter(&t1);
         QueryPerformanceFrequency(&freq);
         static int logged = 0;
-        if (logged++ < 8) LOG("menu: built %d tabs in %.1f ms", kTabs, 1000.0 * (double)(t1.QuadPart - t0.QuadPart) / (double)freq.QuadPart);
+        if (logged++ < 8) LOG("menu: built the tab (section %d, %u rows) in %.1f ms", section, n, 1000.0 * (double)(t1.QuadPart - t0.QuadPart) / (double)freq.QuadPart);
     }
 
     int RowOf(int setting) {
@@ -263,16 +257,25 @@ namespace {
     }
     void __fastcall CallbackHook(void* ui, uint32_t hash, GfxValue* args, uint32_t count) {
         // Y RESET ALL on our tab: the game's RESET ALL takes only its own tabs.
-        if (g_built == 1 && args && count >= 1 && (args[0].type & kTypeMask) == kInt && (uint32_t)args[0].data >= kTabId &&
-            (uint32_t)args[0].data < kTabId + kTabs && hash == Get<uint32_t>(g_base + kResetAllHash)) {
-            settings::ResetTab((int)((uint32_t)args[0].data - kTabId));
+        if (g_built == 1 && args && count >= 1 && (args[0].type & kTypeMask) == kInt && (uint32_t)args[0].data == kTabId &&
+            hash == Get<uint32_t>(g_base + kResetAllHash)) {
+            settings::ResetSection(settings::CurrentSection());
             ++g_changes;
             reinterpret_cast<void(__fastcall*)(void*)>(g_base + kOpenOptions)(ui);   // every tab shows its values again
             return;
         }
+        LARGE_INTEGER c0, c1, cf;
+        QueryPerformanceCounter(&c0);
+        const uint64_t built_before = g_tabs_built;
         g_callback(ui, hash, args, count);
-        // A preset rewrote other rows: build the tabs again so every row shows its new value (as after RESET ALL).
-        if (g_built == 1 && settings::TakeRebuild()) reinterpret_cast<void(__fastcall*)(void*)>(g_base + kOpenOptions)(ui);
+        // A preset or a new section changed which rows are on screen: build the tabs again (unless the game just did, as it does after a change).
+        if (g_built == 1 && settings::TakeRebuild() && g_tabs_built == built_before)
+            reinterpret_cast<void(__fastcall*)(void*)>(g_base + kOpenOptions)(ui);
+        QueryPerformanceCounter(&c1);
+        QueryPerformanceFrequency(&cf);
+        const double ms = 1000.0 * (double)(c1.QuadPart - c0.QuadPart) / (double)cf.QuadPart;
+        static int slow = 0;
+        if (ms > 8.0 && slow++ < 20) LOG("menu: the game took %.1f ms for callback %08x (tabs built %llu -> %llu)", ms, hash, (unsigned long long)built_before, (unsigned long long)g_tabs_built.load());
     }
     int __fastcall TypeHook(void* sys, int setting) {   // 0 a list, 5 a heading
         const int r = RowOf(setting);

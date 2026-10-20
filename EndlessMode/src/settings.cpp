@@ -25,12 +25,8 @@ namespace settings {
 
         std::string Ini() { return DataDir() + "\\EndlessArena_settings.ini"; }
 
-        void Head(const char* title) {
-            Row r;
-            r.title = title;
-            r.tab = g_cur_tab;
-            g_rows.push_back(std::move(r));
-        }
+        void Head(const char*) {}   // no headings: the SHOWING row names the section
+        void Sect(int n) { g_cur_tab = n; }
         void Switch(const char* key, const char* title, const char* help, bool def) {
             Row r;
             r.key = key; r.title = title; r.help = help; r.def = def ? 1 : 0; r.tab = g_cur_tab;
@@ -113,7 +109,11 @@ namespace settings {
         }
 
         void Build() {
-            Head("PRESETS");
+            Sect(-1);
+            List("section", "SHOWING", "Pick which settings to edit; the rows below change. Campaign and Horde keep their own settings.",
+                 { "CAMPAIGN: RUN", "CAMPAIGN: DIFFICULTY", "CAMPAIGN: REWARDS", "CAMPAIGN: CURSES", "CAMPAIGN: ENEMY MIX",
+                   "CAMPAIGN: FACTIONS", "CAMPAIGN: BOSSES", "HORDE: RUN", "HORDE: ENEMY MIX", "HORDE: FACTIONS" }, {}, 0);
+            Sect(0);
             List("preset", "PRESET", "Pick one to set many rows at once. DEFAULT puts everything back. You can still change any row afterwards. Row changes you make before choosing a preset are replaced.",
                  { "PICK ONE", "DEFAULT", "CASUAL", "BRUTAL", "CHAOS", "BOSS FOCUS", "GLASS CANNON" }, {}, 0);
 
@@ -122,7 +122,7 @@ namespace settings {
             Switch("boons", "BOONS AND CURSES", "Campaign: pick a power-up after each wave, and take the curse that comes with it. OFF: no picks, you start with your normal suit and gadgets.", true);
             Switch("practice", "PRACTICE MODE", "Your health is kept full. Nothing ends the run but leaving it.", false);
 
-            Head("DIFFICULTY");
+            Sect(1);
             List("count", "ENEMIES PER WAVE", "How many enemies each wave sends, as a share of the normal number.",
                  { "50%", "75%", "100%", "125%", "150%", "200%", "300%" }, { 50, 75, 100, 125, 150, 200, 300 }, 2);
             List("field", "ENEMIES AT ONCE", "The most enemies on the field together (also the Horde cap). Past 100 the game can stutter or hang.",
@@ -137,7 +137,7 @@ namespace settings {
             List("elites", "ELITE ENEMIES", "How often a goon is replaced by one of the faction's elite units.",
                  { "OFF", "RARE", "NORMAL", "OFTEN", "ALWAYS" }, { 0, 50, 100, 200, 400 }, 2);
 
-            Head("REWARDS");
+            Sect(2);
             List("reward_every", "REWARD EVERY", "How often clearing a wave offers a reward pick. Boss waves always offer their power pick.",
                  { "WAVE", "2 WAVES", "3 WAVES", "BOSSES ONLY" }, { 1, 2, 3, 0 }, 0);
             List("reward_choices", "CHOICES PER REWARD", "Options on every reward screen (the Riot Call curse adds one, up to 4).",
@@ -153,7 +153,7 @@ namespace settings {
                  { "DEFAULT", "1", "2", "3", "5", "10" }, { 0, 1, 2, 3, 5, 10 }, 0);
             Switch("curated", "SKIP USELESS POWERS", "Leave out the suit powers and mods that do nothing in the arena (the author's list). You can also list your own in EndlessArena_pools.txt in the data folder.", false);
 
-            Head("CURSES");
+            Sect(3);
             List("curse_when", "CURSE OFFERS", "When a bittersweet deal is offered: after boss waves, after every wave, or never.",
                  { "AFTER BOSSES", "EVERY WAVE", "NEVER" }, { 0, 1, 2 }, 0);
             List("curse_choices", "CURSES OFFERED", "How many different deals are on offer.", { "1", "2", "3", "4" }, { 1, 2, 3, 4 }, 1);
@@ -165,7 +165,7 @@ namespace settings {
             Switch("curse_open", "CURSE: OPEN SEASON", "Heal 25% after each wave, snipers and rockets from the first wave.", true);
             Switch("curse_blood", "CURSE: BLOOD PRICE", "Heal 6% per kill, elites twice as often.", true);
 
-            Head("YOU");
+            Sect(1);
             List("dmg_out", "YOUR DAMAGE", "How hard you hit, on top of any boons.",
                  { "50%", "75%", "100%", "150%", "200%", "300%", "500%" }, { 50, 75, 100, 150, 200, 300, 500 }, 2);
             List("dmg_in", "DAMAGE YOU TAKE", "How hard enemies hit you, on top of any boons.",
@@ -173,14 +173,15 @@ namespace settings {
             List("wave_heal", "HEAL AFTER EACH WAVE", "Health restored when a wave is cleared.",
                  { "NONE", "10%", "25%", "50%", "FULL" }, { 0, 10, 25, 50, 100 }, 0);
 
-            // ---- tab 1: the Campaign's enemies ----
-            g_cur_tab = 1;
+            Sect(4);
             MixRows("", "ENEMY MIX");
+            Sect(5);
             FactionRows("", true);
+            Sect(6);
             BossRows();
 
-            // ---- tab 2: Horde (its own copy of what applies to it) ----
-            g_cur_tab = 2;
+            // ---- Horde (its own copy of what applies to it) ----
+            Sect(7);
             List("h_preset", "PRESET", "Pick one to set many Horde rows at once. DEFAULT puts them all back. Changes you make before choosing a preset are replaced.",
                  { "PICK ONE", "DEFAULT", "CASUAL", "BRUTAL", "CHAOS", "BOSS FOCUS", "GLASS CANNON" }, {}, 0);
             Head("HORDE RUN");
@@ -192,12 +193,13 @@ namespace settings {
                  { "10", "16", "24", "32", "40", "50", "60", "80", "100" }, { 10, 16, 24, 32, 40, 50, 60, 80, 100 }, 4);
             List("h_elites", "ELITE ENEMIES", "How often an enemy is replaced by one of its faction's elite units.",
                  { "OFF", "RARE", "NORMAL", "OFTEN", "ALWAYS" }, { 0, 50, 100, 200, 400 }, 2);
-            Head("YOU");
             List("h_dmg_out", "YOUR DAMAGE", "How hard you hit.",
                  { "50%", "75%", "100%", "150%", "200%", "300%", "500%" }, { 50, 75, 100, 150, 200, 300, 500 }, 2);
             List("h_dmg_in", "DAMAGE YOU TAKE", "How hard enemies hit you.",
                  { "25%", "50%", "75%", "100%", "150%", "200%", "300%" }, { 25, 50, 75, 100, 150, 200, 300 }, 3);
+            Sect(8);
             MixRows("h_", "HORDE ENEMY MIX");
+            Sect(9);
             FactionRows("h_", false);
 
             if (g_rows.size() > kMaxRows) {
@@ -255,11 +257,11 @@ namespace settings {
         return g_rows;
     }
 
-    const char* TabName(int tab) {
-        static const char* const names[kTabs] = { "ENDLESS: CAMPAIGN", "ENDLESS: FOES", "ENDLESS: HORDE" };
-        return tab >= 0 && tab < kTabs ? names[tab] : "ENDLESS";
+    const char* SectionName(int section) {
+        const auto& r = Rows()[0];   // the SHOWING row
+        return section >= 0 && section < (int)r.choices.size() ? r.choices[(size_t)section].c_str() : "?";
     }
-    int TabOf(size_t row) { return row < Rows().size() ? Rows()[row].tab : 0; }
+    int CurrentSection() { return Rows().empty() ? 0 : g_idx[0].load(); }
 
     int Find(const std::string& key) {
         Rows();
@@ -284,6 +286,7 @@ namespace settings {
             g_idx[row] = index;
             Save(row);
             preset = g_rows[row].key == "preset" ? 1 : g_rows[row].key == "h_preset" ? 2 : 0;
+            if (g_rows[row].key == "section") g_rebuild = true;   // other rows are on screen now
         }
         std::call_once(g_writer_once, [] { std::thread(WriterLoop).detach(); });
         if (preset) ApplyPreset(index, preset == 2);
@@ -291,10 +294,10 @@ namespace settings {
 
     void ResetRow(size_t row) { Rows(); SetIndex(row, g_rows[row].def); }
 
-    void ResetTab(int tab) {
+    void ResetSection(int section) {
         Rows();
         for (size_t i = 0; i < g_rows.size(); i++)
-            if (!g_rows[i].heading() && g_rows[i].tab == tab) SetIndex(i, g_rows[i].def);
+            if (!g_rows[i].heading() && g_rows[i].tab == section) SetIndex(i, g_rows[i].def);
     }
 
     void ResetAll() {
@@ -337,7 +340,7 @@ namespace settings {
         for (size_t i = 0; i < rows.size(); i++) {
             const Row& r = rows[i];
             if (r.heading() || r.key == "preset" || r.key == "h_preset") continue;
-            if ((r.tab == 2) == horde) SetIndex(i, r.def);   // only this mode's rows
+            if (r.tab >= 0 && (r.tab >= 7) == horde) SetIndex(i, r.def);   // only this mode's rows
         }
         for (const auto& p : presets[(size_t)index]) SetValue(horde ? std::string("h_") + p.key : std::string(p.key), p.value);
         g_rebuild = true;
@@ -378,7 +381,7 @@ namespace settings {
         Rows();
         for (size_t i = 0; i < g_rows.size(); i++) {
             const Row& r = g_rows[i];
-            if (r.heading()) { LOG("settings: --- [%s] %s", TabName(r.tab), r.title.c_str()); continue; }
+            if (r.heading()) continue;
             LOG("settings: %-14s = %s", r.key.c_str(), r.choices.empty() ? (g_idx[i] ? "ON" : "OFF") : r.choices[(size_t)g_idx[i]].c_str());
         }
     }

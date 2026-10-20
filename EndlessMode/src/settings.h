@@ -14,19 +14,19 @@ namespace settings {
         std::vector<std::string> choices;   // empty: an ON/OFF switch (0 off, 1 on)
         std::vector<int> values;            // what each choice means; empty: the index itself
         int def = 0;                        // default choice
-        int tab = 0;                        // which tab of the menu shows it (see TabName)
+        int tab = 0;                        // the section that shows it; -1: always shown (the SHOWING row)
         bool heading() const { return key.empty(); }
     };
 
     const std::vector<Row>& Rows();
     constexpr size_t kMaxRows = 128, kMaxChoices = 14;
 
-    // The menu has three tabs, so each stays short (a long list made the game's settings screen lag): 0 the Campaign's run, difficulty,
-    // rewards and curses; 1 the Campaign's enemies (mix, factions, bosses); 2 Horde, which has its own copy of what applies to it (keys "h_...").
-    constexpr int kTabs = 3;
-    const char* TabName(int tab);
-    int TabOf(size_t row);
-    void ResetTab(int tab);
+    // One tab, ENDLESS ARENA, whose first row (SHOWING) picks a section; only that section's rows are on screen, so the game's settings screen
+    // stays small (117 rows at once made it lag). Campaign and Horde keep separate rows: sections 0-6 are the Campaign's, 7-9 Horde's.
+    constexpr int kSections = 10;
+    const char* SectionName(int section);
+    int CurrentSection();                 // the section the SHOWING row is on
+    void ResetSection(int section);       // the rows of one section (and nothing else)
 
     // Loads the ini (call once at start-up; building the table needs the roster).
     void Load();
