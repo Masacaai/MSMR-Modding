@@ -26,8 +26,7 @@ namespace {
     constexpr uintptr_t kOpenOptionsName = 0x389f4c0, kResetAllHash = 0x6d8ed88;
     constexpr uintptr_t kSettingType = 0x3a7d6e8, kHeadingType = 0x3a7d838;   // option-type vtables
     constexpr uint32_t kTabId = 93;                  // the game's tabs are 2-10; its RESET ALL ignores anything above
-    constexpr int kFirstSetting = 0x200;
-    constexpr uint32_t kUpdateOptionHash = 0xd649ae01;   // the screen's UpdateOption callback (setting, value); seen in the log 2026-10-19             // the game's settings are 0-122
+    constexpr int kFirstSetting = 0x200;   // the game's settings are 0-122
     constexpr size_t kTabBytes = 0x40, kItemBytes = 0x88, kChoiceBytes = 0x50;
     constexpr size_t kRows = settings::kMaxRows, kChoices = settings::kMaxChoices;
 
@@ -194,7 +193,8 @@ namespace {
                     Put<uint32_t>(c, 0x14, g_choice_texts[r][k]->hash);
                     Put<uint64_t>(c, 0x18, 0);   // no help or preview image of its own (the row's help shows)
                     Put<uint64_t>(c, 0x20, 0);
-                    Put<uint64_t>(c, 0x28, 0);
+                    Put<uint64_t>(c, 0x28, 0);   // no preview image (its tag is 16 bytes: leaving the rest asks Flash to load an image on first use?)
+                    Put<uint64_t>(c, 0x30, 0);
                 }
             }
             std::memcpy(g_tab, reinterpret_cast<const void*>(menu_tab), kTabBytes);
@@ -308,28 +308,8 @@ namespace {
             reinterpret_cast<void(__fastcall*)(void*)>(g_base + kOpenOptions)(ui);   // every tab shows its values again
             return;
         }
-        // A change of one of our rows (the screen's UpdateOption callback: setting number, new value). The game's own handler stores the value and
-        // then sends the whole settings list to Flash again, which freezes the game for about 300 ms (measured) - and the row already shows its
-        // new value, because the screen updates it before it calls us. So we take the value ourselves and skip all of that. Only a preset (which
-        // rewrites other rows) or the first change after one (the preset turns to CUSTOM) needs the list sent again.
-        if (g_built == 1 && args && count >= 2 && hash == kUpdateOptionHash) {
-            const uint32_t t0 = args[0].type & kTypeMask, t1 = args[1].type & kTypeMask;
-            const uint64_t id = args[0].data & 0xffffffffull;
-            if ((t0 == 3 || t0 == 4) && id >= (uint64_t)kFirstSetting && id < (uint64_t)kFirstSetting + settings::Rows().size() && (t1 == 3 || t1 == 4 || t1 == 5)) {
-                double v;
-                if (t1 == 5) std::memcpy(&v, &args[1].data, sizeof(v));
-                else v = t1 == 3 ? (double)(int32_t)args[1].data : (double)(uint32_t)args[1].data;
-                g_timeline_lines = 0;
-                for (auto& c : g_calls) c = 0;
-                g_set_at = GetTickCount64();
-                if (std::isfinite(v) && std::fabs(v) < 64) {
-                    settings::SetIndex((size_t)(id - kFirstSetting), (int)std::lround(v));
-                    ++g_changes;
-                }
-                if (settings::TakeRebuild()) reinterpret_cast<void(__fastcall*)(void*)>(g_base + kOpenOptions)(ui);
-                return;
-            }
-        }
+        // (Tried 2026-10-19: taking UpdateOption ourselves to skip the game's full re-send of the list. The row then showed a stale value - the screen
+        // waits for that re-send - so the game's own handler stays.)
         LARGE_INTEGER c0, c1, cf;
         QueryPerformanceCounter(&c0);
         const uint64_t built_before = g_open_count;
