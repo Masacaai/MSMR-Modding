@@ -649,7 +649,7 @@ namespace director {
     static std::vector<const roster::Faction*> AllowedFactions(bool horde) {
         std::vector<const roster::Faction*> out;
         for (const auto& f : roster::Factions())
-            if (settings::On(std::string(horde ? "h_fac_" : "fac_") + f.id)) out.push_back(&f);
+            if (settings::On(std::string("fac_") + f.id)) out.push_back(&f);
         if (out.empty()) {
             LOG("director: every faction is switched off in the settings; using them all");
             for (const auto& f : roster::Factions()) out.push_back(&f);

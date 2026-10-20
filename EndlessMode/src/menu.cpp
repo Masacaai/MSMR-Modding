@@ -259,7 +259,7 @@ namespace {
         // Y RESET ALL on our tab: the game's RESET ALL takes only its own tabs.
         if (g_built == 1 && args && count >= 1 && (args[0].type & kTypeMask) == kInt && (uint32_t)args[0].data == kTabId &&
             hash == Get<uint32_t>(g_base + kResetAllHash)) {
-            settings::ResetSection(settings::CurrentSection());
+            settings::ResetAll();
             ++g_changes;
             reinterpret_cast<void(__fastcall*)(void*)>(g_base + kOpenOptions)(ui);   // every tab shows its values again
             return;

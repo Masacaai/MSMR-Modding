@@ -25,7 +25,12 @@ namespace settings {
 
         std::string Ini() { return DataDir() + "\\EndlessArena_settings.ini"; }
 
-        void Head(const char*) {}   // no headings: the SHOWING row names the section
+        void Head(const char* title) {
+            Row r;
+            r.title = title;
+            r.tab = g_cur_tab;
+            g_rows.push_back(std::move(r));
+        }
         void Sect(int n) { g_cur_tab = n; }
         void Switch(const char* key, const char* title, const char* help, bool def) {
             Row r;
@@ -109,11 +114,8 @@ namespace settings {
         }
 
         void Build() {
-            Sect(-1);
-            List("section", "SHOWING", "Pick which settings to edit; the rows below change. Campaign and Horde keep their own settings.",
-                 { "CAMPAIGN: RUN", "CAMPAIGN: DIFFICULTY", "CAMPAIGN: REWARDS", "CAMPAIGN: CURSES", "CAMPAIGN: ENEMY MIX",
-                   "CAMPAIGN: FACTIONS", "CAMPAIGN: BOSSES", "HORDE: RUN", "HORDE: ENEMY MIX", "HORDE: FACTIONS" }, {}, 0);
             Sect(0);
+            Head("CAMPAIGN");
             List("preset", "PRESET", "Pick one to set many rows at once. DEFAULT puts everything back. You can still change any row afterwards. Row changes you make before choosing a preset are replaced.",
                  { "PICK ONE", "DEFAULT", "CASUAL", "BRUTAL", "CHAOS", "BOSS FOCUS", "GLASS CANNON" }, {}, 0);
 
@@ -174,13 +176,12 @@ namespace settings {
 
             Sect(4);
             MixRows("", "ENEMY MIX");
-            Sect(5);
-            FactionRows("", true);
             Sect(6);
             BossRows();
 
             // ---- Horde (its own copy of what applies to it) ----
             Sect(7);
+            Head("HORDE");
             List("h_preset", "PRESET", "Pick one to set many Horde rows at once. DEFAULT puts them all back. Changes you make before choosing a preset are replaced.",
                  { "PICK ONE", "DEFAULT", "CASUAL", "BRUTAL", "CHAOS", "BOSS FOCUS", "GLASS CANNON" }, {}, 0);
             Head("HORDE RUN");
@@ -199,6 +200,8 @@ namespace settings {
             MixRows("h_", "HORDE ENEMY MIX");
             Sect(9);
             FactionRows("h_", false);
+            Sect(5);
+            FactionRows("", true);   // the faction switches are shared by both modes (shown under FACTIONS)
 
             if (g_rows.size() > kMaxRows) {
                 LOG("settings: %zu rows exceeds the menu's %zu, truncating", g_rows.size(), kMaxRows);
@@ -215,9 +218,28 @@ namespace settings {
             g_last_change = GetTickCount64();
         }
 
+        bool IsHorde(const std::string& key) { return key.rfind("h_", 0) == 0 || key == "horde_level"; }
+
+        // The menu is one list in three sections - CAMPAIGN, HORDE, FACTIONS (shared) - with only the rows that matter on screen, so the game's
+        // settings screen stays quick. Every other row is hidden but still exists: the ini, the presets and the defaults reach it.
+        void ChooseShown() {
+            static const char* const kShown[] = { "preset", "boons", "count", "field", "chapter", "bosswaves", "elites", "dmg_out", "dmg_in",
+                                                  "h_preset", "horde_level", "h_field", "h_elites", "h_dmg_out", "h_dmg_in" };
+            for (auto& r : g_rows) {
+                int t = -2;
+                if (r.heading()) t = (r.title == "CAMPAIGN" || r.title == "HORDE" || r.title == "FACTIONS") ? 0 : -2;
+                else {
+                    if (r.key.rfind("fac_", 0) == 0) t = 0;
+                    for (const char* k : kShown) if (r.key == k) t = 0;
+                }
+                r.tab = t;
+            }
+        }
+
         std::once_flag g_once, g_writer_once;
         void Init() {
             Build();
+            ChooseShown();
             for (size_t i = 0; i < g_rows.size(); i++) {
                 g_idx[i] = g_rows[i].def;
                 if (!g_rows[i].heading()) g_find.emplace(g_rows[i].key, (int)i);
@@ -259,7 +281,7 @@ namespace settings {
         const auto& r = Rows()[0];   // the SHOWING row
         return section >= 0 && section < (int)r.choices.size() ? r.choices[(size_t)section].c_str() : "?";
     }
-    int CurrentSection() { return Rows().empty() ? 0 : g_idx[0].load(); }
+    int CurrentSection() { return 0; }   // one list; kept for the menu code
 
     int Find(const std::string& key) {
         Rows();
@@ -338,7 +360,8 @@ namespace settings {
         for (size_t i = 0; i < rows.size(); i++) {
             const Row& r = rows[i];
             if (r.heading() || r.key == "preset" || r.key == "h_preset") continue;
-            if (r.tab >= 0 && (r.tab >= 7) == horde) SetIndex(i, r.def);   // only this mode's rows
+            if (r.key.rfind("fac_", 0) == 0 || r.key.rfind("h_fac_", 0) == 0) continue;   // the faction switches are yours, not the preset's
+            if (IsHorde(r.key) == horde) SetIndex(i, r.def);   // only this mode's rows, hidden ones too
         }
         for (const auto& p : presets[(size_t)index]) SetValue(horde ? std::string("h_") + p.key : std::string(p.key), p.value);
         g_rebuild = true;
