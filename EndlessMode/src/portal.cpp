@@ -227,7 +227,6 @@ namespace portal {
         const std::string P = run.mode == "horde" ? "h_" : "";   // Horde has its own copy of what applies to it
         run.countdown_s = settings::Value(P + "countdown", 3);
         run.roguelike = settings::On("boons");
-        run.god = settings::On(P + "practice");
         run.horde_max = settings::Value(P + "field", 40);
         run.max_types = settings::Value(P + "budget", 44);
         run.horde_level_ms = settings::Value("horde_level", 60) * 1000;

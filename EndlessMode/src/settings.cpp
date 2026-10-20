@@ -110,8 +110,9 @@ namespace settings {
 
         void Build() {
             Sect(-1);
-            List("section", "MODE", "Campaign and Horde keep their own settings. The shoulder buttons switch between them.",
-                 { "CAMPAIGN", "HORDE" }, {}, 0);
+            List("section", "SHOWING", "Pick which settings to edit; the rows below change. Campaign and Horde keep their own settings.",
+                 { "CAMPAIGN: RUN", "CAMPAIGN: DIFFICULTY", "CAMPAIGN: REWARDS", "CAMPAIGN: CURSES", "CAMPAIGN: ENEMY MIX",
+                   "CAMPAIGN: FACTIONS", "CAMPAIGN: BOSSES", "HORDE: RUN", "HORDE: ENEMY MIX", "HORDE: FACTIONS" }, {}, 0);
             Sect(0);
             List("preset", "PRESET", "Pick one to set many rows at once. DEFAULT puts everything back. You can still change any row afterwards. Row changes you make before choosing a preset are replaced.",
                  { "PICK ONE", "DEFAULT", "CASUAL", "BRUTAL", "CHAOS", "BOSS FOCUS", "GLASS CANNON" }, {}, 0);
@@ -119,7 +120,6 @@ namespace settings {
             Head("RUN");
             List("countdown", "COUNTDOWN", "Seconds of Get Ready before a run starts.", { "3", "5", "10", "15", "30" }, { 3, 5, 10, 15, 30 }, 0);
             Switch("boons", "BOONS AND CURSES", "Campaign: pick a power-up after each wave, and take the curse that comes with it. OFF: no picks, you start with your normal suit and gadgets.", true);
-            Switch("practice", "PRACTICE MODE", "Your health is kept full. Nothing ends the run but leaving it.", false);
 
             Sect(1);
             List("count", "ENEMIES PER WAVE", "How many enemies each wave sends, as a share of the normal number.",
@@ -185,7 +185,6 @@ namespace settings {
                  { "PICK ONE", "DEFAULT", "CASUAL", "BRUTAL", "CHAOS", "BOSS FOCUS", "GLASS CANNON" }, {}, 0);
             Head("HORDE RUN");
             List("h_countdown", "COUNTDOWN", "Seconds of Get Ready before a Horde run starts.", { "3", "5", "10", "15", "30" }, { 3, 5, 10, 15, 30 }, 0);
-            Switch("h_practice", "PRACTICE MODE", "Your health is kept full. Nothing ends the run but leaving it.", false);
             List("horde_level", "LEVEL LENGTH", "How long a Horde level lasts at most before the next faction joins.",
                  { "30 S", "45 S", "60 S", "90 S", "120 S" }, { 30, 45, 60, 90, 120 }, 2);
             List("h_field", "ENEMIES AT ONCE", "The most enemies on the field together. Past 100 the game can stutter or hang.",
@@ -216,28 +215,9 @@ namespace settings {
             g_last_change = GetTickCount64();
         }
 
-        bool IsHorde(const std::string& key) { return key.rfind("h_", 0) == 0 || key == "horde_level"; }
-
-        // The rows on screen (cut down so the settings screen stays quick); every other row is hidden but still exists: the ini, the presets and
-        // the defaults reach it. Order on screen is the order they were built in.
-        void ChooseShown() {
-            static const char* const kCampaign[] = { "preset", "practice", "count", "field", "chapter", "bosswaves", "elites", "boons", "dmg_out", "dmg_in" };
-            static const char* const kHorde[] = { "h_preset", "h_practice", "horde_level", "h_field", "h_elites", "h_dmg_out", "h_dmg_in" };
-            for (auto& r : g_rows) {
-                if (r.heading() || r.key == "section") continue;
-                int t = -2;
-                if (r.key.rfind("fac_", 0) == 0) t = 0;
-                else if (r.key.rfind("h_fac_", 0) == 0) t = 1;
-                for (const char* k : kCampaign) if (r.key == k) t = 0;
-                for (const char* k : kHorde) if (r.key == k) t = 1;
-                r.tab = t;
-            }
-        }
-
         std::once_flag g_once, g_writer_once;
         void Init() {
             Build();
-            ChooseShown();
             for (size_t i = 0; i < g_rows.size(); i++) {
                 g_idx[i] = g_rows[i].def;
                 if (!g_rows[i].heading()) g_find.emplace(g_rows[i].key, (int)i);
@@ -315,7 +295,7 @@ namespace settings {
     void ResetSection(int section) {
         Rows();
         for (size_t i = 0; i < g_rows.size(); i++)
-            if (!g_rows[i].heading() && g_rows[i].tab != -1 && IsHorde(g_rows[i].key) == (section == 1)) SetIndex(i, g_rows[i].def);
+            if (!g_rows[i].heading() && g_rows[i].tab == section) SetIndex(i, g_rows[i].def);
     }
 
     void ResetAll() {
@@ -358,7 +338,7 @@ namespace settings {
         for (size_t i = 0; i < rows.size(); i++) {
             const Row& r = rows[i];
             if (r.heading() || r.key == "preset" || r.key == "h_preset") continue;
-            if (r.tab != -1 && IsHorde(r.key) == horde) SetIndex(i, r.def);   // only this mode's rows, hidden ones too
+            if (r.tab >= 0 && (r.tab >= 7) == horde) SetIndex(i, r.def);   // only this mode's rows
         }
         for (const auto& p : presets[(size_t)index]) SetValue(horde ? std::string("h_") + p.key : std::string(p.key), p.value);
         g_rebuild = true;
