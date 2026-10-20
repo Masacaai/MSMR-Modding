@@ -26,7 +26,8 @@ namespace {
     constexpr uintptr_t kOpenOptionsName = 0x389f4c0, kResetAllHash = 0x6d8ed88;
     constexpr uintptr_t kSettingType = 0x3a7d6e8, kHeadingType = 0x3a7d838;   // option-type vtables
     constexpr uint32_t kTabId = 93;                  // the game's tabs are 2-10; its RESET ALL ignores anything above
-    constexpr int kFirstSetting = 0x200;             // the game's settings are 0-122
+    constexpr int kFirstSetting = 0x200;
+    constexpr uint32_t kUpdateOptionHash = 0xd649ae01;   // the screen's UpdateOption callback (setting, value); seen in the log 2026-10-19             // the game's settings are 0-122
     constexpr size_t kTabBytes = 0x40, kItemBytes = 0x88, kChoiceBytes = 0x50;
     constexpr size_t kRows = settings::kMaxRows, kChoices = settings::kMaxChoices;
 
@@ -71,6 +72,7 @@ namespace {
 
     uintptr_t g_base{};
     std::atomic<ULONGLONG> g_open_at{ 0 };
+    std::atomic<uint64_t> g_open_count{ 0 };   // OpenOptions calls seen (a callback that made the game send the list again)
     std::atomic<ULONGLONG> g_set_at{ 0 };      // when one of our rows last changed (for the timeline below)
     std::atomic<uint32_t> g_calls[8];            // hook calls since then: type, value, active, default, default choice, text, has-text, set
     std::atomic<int> g_timeline_lines{ 0 };   // when the settings screen was last opened (OpenOptions)
@@ -258,6 +260,7 @@ namespace {
         if (name == reinterpret_cast<const char*>(g_base + kOpenOptionsName) && args && count >= 1 &&
             (args[0].type & kTypeMask) == kArray && args[0].objects) {
             g_open_at = GetTickCount64();
+            ++g_open_count;
             gamethread::LogGapsFor(4000);
             // Who asks for the whole list to be sent again? (the first dozen times)
             static int traced = 0;
@@ -295,7 +298,8 @@ namespace {
     }
     void __fastcall CallbackHook(void* ui, uint32_t hash, GfxValue* args, uint32_t count) {
         gamethread::LogGapsFor(3000);
-        if (g_open_at && GetTickCount64() - g_open_at < 120000) LOG("menu: callback %08x", hash);
+        static int shown = 0;
+        if (shown++ < 40 && g_open_at && GetTickCount64() - g_open_at < 120000) LOG("menu: callback %08x", hash);
         // Y RESET ALL on our tab: the game's RESET ALL takes only its own tabs.
         if (g_built == 1 && args && count >= 1 && (args[0].type & kTypeMask) == kInt && (uint32_t)args[0].data == kTabId &&
             hash == Get<uint32_t>(g_base + kResetAllHash)) {
@@ -304,12 +308,34 @@ namespace {
             reinterpret_cast<void(__fastcall*)(void*)>(g_base + kOpenOptions)(ui);   // every tab shows its values again
             return;
         }
+        // A change of one of our rows (the screen's UpdateOption callback: setting number, new value). The game's own handler stores the value and
+        // then sends the whole settings list to Flash again, which freezes the game for about 300 ms (measured) - and the row already shows its
+        // new value, because the screen updates it before it calls us. So we take the value ourselves and skip all of that. Only a preset (which
+        // rewrites other rows) or the first change after one (the preset turns to CUSTOM) needs the list sent again.
+        if (g_built == 1 && args && count >= 2 && hash == kUpdateOptionHash) {
+            const uint32_t t0 = args[0].type & kTypeMask, t1 = args[1].type & kTypeMask;
+            const uint64_t id = args[0].data & 0xffffffffull;
+            if ((t0 == 3 || t0 == 4) && id >= (uint64_t)kFirstSetting && id < (uint64_t)kFirstSetting + settings::Rows().size() && (t1 == 3 || t1 == 4 || t1 == 5)) {
+                double v;
+                if (t1 == 5) std::memcpy(&v, &args[1].data, sizeof(v));
+                else v = t1 == 3 ? (double)(int32_t)args[1].data : (double)(uint32_t)args[1].data;
+                g_timeline_lines = 0;
+                for (auto& c : g_calls) c = 0;
+                g_set_at = GetTickCount64();
+                if (std::isfinite(v) && std::fabs(v) < 64) {
+                    settings::SetIndex((size_t)(id - kFirstSetting), (int)std::lround(v));
+                    ++g_changes;
+                }
+                if (settings::TakeRebuild()) reinterpret_cast<void(__fastcall*)(void*)>(g_base + kOpenOptions)(ui);
+                return;
+            }
+        }
         LARGE_INTEGER c0, c1, cf;
         QueryPerformanceCounter(&c0);
-        const uint64_t built_before = g_tabs_built;
+        const uint64_t built_before = g_open_count;
         g_callback(ui, hash, args, count);
         // A preset or a new section changed which rows are on screen: build the tabs again (unless the game just did, as it does after a change).
-        if (g_built == 1 && settings::TakeRebuild() && g_tabs_built == built_before)
+        if (g_built == 1 && settings::TakeRebuild() && g_open_count == built_before)
             reinterpret_cast<void(__fastcall*)(void*)>(g_base + kOpenOptions)(ui);
         QueryPerformanceCounter(&c1);
         QueryPerformanceFrequency(&cf);
