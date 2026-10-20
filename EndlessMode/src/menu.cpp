@@ -259,6 +259,16 @@ namespace {
             (args[0].type & kTypeMask) == kArray && args[0].objects) {
             g_open_at = GetTickCount64();
             gamethread::LogGapsFor(4000);
+            // Who asks for the whole list to be sent again? (the first dozen times)
+            static int traced = 0;
+            if (traced++ < 14) {
+                void* frames[10] = {};
+                const USHORT got = CaptureStackBackTrace(0, 10, frames, nullptr);
+                char line[256] = {};
+                int len = 0;
+                for (USHORT i = 0; i < got && len < 230; i++) len += snprintf(line + len, sizeof(line) - (size_t)len, " %llx", (unsigned long long)((uintptr_t)frames[i] - g_base));
+                LOG("menu: OpenOptions called from exe+ (innermost first):%s", line);
+            }
             AddTab(args[0]);
         }
         // ActionScript runs inside this call: time it, to see where a slow settings screen spends its time.
