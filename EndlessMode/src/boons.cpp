@@ -75,7 +75,7 @@ namespace boons {
     static std::atomic<bool> g_ps = false;   // follow the player's settings
     static int S(const char* key, int def) { return g_ps ? settings::Value(key, def) : def; }
     static std::string g_pfx;   // "h_" in Horde: the damage rows have a copy per mode
-    void SetPlayerSettings(bool on, bool horde) { g_ps = on; g_pfx = horde ? "h_" : ""; }
+    void SetPlayerSettings(bool on, bool horde) { g_ps = on; g_pfx.clear(); (void)horde; }
     static int SP(const char* key, int def) { return g_ps ? settings::Value(g_pfx + key, def) : def; }
     static const char* const kStatKeys[4] = { "stat_power", "stat_tough", "stat_vamp", "stat_second" };
     static const char* const kCurseKeys[4] = { "curse_glass", "curse_riot", "curse_open", "curse_blood" };

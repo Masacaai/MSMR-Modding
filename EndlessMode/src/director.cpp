@@ -660,7 +660,7 @@ namespace director {
     // The factions of a Campaign (or Boss Rush) run, or the Horde's invasion order, from the faction settings.
     static std::vector<const roster::Faction*> SettingsOrder(const Options& opt, std::mt19937& rng, bool horde) {
         const auto allowed = AllowedFactions(horde);
-        const std::string P = horde ? "h_" : "";
+        const std::string P;   // one set of settings for both modes
         const auto& all = roster::Factions();
         const int ord = settings::Value(P + "order", 0);
         std::vector<const roster::Faction*> list;
@@ -700,7 +700,7 @@ namespace director {
 
     static void ApplySettings(plan::Config& cfg, const Options& opt) {
         const bool horde = opt.mode == "horde";
-        const std::string P = horde ? "h_" : "";
+        const std::string P;   // one set of settings for both modes
         cfg.elite_mult = settings::Value(P + "elites", 100) / 100.0f;
         using plan::Role;
         auto set = [&](const char* key, std::initializer_list<Role> roles) {

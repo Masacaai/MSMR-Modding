@@ -224,7 +224,7 @@ namespace portal {
         }
         // The player's Settings tab (settings.h) decides the rest of the run.
         run.player_settings = true;
-        const std::string P = run.mode == "horde" ? "h_" : "";   // Horde has its own copy of what applies to it
+        const std::string P;   // one set of settings for both modes
         run.countdown_s = settings::Value(P + "countdown", 3);
         run.roguelike = settings::On("boons");
         run.horde_max = settings::Value(P + "field", 40);

@@ -220,19 +220,20 @@ namespace settings {
 
         bool IsHorde(const std::string& key) { return key.rfind("h_", 0) == 0 || key == "horde_level"; }
 
-        // The menu is one list in three sections - CAMPAIGN, HORDE, FACTIONS (shared) - with only the rows that matter on screen, so the game's
-        // settings screen stays quick. Every other row is hidden but still exists: the ini, the presets and the defaults reach it.
+        // The menu is one plain list, shared by both modes, with only the rows that matter on screen (a long list, headings and extra tabs all made
+        // the game's settings screen lag). Every other row is hidden but still exists: the ini, the presets and the defaults reach it. Each shown
+        // row's description says which mode it is for.
         void ChooseShown() {
-            static const char* const kShown[] = { "preset", "boons", "count", "field", "chapter", "bosswaves", "elites", "dmg_out", "dmg_in",
-                                                  "h_preset", "horde_level", "h_field", "h_elites", "h_dmg_out", "h_dmg_in" };
+            struct Shown { const char* key; const char* scope; };
+            static const Shown kShown[] = {
+                { "preset", "BOTH MODES. " }, { "boons", "CAMPAIGN ONLY. " }, { "count", "CAMPAIGN ONLY. " }, { "field", "BOTH MODES. " },
+                { "chapter", "CAMPAIGN ONLY. " }, { "bosswaves", "CAMPAIGN ONLY. " }, { "elites", "BOTH MODES. " }, { "dmg_out", "BOTH MODES. " },
+                { "dmg_in", "BOTH MODES. " }, { "horde_level", "HORDE ONLY. " } };
             for (auto& r : g_rows) {
-                int t = -2;
-                if (r.heading()) t = (r.title == "CAMPAIGN" || r.title == "HORDE" || r.title == "FACTIONS") ? 0 : -2;
-                else {
-                    if (r.key.rfind("fac_", 0) == 0) t = 0;
-                    for (const char* k : kShown) if (r.key == k) t = 0;
-                }
-                r.tab = t;
+                r.tab = -2;
+                if (r.heading()) continue;
+                if (r.key.rfind("fac_", 0) == 0) { r.tab = 0; r.help = "BOTH MODES. " + r.help; }
+                for (const auto& k : kShown) if (r.key == k.key) { r.tab = 0; r.help = std::string(k.scope) + r.help; }
             }
         }
 
