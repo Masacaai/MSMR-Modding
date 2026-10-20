@@ -736,8 +736,6 @@ namespace director {
     }
     static bool g_sinister_done = false;   // this run beat the finale
 
-    static void BuildSinister(plan::Config& cfg) { plan::BuildSinister(cfg, SecretInt("kingpin", 1) != 0); }
-
     static bool g_sinister_first_met = false;   // this run met the chapter for the first time ever
 
     static bool AllFactionsSeen() {
@@ -822,7 +820,7 @@ namespace director {
             cfg.order = opt.player_settings ? SettingsOrder(opt, rng, false) : plan::CampaignOrder(opt.shuffle, rng, opt.max_types);
         }
         if (cfg.mode == plan::Mode::Campaign) {
-            BuildSinister(cfg);
+            plan::BuildSinister(cfg, SecretInt("kingpin", 1) != 0);
             if (opt.sinister) cfg.sinister_at = std::max(0, (std::max(opt.first_wave, 1) - 1) / std::max(1, cfg.waves_per_chapter));
         }
         return cfg;
