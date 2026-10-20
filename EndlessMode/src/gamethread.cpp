@@ -2,6 +2,8 @@
 
 #include "log.h"
 #include "natives.h"
+#include "scan.h"
+#include <thread>
 
 #include <MinHook.h>
 #include <Windows.h>
@@ -26,6 +28,51 @@ namespace gamethread {
     static int64_t g_window_start = 0;
     static std::atomic<ULONGLONG> g_gap_log_until{ 0 };
     static std::atomic<int> g_gap_lines{ 0 };
+    static std::atomic<ULONGLONG> g_sample_until{ 0 };
+    static std::atomic<bool> g_sampler_running{ false };
+    static std::atomic<int> g_prof_lines{ 0 };
+
+    static void SamplerLoop() {
+        const DWORD tid = g_thread_id;
+        HANDLE th = tid ? OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE, tid) : nullptr;
+        LARGE_INTEGER f;
+        QueryPerformanceFrequency(&f);
+        const auto& mod = scan::Game();
+        const uintptr_t lo = mod.base, hi = mod.text + mod.text_size;
+        while (th && GetTickCount64() < g_sample_until && g_prof_lines < 1500) {
+            Sleep(4);
+            LARGE_INTEGER q;
+            QueryPerformanceCounter(&q);
+            const int64_t last = g_last_qpc;
+            if (!last || (q.QuadPart - last) * 1000 / f.QuadPart < 40) continue;   // not in a stall
+            if (SuspendThread(th) == (DWORD)-1) continue;
+            CONTEXT c{};
+            c.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+            char line[400] = {};
+            if (GetThreadContext(th, &c)) {
+                int len = snprintf(line, sizeof(line), "rip=%llx", (unsigned long long)(c.Rip >= lo && c.Rip < hi ? c.Rip - lo : 0));
+                if (!(c.Rip >= lo && c.Rip < hi)) len += snprintf(line + len, sizeof(line) - (size_t)len, "(other:%llx)", (unsigned long long)c.Rip);
+                // return addresses: values on the stack that point into the exe's code
+                int found = 0;
+                for (int i = 0; i < 256 && found < 10 && len < 360; i++) {
+                    uintptr_t v = 0;
+                    SIZE_T got = 0;
+                    if (!ReadProcessMemory(GetCurrentProcess(), (void*)(c.Rsp + (uintptr_t)i * 8), &v, sizeof(v), &got) || got != sizeof(v)) break;
+                    if (v >= lo && v < hi) { len += snprintf(line + len, sizeof(line) - (size_t)len, " %llx", (unsigned long long)(v - lo)); found++; }
+                }
+            }
+            ResumeThread(th);
+            if (line[0]) { ++g_prof_lines; LOG("prof: %s", line); }
+        }
+        if (th) CloseHandle(th);
+        g_sampler_running = false;
+    }
+
+    void SampleStalls(unsigned ms) {
+        g_sample_until = GetTickCount64() + ms;
+        if (g_thread_id && !g_sampler_running.exchange(true)) std::thread(SamplerLoop).detach();
+    }
+
     void LogGapsFor(unsigned ms) { g_gap_log_until = GetTickCount64() + ms; }
 
     static void RunJobs() {

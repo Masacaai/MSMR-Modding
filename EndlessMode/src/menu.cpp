@@ -262,6 +262,7 @@ namespace {
             g_open_at = GetTickCount64();
             ++g_open_count;
             gamethread::LogGapsFor(4000);
+            gamethread::SampleStalls(4000);
             // Who asks for the whole list to be sent again? (the first dozen times)
             static int traced = 0;
             if (traced++ < 14) {
@@ -298,6 +299,7 @@ namespace {
     }
     void __fastcall CallbackHook(void* ui, uint32_t hash, GfxValue* args, uint32_t count) {
         gamethread::LogGapsFor(3000);
+        gamethread::SampleStalls(3000);
         static int shown = 0;
         if (shown++ < 40 && g_open_at && GetTickCount64() - g_open_at < 120000) LOG("menu: callback %08x", hash);
         // Y RESET ALL on our tab: the game's RESET ALL takes only its own tabs.

@@ -20,6 +20,10 @@ namespace gamethread {
     // Logs every frame gap longer than 60 ms (with the time since the previous tick) until `ms` from now; for hunting hitches around a menu.
     void LogGapsFor(unsigned ms);
 
+    // A poor man's profiler for hitches: for `ms` from now, while the game thread has not ticked for 40 ms, sample where it is (its instruction
+    // pointer and the return addresses it can find on the stack, as exe+RVA) every 4 ms into the log ("prof:" lines).
+    void SampleStalls(unsigned ms);
+
     // Queue a job; it runs inside the next tick.
     void Post(std::function<void()> job);
 
