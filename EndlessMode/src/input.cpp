@@ -7,7 +7,7 @@
 
 namespace input {
     static std::atomic<Device> g_last = Device::Keyboard;
-    static bool g_prev[5] = {};
+    static bool g_prev[8] = {};
 
     struct PadState { DWORD packet; WORD buttons; BYTE lt, rt; SHORT lx, ly, rx, ry; };
 
@@ -66,6 +66,10 @@ namespace input {
             return (GetAsyncKeyState('3') & 0x8000) || xb(0x2000 /* B */) || psinput::Down(psinput::kCircle);
         case Action::Choice4:
             return (GetAsyncKeyState('4') & 0x8000) || xb(0x1000 /* A */) || psinput::Down(psinput::kCross);
+        case Action::BumperLeft:
+            return (GetAsyncKeyState(VK_PRIOR) & 0x8000) || xb(0x0100 /* LB */) || psinput::Down(psinput::kL1);
+        case Action::BumperRight:
+            return (GetAsyncKeyState(VK_NEXT) & 0x8000) || xb(0x0200 /* RB */) || psinput::Down(psinput::kR1);
         }
         return false;
     }
@@ -86,6 +90,8 @@ namespace input {
         case Action::Choice2: return d == Device::Keyboard ? "2" : d == Device::Xbox ? "Y" : "Triangle";
         case Action::Choice3: return d == Device::Keyboard ? "3" : d == Device::Xbox ? "B" : "Circle";
         case Action::Choice4: return d == Device::Keyboard ? "4" : d == Device::Xbox ? "A" : "Cross";
+        case Action::BumperLeft: return d == Device::Keyboard ? "Page Up" : d == Device::Xbox ? "LB" : "L1";
+        case Action::BumperRight: return d == Device::Keyboard ? "Page Down" : d == Device::Xbox ? "RB" : "R1";
         }
         return "?";
     }
@@ -99,6 +105,7 @@ namespace input {
             case Action::Choice2: return "[2]";
             case Action::Choice3: return "[3]";
             case Action::Choice4: return "[4]";
+            default: break;
             }
         }
         switch (a) {
@@ -107,6 +114,7 @@ namespace input {
         case Action::Choice2: return "[BTN_Y]";
         case Action::Choice3: return "[BTN_B]";
         case Action::Choice4: return "[BTN_A]";
+        default: break;
         }
         return "";
     }

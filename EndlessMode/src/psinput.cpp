@@ -11,7 +11,7 @@
 
 namespace psinput {
     static std::atomic<bool> g_triangle = false, g_connected = false, g_started = false;
-    static std::atomic<uint8_t> g_byte = 0x08;          // face nibble + hat; 0x08 = nothing pressed
+    static std::atomic<uint8_t> g_byte = 0x08, g_byte2 = 0;          // face nibble + hat; 0x08 = nothing pressed
     static std::atomic<unsigned> g_last_activity = 0;
 
     struct Pad { HANDLE h = INVALID_HANDLE_VALUE; USHORT pid = 0; };
@@ -72,6 +72,7 @@ namespace psinput {
                 int off = FaceButtonsOffset(report, n, pad.pid);
                 if (off > 0 && off < (int)n) {
                     uint8_t b = report[off];
+                    if (off + 1 < (int)n) g_byte2 = report[off + 1] & 0x03;
                     if (b != g_byte.load()) {
                         g_byte = b;
                         if (b != 0x08) g_last_activity = GetTickCount();
@@ -83,6 +84,7 @@ namespace psinput {
             g_connected = false;
             g_triangle = false;
             g_byte = 0x08;
+            g_byte2 = 0;
             LOG("psinput: controller disconnected");
             Sleep(1000);
         }
@@ -106,6 +108,8 @@ namespace psinput {
         case kRight: return hat >= 1 && hat <= 3;
         case kDown: return hat >= 3 && hat <= 5;
         case kLeft: return hat >= 5 && hat <= 7;
+        case kL1: return (g_byte2 & 0x01) != 0;
+        case kR1: return (g_byte2 & 0x02) != 0;
         }
         return false;
     }

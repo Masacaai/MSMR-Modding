@@ -1,6 +1,9 @@
 #include "menu.h"
 
+#include "gamethread.h"
+#include "input.h"
 #include "log.h"
+#include "memory.h"
 #include "scan.h"
 #include "settings.h"
 
@@ -12,6 +15,7 @@
 #include <cmath>
 #include <cstring>
 #include <string_view>
+#include <thread>
 
 // All addresses are image offsets in Spider-Man.exe 4.0630.0.0 and are checked against the bytes the functions start with
 // before anything is hooked (a mismatch leaves the Settings untouched). See docs/NEXT_RELEASE_RECON.md, section 3.
@@ -69,6 +73,8 @@ namespace {
     HasTextFn g_has_text{};
 
     uintptr_t g_base{};
+    std::atomic<void*> g_ui{};                 // the settings screen's UI object, from the last call we saw
+    std::atomic<ULONGLONG> g_activity{ 0 };    // when the game last talked to the settings screen (OpenOptions, a callback)
     std::atomic<uint64_t> g_tabs_built{}, g_changes{};
     std::atomic<uint32_t> g_failure{};
     std::atomic<bool> g_hooked{};
@@ -251,11 +257,16 @@ namespace {
     // ---- hooks ----
     bool __fastcall InvokeHook(void* ui, const char* name, GfxValue* args, uint32_t count, uint64_t a, float b, uint32_t c, uint64_t d) {
         if (name == reinterpret_cast<const char*>(g_base + kOpenOptionsName) && args && count >= 1 &&
-            (args[0].type & kTypeMask) == kArray && args[0].objects)
+            (args[0].type & kTypeMask) == kArray && args[0].objects) {
+            g_ui = ui;
+            g_activity = GetTickCount64();
             AddTab(args[0]);
+        }
         return g_invoke(ui, name, args, count, a, b, c, d);
     }
     void __fastcall CallbackHook(void* ui, uint32_t hash, GfxValue* args, uint32_t count) {
+        g_ui = ui;
+        g_activity = GetTickCount64();
         // Y RESET ALL on our tab: the game's RESET ALL takes only its own tabs.
         if (g_built == 1 && args && count >= 1 && (args[0].type & kTypeMask) == kInt && (uint32_t)args[0].data == kTabId &&
             hash == Get<uint32_t>(g_base + kResetAllHash)) {
@@ -321,6 +332,33 @@ namespace {
         return (t_building && TextFor(hash)) || g_has_text(hash);
     }
 
+    // The shoulder buttons switch the MODE row (Campaign / Horde) while the settings screen is up. The game's own Display & Graphics page has
+    // this two-page format, but it is tied to the PC video settings (apply / revert), so ours is a row plus the buttons. "Up" = the game clock
+    // stands still (as in the pause menu) and the screen talked to us in the last two minutes.
+    bool GameClockStill() {
+        static int64_t last = 0;
+        static ULONGLONG since = 0;
+        int64_t v = 0;
+        if (!memory::Read(g_base + 0x5d6e7e4, v)) return false;
+        ULONGLONG now = GetTickCount64();
+        if (v != last) { last = v; since = now; }
+        return now - since > 150;
+    }
+    void BumperLoop() {
+        for (;;) {
+            Sleep(40);
+            if (g_built != 1 || !g_ui || GetTickCount64() - g_activity > 120000 || !GameClockStill()) continue;
+            input::Update();
+            const bool left = input::Pressed(input::Action::BumperLeft), right = input::Pressed(input::Action::BumperRight);
+            if (!left && !right) continue;
+            settings::SetIndex(0, left ? 0 : 1);   // the MODE row: Campaign / Horde; its change asks for a rebuild
+            if (!settings::TakeRebuild()) continue;
+            gamethread::Post([] {
+                if (void* ui = g_ui.load()) reinterpret_cast<void(__fastcall*)(void*)>(g_base + kOpenOptions)(ui);
+            });
+        }
+    }
+
     struct Hook {
         uintptr_t rva;
         void* detour;
@@ -371,6 +409,7 @@ namespace {
             if ((st = MH_QueueEnableHook((void*)(g_base + h.rva))) != MH_OK) return 9440 + st;
         if ((st = MH_ApplyQueued()) != MH_OK) return 9460 + st;
         g_hooked = true;
+        std::thread(BumperLoop).detach();
         LOG("menu: settings tab hooked (%zu rows)", settings::Rows().size());
         return 0;
     }

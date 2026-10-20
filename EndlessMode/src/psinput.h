@@ -12,7 +12,7 @@ namespace psinput {
     // Face buttons and D-pad from the same byte: high nibble square 0x10, cross 0x20, circle 0x40, triangle 0x80;
     // low nibble the D-pad hat (0 up, 1 up-right, 2 right, 3 down-right, 4 down, 5 down-left, 6 left, 7 up-left,
     // 8 = none).
-    enum Button { kSquare, kCross, kCircle, kTriangle, kUp, kRight, kDown, kLeft };
+    enum Button { kSquare, kCross, kCircle, kTriangle, kUp, kRight, kDown, kLeft, kL1, kR1 };   // L1 / R1: the next byte, bits 0 and 1
     bool Down(Button b);
     unsigned LastActivityTick();   // GetTickCount() of the last button or D-pad change (0 = never)
 }

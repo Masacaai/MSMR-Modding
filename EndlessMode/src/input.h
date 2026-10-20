@@ -11,6 +11,8 @@ namespace input {
         Choice2,    // 2 / Triangle / Y
         Choice3,    // 3 / Circle / B
         Choice4,    // 4 / Cross / A (only when a fourth option is on offer)
+        BumperLeft,   // Page Up / LB / L1: the settings screen's Campaign / Horde pages
+        BumperRight,  // Page Down / RB / R1
     };
 
     // Polls devices and updates the last-used one; call regularly (the portal loop does, every 100 ms).

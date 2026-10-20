@@ -22,8 +22,8 @@ namespace settings {
     constexpr size_t kMaxRows = 128, kMaxChoices = 14;
 
     // One tab, ENDLESS ARENA, whose first row (SHOWING) picks a section; only that section's rows are on screen, so the game's settings screen
-    // stays small (117 rows at once made it lag). Campaign and Horde keep separate rows: sections 0-6 are the Campaign's, 7-9 Horde's.
-    constexpr int kSections = 10;
+    // stays small (117 rows at once made it lag). Campaign and Horde keep separate rows: section 0 is the Campaign's, 1 Horde's. Rows not on screen are hidden but kept (ini, presets and defaults still reach them).
+    constexpr int kSections = 2;
     const char* SectionName(int section);
     int CurrentSection();                 // the section the SHOWING row is on
     void ResetSection(int section);       // the rows of one section (and nothing else)
