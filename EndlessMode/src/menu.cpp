@@ -69,7 +69,10 @@ namespace {
     HasTextFn g_has_text{};
 
     uintptr_t g_base{};
-    std::atomic<ULONGLONG> g_open_at{ 0 };   // when the settings screen was last opened (OpenOptions)
+    std::atomic<ULONGLONG> g_open_at{ 0 };
+    std::atomic<ULONGLONG> g_set_at{ 0 };      // when one of our rows last changed (for the timeline below)
+    std::atomic<uint32_t> g_calls[8];            // hook calls since then: type, value, active, default, default choice, text, has-text, set
+    std::atomic<int> g_timeline_lines{ 0 };   // when the settings screen was last opened (OpenOptions)
     std::atomic<uint64_t> g_tabs_built{}, g_changes{};
     std::atomic<uint32_t> g_failure{};
     std::atomic<bool> g_hooked{};
@@ -259,6 +262,7 @@ namespace {
         // ActionScript runs inside this call: time it, to see where a slow settings screen spends its time.
         LARGE_INTEGER i0, i1, f;
         QueryPerformanceCounter(&i0);
+        const ULONGLONG since_set = g_set_at ? GetTickCount64() - g_set_at : 0;
         const bool r = g_invoke(ui, name, args, count, a, b, c, d);
         QueryPerformanceCounter(&i1);
         QueryPerformanceFrequency(&f);
@@ -266,6 +270,15 @@ namespace {
         static int slow = 0;
         if (ms > 15.0 && GetTickCount64() - g_open_at < 120000 && slow++ < 40)
             LOG("menu: UI call %.60s took %.1f ms", name ? name : "?", ms);
+        // After one of our rows changed: every UI call the game makes in the next 1.5 s, with when and how long, then the hook call counts.
+        if (g_set_at && since_set < 1500 && g_timeline_lines < 300) {
+            ++g_timeline_lines;
+            LOG("menu: +%llu ms UI call %.50s (%.2f ms)", (unsigned long long)since_set, name ? name : "?", ms);
+        } else if (g_set_at && since_set >= 1500) {
+            LOG("menu: after the change, hook calls: type %u value %u active %u default %u defchoice %u text %u hastext %u set %u", g_calls[0].load(), g_calls[1].load(),
+                g_calls[2].load(), g_calls[3].load(), g_calls[4].load(), g_calls[5].load(), g_calls[6].load(), g_calls[7].load());
+            g_set_at = 0;
+        }
         return r;
     }
     void __fastcall CallbackHook(void* ui, uint32_t hash, GfxValue* args, uint32_t count) {
@@ -291,29 +304,38 @@ namespace {
         if (ms > 8.0 && slow++ < 20) LOG("menu: the game took %.1f ms for callback %08x (tabs built %llu -> %llu)", ms, hash, (unsigned long long)built_before, (unsigned long long)g_tabs_built.load());
     }
     int __fastcall TypeHook(void* sys, int setting) {   // 0 a list, 5 a heading
+        if (g_set_at) ++g_calls[0];
         const int r = RowOf(setting);
         if (r < 0) return g_type(sys, setting);
         return settings::Rows()[(size_t)r].heading() ? 5 : 0;
     }
     float __fastcall ValueHook(void* sys, int setting) {
+        if (g_set_at) ++g_calls[1];
         const int r = RowOf(setting);
         return r < 0 ? g_value(sys, setting) : (float)settings::Index((size_t)r);
     }
     bool __fastcall ActiveHook(void* sys, int setting) {
+        if (g_set_at) ++g_calls[2];
         const int r = RowOf(setting);
         return r < 0 ? g_active(sys, setting) : true;
     }
     float __fastcall DefaultHook(void* sys, int setting) {
+        if (g_set_at) ++g_calls[3];
         const int r = RowOf(setting);
         return r < 0 ? g_default(sys, setting) : (float)settings::Rows()[(size_t)r].def;
     }
     int __fastcall DefaultChoiceHook(void* sys, int setting) {
+        if (g_set_at) ++g_calls[4];
         const int r = RowOf(setting);
         return r < 0 ? g_default_choice(sys, setting) : settings::Rows()[(size_t)r].def;
     }
     void __fastcall SetHook(void* sys, int setting, float value, bool apply, bool force) {
         const int r = RowOf(setting);
         if (r < 0) return g_set(sys, setting, value, apply, force);
+        g_timeline_lines = 0;
+        for (auto& c : g_calls) c = 0;
+        g_set_at = GetTickCount64();
+        ++g_calls[7];
         if (std::isfinite(value) && std::fabs(value) < 64) {
             settings::SetIndex((size_t)r, (int)std::lround(value));
             ++g_changes;
@@ -326,11 +348,13 @@ namespace {
         ++g_changes;
     }
     const char* __fastcall TextHook(uint32_t hash, const char* fallback) {
+        if (g_set_at) ++g_calls[5];
         if (t_building)
             if (const char* text = TextFor(hash)) return text;
         return g_text(hash, fallback);
     }
     bool __fastcall HasTextHook(uint32_t hash) {
+        if (g_set_at) ++g_calls[6];
         return (t_building && TextFor(hash)) || g_has_text(hash);
     }
 

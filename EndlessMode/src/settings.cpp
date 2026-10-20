@@ -22,6 +22,8 @@ namespace settings {
         std::mutex g_mutex;
         std::unordered_map<std::string, int> g_find;
         int g_cur_tab = 0;
+        thread_local bool t_applying = false;   // a preset or a reset is rewriting rows: they are not the player's own changes
+        constexpr int kCustomPreset = 6;
 
         std::string Ini() { return DataDir() + "\\EndlessArena_settings.ini"; }
 
@@ -116,8 +118,8 @@ namespace settings {
         void Build() {
             Sect(0);
             Head("CAMPAIGN");
-            List("preset", "PRESET", "Pick one to set many rows at once. DEFAULT puts everything back. You can still change any row afterwards. Row changes you make before choosing a preset are replaced.",
-                 { "PICK ONE", "DEFAULT", "CASUAL", "BRUTAL", "CHAOS", "BOSS FOCUS", "GLASS CANNON" }, {}, 0);
+            List("preset2", "PRESET", "Sets many rows at once (including some not shown). DEFAULT puts everything back. Changing any other row switches this to CUSTOM; your rows are replaced when you pick a preset.",
+                 { "DEFAULT", "CASUAL", "BRUTAL", "CHAOS", "BOSS FOCUS", "GLASS CANNON", "CUSTOM" }, {}, 0);
 
             Head("RUN");
             List("countdown", "COUNTDOWN", "Seconds of Get Ready before a run starts.", { "3", "5", "10", "15", "30" }, { 3, 5, 10, 15, 30 }, 0);
@@ -226,7 +228,7 @@ namespace settings {
         void ChooseShown() {
             struct Shown { const char* key; const char* scope; };
             static const Shown kShown[] = {
-                { "preset", "BOTH MODES. " }, { "boons", "CAMPAIGN ONLY. " }, { "count", "CAMPAIGN ONLY. " }, { "field", "BOTH MODES. " },
+                { "preset2", "BOTH MODES. " }, { "boons", "CAMPAIGN ONLY. " }, { "count", "CAMPAIGN ONLY. " }, { "field", "BOTH MODES. " },
                 { "chapter", "CAMPAIGN ONLY. " }, { "bosswaves", "CAMPAIGN ONLY. " }, { "elites", "BOTH MODES. " }, { "dmg_out", "BOTH MODES. " },
                 { "dmg_in", "BOTH MODES. " }, { "horde_level", "HORDE ONLY. " } };
             for (auto& r : g_rows) {
@@ -306,10 +308,20 @@ namespace settings {
             if (g_idx[row] == index) return;
             g_idx[row] = index;
             Save(row);
-            preset = g_rows[row].key == "preset" ? 1 : g_rows[row].key == "h_preset" ? 2 : 0;
+            preset = g_rows[row].key == "preset2" ? 1 : g_rows[row].key == "h_preset" ? 2 : 0;
+            // Any other row the player changes turns the preset into CUSTOM (not while a preset or a reset is rewriting rows).
+            if (!preset && !t_applying && !g_rows[row].key.empty()) {
+                const auto it = g_find.find("preset2");
+                if (it != g_find.end() && g_idx[it->second] != kCustomPreset) {
+                    g_idx[it->second] = kCustomPreset;
+                    Save((size_t)it->second);
+                    g_rebuild = true;   // the menu shows CUSTOM
+                }
+            }
             if (g_rows[row].key == "section") g_rebuild = true;   // other rows are on screen now
         }
         std::call_once(g_writer_once, [] { std::thread(WriterLoop).detach(); });
+        if (preset == 1 && index == kCustomPreset) return;   // CUSTOM is a label, not an action
         if (preset) ApplyPreset(index, preset == 2);
     }
 
@@ -323,7 +335,9 @@ namespace settings {
 
     void ResetAll() {
         Rows();
+        struct Guard { Guard() { t_applying = true; } ~Guard() { t_applying = false; } } guard;
         for (size_t i = 0; i < g_rows.size(); i++) SetIndex(i, g_rows[i].def);
+        g_rebuild = true;
     }
 
     bool SetValue(const std::string& key, int value) {
@@ -342,8 +356,7 @@ namespace settings {
     bool ApplyPreset(int index, bool horde) {
         struct Pair { const char* key; int value; };
         static const std::vector<std::vector<Pair>> presets = {
-            /* 0 */ {},
-            /* 1 DEFAULT */ {},
+            /* 0 DEFAULT */ {},
             /* 2 CASUAL */ { { "count", 75 }, { "field", 24 }, { "crew", 50 }, { "elites", 50 }, { "dmg_in", 50 }, { "wave_heal", 25 },
                              { "mix_rocket", 50 }, { "mix_sniper", 50 }, { "mix_heavy", 50 }, { "curse_when", 2 } },
             /* 3 BRUTAL */ { { "count", 150 }, { "field", 60 }, { "crew", 200 }, { "elites", 200 }, { "dmg_in", 150 }, { "curse_when", 1 },
@@ -356,11 +369,12 @@ namespace settings {
                                  { "mix_shield", 50 }, { "mix_rocket", 50 }, { "mix_sniper", 50 }, { "mix_heavy", 50 }, { "mix_special", 50 } },
             /* 6 GLASS CANNON */ { { "dmg_out", 300 }, { "dmg_in", 300 }, { "wave_heal", 10 } },
         };
-        if (index <= 0 || index >= (int)presets.size()) return false;
+        if (index < 0 || index >= (int)presets.size()) return false;   // CUSTOM and anything else: nothing to apply
+        struct Guard { Guard() { t_applying = true; } ~Guard() { t_applying = false; } } guard;
         const auto& rows = Rows();
         for (size_t i = 0; i < rows.size(); i++) {
             const Row& r = rows[i];
-            if (r.heading() || r.key == "preset" || r.key == "h_preset") continue;
+            if (r.heading() || r.key == "preset2" || r.key == "h_preset") continue;
             if (r.key.rfind("fac_", 0) == 0 || r.key.rfind("h_fac_", 0) == 0) continue;   // the faction switches are yours, not the preset's
             if (IsHorde(r.key) == horde) SetIndex(i, r.def);   // only this mode's rows, hidden ones too
         }
