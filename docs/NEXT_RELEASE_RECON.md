@@ -122,11 +122,6 @@ intensity states and RTPCs the combat music reacts to.
 **Customization: SpidyVR** (section 3) is the way in; built as `menu.cpp` + `settings.cpp`: a PRESET row, run, difficulty, rewards, curses, you, enemy mix, factions
 (switches, order, slots, budget), bosses (per faction), Horde. Boons and curses are fully configurable; pool lists can also be edited in `EndlessArena_pools.txt`.
 
-**Allegiance** (allies, no infighting): every fighter has a `SimpleAllegiance` component (vtable `exe+4f89dc0`, team int at `+0x48`); the mission action that
-changes it calls `exe+2117e00 (this, value)`. Enum (order of the names at `exe+39470d8`): 0 kNeutral, 1 kBlueTeam (the hero), 2 kRedTeam, 3 kSuperFriends,
-4 kBaseDestructables, 5 kHeroOnlyTarget, 6 kFreeForAll, 7 kPolice, 8 kInnerDemons, 9 kSableFriendly, 10 kSableEnemy, 11 kFisk, 12 kTaskmaster, 13 kPrisoner,
-14 kHammerhead, 15 kMaggia. There are also `Team` components with `SetTeamEvent` / `ToggleTeamEvent` / `GetTeamEvent`, and `AllyBot` companions (Silver Sable's ally
-fight). `alleg` (dev command) lists the hero's and every live enemy's side and changes them; the experiments to run: (1) `alleg set kBlueTeam` - do they stop attacking
-you, and do they attack the rest? (2) `alleg set kFisk` (one common side) - does infighting stop? (3) `alleg set kFreeForAll` - do they all fight each other?
+**Allegiance (allies, no infighting): dropped 2026-10-20** - it would tamper with the survive-as-long-as-you-can fantasy and need more settings. (Notes kept for the record: every fighter has a `SimpleAllegiance` component, team int at `+0x48`, set by `exe+2117e00`; the enum order is at `exe+39470d8`.)
 
 **Boss phases (Kingpin):** see docs/GAME_INTERNALS.md. The director now steps Kingpin through his health phases.
