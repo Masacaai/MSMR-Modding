@@ -69,6 +69,7 @@ namespace {
     HasTextFn g_has_text{};
 
     uintptr_t g_base{};
+    std::atomic<ULONGLONG> g_open_at{ 0 };   // when the settings screen was last opened (OpenOptions)
     std::atomic<uint64_t> g_tabs_built{}, g_changes{};
     std::atomic<uint32_t> g_failure{};
     std::atomic<bool> g_hooked{};
@@ -251,8 +252,10 @@ namespace {
     // ---- hooks ----
     bool __fastcall InvokeHook(void* ui, const char* name, GfxValue* args, uint32_t count, uint64_t a, float b, uint32_t c, uint64_t d) {
         if (name == reinterpret_cast<const char*>(g_base + kOpenOptionsName) && args && count >= 1 &&
-            (args[0].type & kTypeMask) == kArray && args[0].objects)
+            (args[0].type & kTypeMask) == kArray && args[0].objects) {
+            g_open_at = GetTickCount64();
             AddTab(args[0]);
+        }
         // ActionScript runs inside this call: time it, to see where a slow settings screen spends its time.
         LARGE_INTEGER i0, i1, f;
         QueryPerformanceCounter(&i0);
@@ -261,7 +264,7 @@ namespace {
         QueryPerformanceFrequency(&f);
         const double ms = 1000.0 * (double)(i1.QuadPart - i0.QuadPart) / (double)f.QuadPart;
         static int slow = 0;
-        if (ms > 15.0 && GetTickCount64() - g_activity < 5000 && slow++ < 40)
+        if (ms > 15.0 && GetTickCount64() - g_open_at < 120000 && slow++ < 40)
             LOG("menu: UI call %.60s took %.1f ms", name ? name : "?", ms);
         return r;
     }
