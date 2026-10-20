@@ -72,9 +72,6 @@ namespace {
     uintptr_t g_base{};
     std::atomic<ULONGLONG> g_open_at{ 0 };
     std::atomic<uint64_t> g_open_count{ 0 };   // OpenOptions calls seen (a callback that made the game send the list again)
-    std::atomic<ULONGLONG> g_set_at{ 0 };      // when one of our rows last changed (for the timeline below)
-    std::atomic<uint32_t> g_calls[8];            // hook calls since then: type, value, active, default, default choice, text, has-text, set
-    std::atomic<int> g_timeline_lines{ 0 };   // when the settings screen was last opened (OpenOptions)
     std::atomic<uint64_t> g_tabs_built{}, g_changes{};
     std::atomic<uint32_t> g_failure{};
     std::atomic<bool> g_hooked{};
@@ -197,38 +194,6 @@ namespace {
                     Put<uint64_t>(c, 0x30, 0);
                 }
             }
-            // One-off dump (recon): the game's own items that have choices, and ours, byte for byte, to see which fields differ.
-            {
-                auto hex = [](const char* what, uintptr_t at, size_t n) {
-                    char line[600] = {};
-                    int len = snprintf(line, sizeof(line), "%s:", what);
-                    for (size_t i = 0; i < n && len < 580; i++) {
-                        unsigned char b = 0;
-                        std::memcpy(&b, reinterpret_cast<const void*>(at + i), 1);
-                        len += snprintf(line + len, sizeof(line) - (size_t)len, "%s%02x", i % 8 == 0 ? " " : "", b);
-                    }
-                    LOG("menu-dump %s", line);
-                };
-                int shown = 0;
-                for (uint32_t t = 0; t < tab_count && shown < 10; ++t) {
-                    const uintptr_t at = tabs + t * kTabBytes;
-                    const auto list = Get<uintptr_t>(at + 0x30);
-                    const auto count = Get<uint32_t>(at + 0x38);
-                    if (!list || !count || count > 256) continue;
-                    for (uint32_t i = 0; i < count && shown < 10; ++i) {
-                        const uintptr_t item = list + i * kItemBytes;
-                        if (!Get<uintptr_t>(item + 0x70) || !Get<uint32_t>(item + 0x78)) continue;
-                        char w[48];
-                        snprintf(w, sizeof(w), "game tab %u item %u", Get<uint32_t>(at + 8), i);
-                        hex(w, item, kItemBytes);
-                        hex("   its first choice", Get<uintptr_t>(item + 0x70), kChoiceBytes);
-                        ++shown;
-                    }
-                }
-                hex("OURS row 0 item", (uintptr_t)g_items[0], kItemBytes);
-                hex("   its first choice", (uintptr_t)g_choice[0][0], kChoiceBytes);
-                hex("OURS row 1 item", (uintptr_t)g_items[1], kItemBytes);
-            }
             std::memcpy(g_tab, reinterpret_cast<const void*>(menu_tab), kTabBytes);
             Put<uint32_t>(g_tab, 8, kTabId);
             PutTag(g_tab, 0x10, g_tab_name);
@@ -279,7 +244,7 @@ namespace {
         QueryPerformanceCounter(&t1);
         QueryPerformanceFrequency(&freq);
         static int logged = 0;
-        if (logged++ < 8) LOG("menu: built the tab (section %d, %u rows) in %.1f ms", section, n, 1000.0 * (double)(t1.QuadPart - t0.QuadPart) / (double)freq.QuadPart);
+        if (logged++ < 3) LOG("menu: built the tab (section %d, %u rows) in %.1f ms", section, n, 1000.0 * (double)(t1.QuadPart - t0.QuadPart) / (double)freq.QuadPart);
     }
 
     int RowOf(int setting) {
@@ -293,47 +258,12 @@ namespace {
             (args[0].type & kTypeMask) == kArray && args[0].objects) {
             g_open_at = GetTickCount64();
             ++g_open_count;
-            gamethread::LogGapsFor(4000);
-            gamethread::SampleStalls(4000);
-            // Who asks for the whole list to be sent again? (the first dozen times)
-            static int traced = 0;
-            if (traced++ < 14) {
-                void* frames[10] = {};
-                const USHORT got = CaptureStackBackTrace(0, 10, frames, nullptr);
-                char line[256] = {};
-                int len = 0;
-                for (USHORT i = 0; i < got && len < 230; i++) len += snprintf(line + len, sizeof(line) - (size_t)len, " %llx", (unsigned long long)((uintptr_t)frames[i] - g_base));
-                LOG("menu: OpenOptions called from exe+ (innermost first):%s", line);
-            }
             AddTab(args[0]);
         }
-        // ActionScript runs inside this call: time it, to see where a slow settings screen spends its time.
-        LARGE_INTEGER i0, i1, f;
-        QueryPerformanceCounter(&i0);
-        const ULONGLONG since_set = g_set_at ? GetTickCount64() - g_set_at : 0;
         const bool r = g_invoke(ui, name, args, count, a, b, c, d);
-        QueryPerformanceCounter(&i1);
-        QueryPerformanceFrequency(&f);
-        const double ms = 1000.0 * (double)(i1.QuadPart - i0.QuadPart) / (double)f.QuadPart;
-        static int slow = 0;
-        if (ms > 15.0 && GetTickCount64() - g_open_at < 120000 && slow++ < 40)
-            LOG("menu: UI call %.60s took %.1f ms", name ? name : "?", ms);
-        // After one of our rows changed: every UI call the game makes in the next 1.5 s, with when and how long, then the hook call counts.
-        if (g_set_at && since_set < 1500 && g_timeline_lines < 300) {
-            ++g_timeline_lines;
-            LOG("menu: +%llu ms UI call %.50s (%.2f ms)", (unsigned long long)since_set, name ? name : "?", ms);
-        } else if (g_set_at && since_set >= 1500) {
-            LOG("menu: after the change, hook calls: type %u value %u active %u default %u defchoice %u text %u hastext %u set %u", g_calls[0].load(), g_calls[1].load(),
-                g_calls[2].load(), g_calls[3].load(), g_calls[4].load(), g_calls[5].load(), g_calls[6].load(), g_calls[7].load());
-            g_set_at = 0;
-        }
         return r;
     }
     void __fastcall CallbackHook(void* ui, uint32_t hash, GfxValue* args, uint32_t count) {
-        gamethread::LogGapsFor(3000);
-        gamethread::SampleStalls(3000);
-        static int shown = 0;
-        if (shown++ < 40 && g_open_at && GetTickCount64() - g_open_at < 120000) LOG("menu: callback %08x", hash);
         // Y RESET ALL on our tab: the game's RESET ALL takes only its own tabs.
         if (g_built == 1 && args && count >= 1 && (args[0].type & kTypeMask) == kInt && (uint32_t)args[0].data == kTabId &&
             hash == Get<uint32_t>(g_base + kResetAllHash)) {
@@ -344,53 +274,36 @@ namespace {
         }
         // (Tried 2026-10-19: taking UpdateOption ourselves to skip the game's full re-send of the list. The row then showed a stale value - the screen
         // waits for that re-send - so the game's own handler stays.)
-        LARGE_INTEGER c0, c1, cf;
-        QueryPerformanceCounter(&c0);
         const uint64_t built_before = g_open_count;
         g_callback(ui, hash, args, count);
         // A preset or a new section changed which rows are on screen: build the tabs again (unless the game just did, as it does after a change).
         if (g_built == 1 && settings::TakeRebuild() && g_open_count == built_before)
             reinterpret_cast<void(__fastcall*)(void*)>(g_base + kOpenOptions)(ui);
-        QueryPerformanceCounter(&c1);
-        QueryPerformanceFrequency(&cf);
-        const double ms = 1000.0 * (double)(c1.QuadPart - c0.QuadPart) / (double)cf.QuadPart;
-        static int slow = 0;
-        if (ms > 8.0 && slow++ < 20) LOG("menu: the game took %.1f ms for callback %08x (tabs built %llu -> %llu)", ms, hash, (unsigned long long)built_before, (unsigned long long)g_tabs_built.load());
     }
     int __fastcall TypeHook(void* sys, int setting) {   // 0 a list, 5 a heading
-        if (g_set_at) ++g_calls[0];
         const int r = RowOf(setting);
         if (r < 0) return g_type(sys, setting);
         return settings::Rows()[(size_t)r].heading() ? 5 : 0;
     }
     float __fastcall ValueHook(void* sys, int setting) {
-        if (g_set_at) ++g_calls[1];
         const int r = RowOf(setting);
         return r < 0 ? g_value(sys, setting) : (float)settings::Index((size_t)r);
     }
     bool __fastcall ActiveHook(void* sys, int setting) {
-        if (g_set_at) ++g_calls[2];
         const int r = RowOf(setting);
         return r < 0 ? g_active(sys, setting) : true;
     }
     float __fastcall DefaultHook(void* sys, int setting) {
-        if (g_set_at) ++g_calls[3];
         const int r = RowOf(setting);
         return r < 0 ? g_default(sys, setting) : (float)settings::Rows()[(size_t)r].def;
     }
     int __fastcall DefaultChoiceHook(void* sys, int setting) {
-        if (g_set_at) ++g_calls[4];
         const int r = RowOf(setting);
         return r < 0 ? g_default_choice(sys, setting) : settings::Rows()[(size_t)r].def;
     }
     void __fastcall SetHook(void* sys, int setting, float value, bool apply, bool force) {
         const int r = RowOf(setting);
         if (r < 0) return g_set(sys, setting, value, apply, force);
-        gamethread::LogGapsFor(4000);
-        g_timeline_lines = 0;
-        for (auto& c : g_calls) c = 0;
-        g_set_at = GetTickCount64();
-        ++g_calls[7];
         if (std::isfinite(value) && std::fabs(value) < 64) {
             settings::SetIndex((size_t)r, (int)std::lround(value));
             ++g_changes;
@@ -403,13 +316,11 @@ namespace {
         ++g_changes;
     }
     const char* __fastcall TextHook(uint32_t hash, const char* fallback) {
-        if (g_set_at) ++g_calls[5];
         if (t_building)
             if (const char* text = TextFor(hash)) return text;
         return g_text(hash, fallback);
     }
     bool __fastcall HasTextHook(uint32_t hash) {
-        if (g_set_at) ++g_calls[6];
         return (t_building && TextFor(hash)) || g_has_text(hash);
     }
 
