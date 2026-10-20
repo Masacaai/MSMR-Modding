@@ -253,7 +253,17 @@ namespace {
         if (name == reinterpret_cast<const char*>(g_base + kOpenOptionsName) && args && count >= 1 &&
             (args[0].type & kTypeMask) == kArray && args[0].objects)
             AddTab(args[0]);
-        return g_invoke(ui, name, args, count, a, b, c, d);
+        // ActionScript runs inside this call: time it, to see where a slow settings screen spends its time.
+        LARGE_INTEGER i0, i1, f;
+        QueryPerformanceCounter(&i0);
+        const bool r = g_invoke(ui, name, args, count, a, b, c, d);
+        QueryPerformanceCounter(&i1);
+        QueryPerformanceFrequency(&f);
+        const double ms = 1000.0 * (double)(i1.QuadPart - i0.QuadPart) / (double)f.QuadPart;
+        static int slow = 0;
+        if (ms > 15.0 && GetTickCount64() - g_activity < 5000 && slow++ < 40)
+            LOG("menu: UI call %.60s took %.1f ms", name ? name : "?", ms);
+        return r;
     }
     void __fastcall CallbackHook(void* ui, uint32_t hash, GfxValue* args, uint32_t count) {
         // Y RESET ALL on our tab: the game's RESET ALL takes only its own tabs.
