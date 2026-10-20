@@ -1,5 +1,6 @@
 #include "menu.h"
 
+#include "gamethread.h"
 #include "log.h"
 #include "scan.h"
 #include "settings.h"
@@ -257,6 +258,7 @@ namespace {
         if (name == reinterpret_cast<const char*>(g_base + kOpenOptionsName) && args && count >= 1 &&
             (args[0].type & kTypeMask) == kArray && args[0].objects) {
             g_open_at = GetTickCount64();
+            gamethread::LogGapsFor(4000);
             AddTab(args[0]);
         }
         // ActionScript runs inside this call: time it, to see where a slow settings screen spends its time.
@@ -282,6 +284,8 @@ namespace {
         return r;
     }
     void __fastcall CallbackHook(void* ui, uint32_t hash, GfxValue* args, uint32_t count) {
+        gamethread::LogGapsFor(3000);
+        if (g_open_at && GetTickCount64() - g_open_at < 120000) LOG("menu: callback %08x", hash);
         // Y RESET ALL on our tab: the game's RESET ALL takes only its own tabs.
         if (g_built == 1 && args && count >= 1 && (args[0].type & kTypeMask) == kInt && (uint32_t)args[0].data == kTabId &&
             hash == Get<uint32_t>(g_base + kResetAllHash)) {
@@ -332,6 +336,7 @@ namespace {
     void __fastcall SetHook(void* sys, int setting, float value, bool apply, bool force) {
         const int r = RowOf(setting);
         if (r < 0) return g_set(sys, setting, value, apply, force);
+        gamethread::LogGapsFor(4000);
         g_timeline_lines = 0;
         for (auto& c : g_calls) c = 0;
         g_set_at = GetTickCount64();

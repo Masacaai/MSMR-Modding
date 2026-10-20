@@ -24,6 +24,9 @@ namespace gamethread {
     static std::atomic<int64_t> g_last_qpc = 0, g_max_gap = 0;
     static std::atomic<uint64_t> g_window_ticks = 0;
     static int64_t g_window_start = 0;
+    static std::atomic<ULONGLONG> g_gap_log_until{ 0 };
+    static std::atomic<int> g_gap_lines{ 0 };
+    void LogGapsFor(unsigned ms) { g_gap_log_until = GetTickCount64() + ms; }
 
     static void RunJobs() {
         std::deque<std::function<void()>> jobs;
@@ -43,6 +46,12 @@ namespace gamethread {
         int64_t last = g_last_qpc.exchange(q.QuadPart);
         if (last) {
             int64_t gap = q.QuadPart - last;
+            if (g_gap_log_until && GetTickCount64() < g_gap_log_until) {
+                LARGE_INTEGER f;
+                QueryPerformanceFrequency(&f);
+                double ms = 1000.0 * (double)gap / (double)f.QuadPart;
+                if (ms > 60.0 && g_gap_lines++ < 400) LOG("gamethread: frame gap %.0f ms", ms);
+            }
             int64_t m = g_max_gap.load();
             while (gap > m && !g_max_gap.compare_exchange_weak(m, gap)) {}
         }

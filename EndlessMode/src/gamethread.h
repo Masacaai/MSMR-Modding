@@ -17,6 +17,9 @@ namespace gamethread {
     struct FrameStats { uint64_t ticks = 0; double seconds = 0, avg_hz = 0, worst_ms = 0; };
     FrameStats TakeFrameStats();
 
+    // Logs every frame gap longer than 60 ms (with the time since the previous tick) until `ms` from now; for hunting hitches around a menu.
+    void LogGapsFor(unsigned ms);
+
     // Queue a job; it runs inside the next tick.
     void Post(std::function<void()> job);
 
