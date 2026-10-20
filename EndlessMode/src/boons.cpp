@@ -74,7 +74,9 @@ namespace boons {
 
     static std::atomic<bool> g_ps = false;   // follow the player's settings
     static int S(const char* key, int def) { return g_ps ? settings::Value(key, def) : def; }
-    void SetPlayerSettings(bool on) { g_ps = on; }
+    static std::string g_pfx;   // "h_" in Horde: the damage rows have a copy per mode
+    void SetPlayerSettings(bool on, bool horde) { g_ps = on; g_pfx = horde ? "h_" : ""; }
+    static int SP(const char* key, int def) { return g_ps ? settings::Value(g_pfx + key, def) : def; }
     static const char* const kStatKeys[4] = { "stat_power", "stat_tough", "stat_vamp", "stat_second" };
     static const char* const kCurseKeys[4] = { "curse_glass", "curse_riot", "curse_open", "curse_blood" };
     static float CurseStrength() { return S("curse_strength", 100) / 100.0f; }
@@ -116,7 +118,7 @@ namespace boons {
     }
 
     float OutgoingMult() {
-        const float base = S("dmg_out", 100) / 100.0f;
+        const float base = SP("dmg_out", 100) / 100.0f;
         if (!g_active) return base;
         float m = base * (1.0f + 0.20f * g_stacks[(int)Stat::Power]);
         if (HasCurse(Curse::GlassCannon)) m *= 1.40f;
@@ -124,7 +126,7 @@ namespace boons {
     }
 
     float IncomingMult() {
-        const float base = S("dmg_in", 100) / 100.0f;
+        const float base = SP("dmg_in", 100) / 100.0f;
         if (!g_active) return base;
         float m = base * std::pow(0.85f, (float)g_stacks[(int)Stat::Toughness]);
         if (HasCurse(Curse::GlassCannon)) m *= 1.0f + 0.30f * CurseStrength();

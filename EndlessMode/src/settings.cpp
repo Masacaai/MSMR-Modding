@@ -10,23 +10,30 @@
 #include <cstdlib>
 #include <atomic>
 #include <mutex>
+#include <thread>
+#include <unordered_map>
 
 namespace settings {
     namespace {
         std::vector<Row> g_rows;
-        std::vector<int> g_index;
+        std::atomic<int> g_idx[kMaxRows];          // the current choice of each row (read from the game's menu hooks, so lock-free)
+        std::vector<char> g_dirty;                 // rows changed and not written to the ini yet
+        std::atomic<ULONGLONG> g_last_change{ 0 };
         std::mutex g_mutex;
+        std::unordered_map<std::string, int> g_find;
+        int g_cur_tab = 0;
 
         std::string Ini() { return DataDir() + "\\EndlessArena_settings.ini"; }
 
         void Head(const char* title) {
             Row r;
             r.title = title;
+            r.tab = g_cur_tab;
             g_rows.push_back(std::move(r));
         }
         void Switch(const char* key, const char* title, const char* help, bool def) {
             Row r;
-            r.key = key; r.title = title; r.help = help; r.def = def ? 1 : 0;
+            r.key = key; r.title = title; r.help = help; r.def = def ? 1 : 0; r.tab = g_cur_tab;
             g_rows.push_back(std::move(r));
         }
         // choices as "label" with values in the parallel list; def = the index chosen by default.
@@ -34,11 +41,75 @@ namespace settings {
                   std::vector<int> values, int def) {
             Row r;
             r.key = key; r.title = title; r.help = help;
-            r.choices = std::move(choices); r.values = std::move(values); r.def = def;
+            r.choices = std::move(choices); r.values = std::move(values); r.def = def; r.tab = g_cur_tab;
             g_rows.push_back(std::move(r));
         }
         void Mix(const char* key, const char* title, const char* help) {
             List(key, title, help, { "OFF", "FEW", "NORMAL", "MANY" }, { 0, 50, 100, 200 }, 2);
+        }
+
+        void MixRows(const std::string& p, const char* heading) {
+            Head(heading);
+            Mix((p + "mix_melee").c_str(), "BRAWLERS", "Fist and baton fighters.");
+            Mix((p + "mix_ranged").c_str(), "GUNMEN", "Pistols and rifles.");
+            Mix((p + "mix_shield").c_str(), "SHIELDS", "Riot-shield enemies.");
+            Mix((p + "mix_rocket").c_str(), "ROCKETEERS", "Rocket launchers.");
+            Mix((p + "mix_sniper").c_str(), "SNIPERS", "Long-range shooters.");
+            Mix((p + "mix_heavy").c_str(), "HEAVIES", "Big armored enemies.");
+            Mix((p + "mix_special").c_str(), "SPECIALISTS", "Jetpacks, drones and the like.");
+        }
+
+        void FactionRows(const std::string& p, bool campaign) {
+            Head(campaign ? "FACTIONS" : "HORDE FACTIONS");
+            for (const auto& f : roster::Factions()) {
+                std::string key = p + "fac_" + f.id;
+                Switch(key.c_str(), f.name, campaign ? "OFF: this faction never appears in a Campaign run." : "OFF: this faction never appears in a Horde run.", true);
+                g_rows.back().title = f.name;
+                for (auto& c : g_rows.back().title) c = (char)toupper((unsigned char)c);
+            }
+            if (campaign)
+                List("order", "FACTION ORDER", "DEFAULT: the story's order, a random few. SHUFFLED: any order. CUSTOM: the slots below.",
+                     { "DEFAULT", "SHUFFLED", "CUSTOM" }, { 0, 1, 2 }, 0);
+            else
+                List("h_order", "INVASION ORDER", "RANDOM: a different order every run. CUSTOM: the slots below.",
+                     { "RANDOM", "CUSTOM" }, { 0, 2 }, 0);
+            if (campaign)
+                List("perrun", "FACTIONS PER RUN", "How many factions a Campaign cycles through. More means more enemy models in memory.",
+                     { "2", "3", "4", "5", "6", "7", "8", "9" }, { 2, 3, 4, 5, 6, 7, 8, 9 }, 3);
+            List((p + "budget").c_str(), "ENEMY TYPES IN MEMORY", "The game cannot hold unlimited enemy models. Past about 50 the new ones come out as white blocks or the game crashes.",
+                 { "30 (SAFE)", "44 (NORMAL)", "50 (HIGH)", "60 (RISKY)", "80 (UNLIMITED)" }, { 30, 44, 50, 60, 80 }, 1);
+            std::vector<std::string> ch{ "NONE" };
+            std::vector<int> vals{ 0 };
+            int i = 1;
+            for (const auto& f : roster::Factions()) {
+                std::string n = f.name;
+                for (auto& c : n) c = (char)toupper((unsigned char)c);
+                ch.push_back(n);
+                vals.push_back(i++);
+            }
+            for (int sl = 1; sl <= (int)roster::Factions().size(); sl++) {
+                char title[32];
+                snprintf(title, sizeof(title), "CUSTOM SLOT %d", sl);
+                List((p + "slot_" + std::to_string(sl)).c_str(), title, "With the order set to CUSTOM, the faction that takes this place in the run. NONE skips it.", ch, vals, 0);
+            }
+        }
+
+        void BossRows() {
+            Head("BOSSES");
+            Switch("unverified", "UNTESTED BOSSES", "Allow bosses nobody has fought standalone yet. They can break, hang or crash the game.", false);
+            for (const auto& f : roster::Factions()) {
+                if (f.bosses.empty()) continue;
+                std::vector<std::string> ch{ "RANDOM", "NONE" };
+                for (const auto* b : f.bosses) {
+                    std::string n = b->name;
+                    for (auto& c : n) c = (char)toupper((unsigned char)c);
+                    ch.push_back(n);
+                }
+                std::string key = std::string("boss_") + f.id;
+                std::string title = std::string("BOSS: ") + f.name;
+                for (auto& c : title) c = (char)toupper((unsigned char)c);
+                List(key.c_str(), title.c_str(), "RANDOM: any of its bosses. NONE: no boss for this faction. A name: always that boss, even if untested.", ch, {}, 0);
+            }
         }
 
         void Build() {
@@ -102,65 +173,32 @@ namespace settings {
             List("wave_heal", "HEAL AFTER EACH WAVE", "Health restored when a wave is cleared.",
                  { "NONE", "10%", "25%", "50%", "FULL" }, { 0, 10, 25, 50, 100 }, 0);
 
-            Head("ENEMY MIX");
-            Mix("mix_melee", "BRAWLERS", "Fist and baton fighters.");
-            Mix("mix_ranged", "GUNMEN", "Pistols and rifles.");
-            Mix("mix_shield", "SHIELDS", "Riot-shield enemies.");
-            Mix("mix_rocket", "ROCKETEERS", "Rocket launchers.");
-            Mix("mix_sniper", "SNIPERS", "Long-range shooters.");
-            Mix("mix_heavy", "HEAVIES", "Big armored enemies.");
-            Mix("mix_special", "SPECIALISTS", "Jetpacks, drones and the like.");
+            // ---- tab 1: the Campaign's enemies ----
+            g_cur_tab = 1;
+            MixRows("", "ENEMY MIX");
+            FactionRows("", true);
+            BossRows();
 
-            Head("FACTIONS");
-            for (const auto& f : roster::Factions()) {
-                std::string key = std::string("fac_") + f.id;
-                Switch(key.c_str(), f.name, "OFF: this faction never appears in a Campaign or Horde run.", true);
-                g_rows.back().title = f.name;
-                for (auto& c : g_rows.back().title) c = (char)toupper((unsigned char)c);
-            }
-            List("order", "FACTION ORDER", "DEFAULT: the story's order, a random few. SHUFFLED: any order. CUSTOM: the slots below. Horde always mixes.",
-                 { "DEFAULT", "SHUFFLED", "CUSTOM" }, { 0, 1, 2 }, 0);
-            List("perrun", "FACTIONS PER RUN", "How many factions a Campaign cycles through. More means more enemy models in memory.",
-                 { "2", "3", "4", "5", "6", "7", "8", "9" }, { 2, 3, 4, 5, 6, 7, 8, 9 }, 3);
-            List("budget", "ENEMY TYPES IN MEMORY", "The game cannot hold unlimited enemy models. Past about 50 the new ones come out as white blocks or the game crashes.",
-                 { "30 (SAFE)", "44 (NORMAL)", "50 (HIGH)", "60 (RISKY)", "80 (UNLIMITED)" }, { 30, 44, 50, 60, 80 }, 1);
-            {
-                std::vector<std::string> ch{ "NONE" };
-                std::vector<int> vals{ 0 };
-                int i = 1;
-                for (const auto& f : roster::Factions()) {
-                    std::string n = f.name;
-                    for (auto& c : n) c = (char)toupper((unsigned char)c);
-                    ch.push_back(n);
-                    vals.push_back(i++);
-                }
-                for (int s = 1; s <= (int)roster::Factions().size(); s++) {
-                    char key[16], title[32];
-                    snprintf(key, sizeof(key), "slot_%d", s);
-                    snprintf(title, sizeof(title), "CUSTOM SLOT %d", s);
-                    List(key, title, "With FACTION ORDER: CUSTOM, the faction that takes this place in the run. NONE skips it.", ch, vals, 0);
-                }
-            }
-
-            Head("BOSSES");
-            Switch("unverified", "UNTESTED BOSSES", "Allow bosses nobody has fought standalone yet. They can break, hang or crash the game.", false);
-            for (const auto& f : roster::Factions()) {
-                if (f.bosses.empty()) continue;
-                std::vector<std::string> ch{ "RANDOM", "NONE" };
-                for (const auto* b : f.bosses) {
-                    std::string n = b->name;
-                    for (auto& c : n) c = (char)toupper((unsigned char)c);
-                    ch.push_back(n);
-                }
-                std::string key = std::string("boss_") + f.id;
-                std::string title = std::string("BOSS: ") + f.name;
-                for (auto& c : title) c = (char)toupper((unsigned char)c);
-                List(key.c_str(), title.c_str(), "RANDOM: any of its bosses. NONE: no boss for this faction. A name: always that boss, even if untested.", ch, {}, 0);
-            }
-
-            Head("HORDE");
+            // ---- tab 2: Horde (its own copy of what applies to it) ----
+            g_cur_tab = 2;
+            List("h_preset", "PRESET", "Pick one to set many Horde rows at once. DEFAULT puts them all back. Changes you make before choosing a preset are replaced.",
+                 { "PICK ONE", "DEFAULT", "CASUAL", "BRUTAL", "CHAOS", "BOSS FOCUS", "GLASS CANNON" }, {}, 0);
+            Head("HORDE RUN");
+            List("h_countdown", "COUNTDOWN", "Seconds of Get Ready before a Horde run starts.", { "3", "5", "10", "15", "30" }, { 3, 5, 10, 15, 30 }, 0);
+            Switch("h_practice", "PRACTICE MODE", "Your health is kept full. Nothing ends the run but leaving it.", false);
             List("horde_level", "LEVEL LENGTH", "How long a Horde level lasts at most before the next faction joins.",
                  { "30 S", "45 S", "60 S", "90 S", "120 S" }, { 30, 45, 60, 90, 120 }, 2);
+            List("h_field", "ENEMIES AT ONCE", "The most enemies on the field together. Past 100 the game can stutter or hang.",
+                 { "10", "16", "24", "32", "40", "50", "60", "80", "100" }, { 10, 16, 24, 32, 40, 50, 60, 80, 100 }, 4);
+            List("h_elites", "ELITE ENEMIES", "How often an enemy is replaced by one of its faction's elite units.",
+                 { "OFF", "RARE", "NORMAL", "OFTEN", "ALWAYS" }, { 0, 50, 100, 200, 400 }, 2);
+            Head("YOU");
+            List("h_dmg_out", "YOUR DAMAGE", "How hard you hit.",
+                 { "50%", "75%", "100%", "150%", "200%", "300%", "500%" }, { 50, 75, 100, 150, 200, 300, 500 }, 2);
+            List("h_dmg_in", "DAMAGE YOU TAKE", "How hard enemies hit you.",
+                 { "25%", "50%", "75%", "100%", "150%", "200%", "300%" }, { 25, 50, 75, 100, 150, 200, 300 }, 3);
+            MixRows("h_", "HORDE ENEMY MIX");
+            FactionRows("h_", false);
 
             if (g_rows.size() > kMaxRows) {
                 LOG("settings: %zu rows exceeds the menu's %zu, truncating", g_rows.size(), kMaxRows);
@@ -170,35 +208,114 @@ namespace settings {
                 if (r.choices.size() > kMaxChoices) { r.choices.resize(kMaxChoices); if (r.values.size() > kMaxChoices) r.values.resize(kMaxChoices); }
         }
 
-        void Save(size_t row) {
-            const Row& r = g_rows[row];
-            if (r.heading()) return;
-            char v[16];
-            snprintf(v, sizeof(v), "%d", g_index[row]);
-            WritePrivateProfileStringA("settings", r.key.c_str(), v, Ini().c_str());
+        void Save(size_t row) {   // marks the row for the writer thread: the menu must not wait for the disk
+            if (g_rows[row].heading()) return;
+            if (g_dirty.size() < g_rows.size()) g_dirty.assign(g_rows.size(), 0);
+            g_dirty[row] = 1;
+            g_last_change = GetTickCount64();
+        }
+
+        std::once_flag g_once, g_writer_once;
+        void Init() {
+            Build();
+            for (size_t i = 0; i < g_rows.size(); i++) {
+                g_idx[i] = g_rows[i].def;
+                if (!g_rows[i].heading()) g_find.emplace(g_rows[i].key, (int)i);
+            }
+            g_dirty.assign(g_rows.size(), 0);
+        }
+
+        // Writes changed rows to the ini half a second after the last change.
+        void WriterLoop() {
+            for (;;) {
+                Sleep(300);
+                ULONGLONG last = g_last_change;
+                if (!last || GetTickCount64() - last < 500) continue;
+                std::vector<std::pair<std::string, int>> out;
+                {
+                    std::lock_guard<std::mutex> lock(g_mutex);
+                    for (size_t i = 0; i < g_dirty.size(); i++)
+                        if (g_dirty[i]) { out.push_back({ g_rows[i].key, g_idx[i] }); g_dirty[i] = 0; }
+                    g_last_change = 0;
+                }
+                for (auto& [k, v] : out) {
+                    char b[16];
+                    snprintf(b, sizeof(b), "%d", v);
+                    WritePrivateProfileStringA("settings", k.c_str(), b, Ini().c_str());
+                }
+            }
         }
     }
 
     static std::atomic<bool> g_rebuild{ false };
     bool TakeRebuild() { return g_rebuild.exchange(false); }
 
-    const std::vector<Row>& Rows();
-    bool SetValue(const std::string& key, int value) {
-        const auto& rows = Rows();
-        for (size_t i = 0; i < rows.size(); i++) {
-            if (rows[i].key != key) continue;
-            if (rows[i].choices.empty()) { SetIndex(i, value ? 1 : 0); return true; }
-            for (size_t k = 0; k < rows[i].choices.size(); k++) {
-                int v = k < rows[i].values.size() ? rows[i].values[k] : (int)k;
-                if (v == value) { SetIndex(i, (int)k); return true; }
-            }
-            LOG("settings: no choice %d in row %s", value, key.c_str());
-            return false;
+    const std::vector<Row>& Rows() {
+        std::call_once(g_once, Init);
+        return g_rows;
+    }
+
+    const char* TabName(int tab) {
+        static const char* const names[kTabs] = { "ENDLESS: CAMPAIGN", "ENDLESS: FOES", "ENDLESS: HORDE" };
+        return tab >= 0 && tab < kTabs ? names[tab] : "ENDLESS";
+    }
+    int TabOf(size_t row) { return row < Rows().size() ? Rows()[row].tab : 0; }
+
+    int Find(const std::string& key) {
+        Rows();
+        auto it = g_find.find(key);
+        return it == g_find.end() ? -1 : it->second;
+    }
+
+    int Index(size_t row) {
+        Rows();
+        return row < g_rows.size() ? g_idx[row].load() : 0;
+    }
+
+    void SetIndex(size_t row, int index) {
+        Rows();
+        int preset = 0;   // 1 the Campaign's preset row, 2 Horde's
+        {
+            std::lock_guard<std::mutex> lock(g_mutex);
+            if (row >= g_rows.size() || g_rows[row].heading()) return;
+            int n = g_rows[row].choices.empty() ? 2 : (int)g_rows[row].choices.size();
+            index = std::clamp(index, 0, n - 1);
+            if (g_idx[row] == index) return;
+            g_idx[row] = index;
+            Save(row);
+            preset = g_rows[row].key == "preset" ? 1 : g_rows[row].key == "h_preset" ? 2 : 0;
         }
+        std::call_once(g_writer_once, [] { std::thread(WriterLoop).detach(); });
+        if (preset) ApplyPreset(index, preset == 2);
+    }
+
+    void ResetRow(size_t row) { Rows(); SetIndex(row, g_rows[row].def); }
+
+    void ResetTab(int tab) {
+        Rows();
+        for (size_t i = 0; i < g_rows.size(); i++)
+            if (!g_rows[i].heading() && g_rows[i].tab == tab) SetIndex(i, g_rows[i].def);
+    }
+
+    void ResetAll() {
+        Rows();
+        for (size_t i = 0; i < g_rows.size(); i++) SetIndex(i, g_rows[i].def);
+    }
+
+    bool SetValue(const std::string& key, int value) {
+        const int i = Find(key);
+        if (i < 0) return false;
+        const Row& r = g_rows[(size_t)i];
+        if (r.choices.empty()) { SetIndex((size_t)i, value ? 1 : 0); return true; }
+        for (size_t k = 0; k < r.choices.size(); k++) {
+            int v = k < r.values.size() ? r.values[k] : (int)k;
+            if (v == value) { SetIndex((size_t)i, (int)k); return true; }
+        }
+        LOG("settings: no choice %d in row %s", value, key.c_str());
         return false;
     }
 
-    bool ApplyPreset(int index) {
+    bool ApplyPreset(int index, bool horde) {
         struct Pair { const char* key; int value; };
         static const std::vector<std::vector<Pair>> presets = {
             /* 0 */ {},
@@ -217,18 +334,15 @@ namespace settings {
         };
         if (index <= 0 || index >= (int)presets.size()) return false;
         const auto& rows = Rows();
-        for (size_t i = 0; i < rows.size(); i++)
-            if (!rows[i].heading() && rows[i].key != "preset") SetIndex(i, rows[i].def);
-        for (const auto& p : presets[(size_t)index]) SetValue(p.key, p.value);
+        for (size_t i = 0; i < rows.size(); i++) {
+            const Row& r = rows[i];
+            if (r.heading() || r.key == "preset" || r.key == "h_preset") continue;
+            if ((r.tab == 2) == horde) SetIndex(i, r.def);   // only this mode's rows
+        }
+        for (const auto& p : presets[(size_t)index]) SetValue(horde ? std::string("h_") + p.key : std::string(p.key), p.value);
         g_rebuild = true;
-        LOG("settings: preset %d applied", index);
+        LOG("settings: %s preset %d applied", horde ? "Horde" : "Campaign", index);
         return true;
-    }
-
-    const std::vector<Row>& Rows() {
-        std::lock_guard<std::mutex> lock(g_mutex);
-        if (g_rows.empty()) { Build(); g_index.assign(g_rows.size(), 0); for (size_t i = 0; i < g_rows.size(); i++) g_index[i] = g_rows[i].def; }
-        return g_rows;
     }
 
     void Load() {
@@ -239,72 +353,33 @@ namespace settings {
             if (r.heading()) continue;
             int n = r.choices.empty() ? 2 : (int)r.choices.size();
             int v = (int)GetPrivateProfileIntA("settings", r.key.c_str(), r.def, Ini().c_str());
-            g_index[i] = std::clamp(v, 0, n - 1);
+            g_idx[i] = std::clamp(v, 0, n - 1);
         }
         LOG("settings: loaded %zu rows from %s", g_rows.size(), Ini().c_str());
     }
 
-    int Index(size_t row) {
-        Rows();
-        std::lock_guard<std::mutex> lock(g_mutex);
-        return row < g_index.size() ? g_index[row] : 0;
-    }
-
-    void SetIndex(size_t row, int index) {
-        Rows();
-        bool preset = false;
-        {
-            std::lock_guard<std::mutex> lock(g_mutex);
-            if (row >= g_rows.size() || g_rows[row].heading()) return;
-            int n = g_rows[row].choices.empty() ? 2 : (int)g_rows[row].choices.size();
-            index = std::clamp(index, 0, n - 1);
-            if (g_index[row] == index) return;
-            g_index[row] = index;
-            Save(row);
-            preset = g_rows[row].key == "preset";
-        }
-        if (preset) ApplyPreset(index);
-    }
-
-    void ResetRow(size_t row) { Rows(); SetIndex(row, g_rows[row].def); }
-
-    void ResetAll() {
-        Rows();
-        for (size_t i = 0; i < g_rows.size(); i++) SetIndex(i, g_rows[i].def);
-    }
-
-    int Find(const std::string& key) {
-        Rows();
-        for (size_t i = 0; i < g_rows.size(); i++) if (g_rows[i].key == key) return (int)i;
-        return -1;
-    }
-
     int Value(const std::string& key, int fallback) {
-        int row = Find(key);
+        const int row = Find(key);
         if (row < 0) return fallback;
-        std::lock_guard<std::mutex> lock(g_mutex);
-        const Row& r = g_rows[row];
-        int i = g_index[row];
-        return i < (int)r.values.size() ? r.values[i] : i;
+        const Row& r = g_rows[(size_t)row];
+        int i = g_idx[row];
+        return i < (int)r.values.size() ? r.values[(size_t)i] : i;
     }
 
     bool On(const std::string& key) { return Value(key, 0) != 0; }
 
     bool Changed() {
         Rows();
-        std::lock_guard<std::mutex> lock(g_mutex);
-        for (size_t i = 0; i < g_rows.size(); i++) if (!g_rows[i].heading() && g_index[i] != g_rows[i].def) return true;
+        for (size_t i = 0; i < g_rows.size(); i++) if (!g_rows[i].heading() && g_idx[i] != g_rows[i].def) return true;
         return false;
     }
 
     void LogAll() {
         Rows();
-        std::lock_guard<std::mutex> lock(g_mutex);
         for (size_t i = 0; i < g_rows.size(); i++) {
             const Row& r = g_rows[i];
-            if (r.heading()) { LOG("settings: --- %s", r.title.c_str()); continue; }
-            LOG("settings: %-14s = %s", r.key.c_str(),
-                r.choices.empty() ? (g_index[i] ? "ON" : "OFF") : r.choices[g_index[i]].c_str());
+            if (r.heading()) { LOG("settings: --- [%s] %s", TabName(r.tab), r.title.c_str()); continue; }
+            LOG("settings: %-14s = %s", r.key.c_str(), r.choices.empty() ? (g_idx[i] ? "ON" : "OFF") : r.choices[(size_t)g_idx[i]].c_str());
         }
     }
 }

@@ -15,7 +15,7 @@
 // each new wave plan. Damage scaling is read by the stats damage hooks (OutgoingMult / IncomingMult).
 namespace boons {
     // Whether this run follows the player's settings (rewards, curses, damage, wave heal). Set at run start, cleared at its end.
-    void SetPlayerSettings(bool on);
+    void SetPlayerSettings(bool on, bool horde = false);
     void Begin(uint32_t seed);    // run start (Campaign): pools from the game's item categories, loadout cleared
     void End();                   // run end: loadout restored, modifiers reset
     bool Active();

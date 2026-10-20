@@ -646,10 +646,10 @@ namespace director {
 
     // ---- the player's settings (settings.h) ----
 
-    static std::vector<const roster::Faction*> AllowedFactions() {
+    static std::vector<const roster::Faction*> AllowedFactions(bool horde) {
         std::vector<const roster::Faction*> out;
         for (const auto& f : roster::Factions())
-            if (settings::On(std::string("fac_") + f.id)) out.push_back(&f);
+            if (settings::On(std::string(horde ? "h_fac_" : "fac_") + f.id)) out.push_back(&f);
         if (out.empty()) {
             LOG("director: every faction is switched off in the settings; using them all");
             for (const auto& f : roster::Factions()) out.push_back(&f);
@@ -659,13 +659,14 @@ namespace director {
 
     // The factions of a Campaign (or Boss Rush) run, or the Horde's invasion order, from the faction settings.
     static std::vector<const roster::Faction*> SettingsOrder(const Options& opt, std::mt19937& rng, bool horde) {
-        const auto allowed = AllowedFactions();
+        const auto allowed = AllowedFactions(horde);
+        const std::string P = horde ? "h_" : "";
         const auto& all = roster::Factions();
-        const int ord = settings::Value("order", 0);
+        const int ord = settings::Value(P + "order", 0);
         std::vector<const roster::Faction*> list;
         if (ord == 2) {
             for (size_t s = 1; s <= all.size(); s++) {
-                int idx = settings::Value("slot_" + std::to_string(s), 0);
+                int idx = settings::Value(P + "slot_" + std::to_string(s), 0);
                 if (idx <= 0 || idx > (int)all.size()) continue;
                 const roster::Faction* f = &all[idx - 1];
                 if (std::find(allowed.begin(), allowed.end(), f) != allowed.end() &&
@@ -698,15 +699,12 @@ namespace director {
     }
 
     static void ApplySettings(plan::Config& cfg, const Options& opt) {
-        cfg.count_mult = settings::Value("count", 100) / 100.0f;
-        cfg.boss_waves = settings::On("bosswaves");
-        cfg.boss_count = settings::Value("bosscount", 0);
-        cfg.crew_mult = settings::Value("crew", 100) / 100.0f;
-        cfg.elite_mult = settings::Value("elites", 100) / 100.0f;
-        cfg.waves_per_chapter = settings::Value("chapter", 4);
+        const bool horde = opt.mode == "horde";
+        const std::string P = horde ? "h_" : "";
+        cfg.elite_mult = settings::Value(P + "elites", 100) / 100.0f;
         using plan::Role;
         auto set = [&](const char* key, std::initializer_list<Role> roles) {
-            float m = settings::Value(key, 100) / 100.0f;
+            float m = settings::Value(P + key, 100) / 100.0f;
             for (Role r : roles) cfg.role_mult[(int)r] = m;
         };
         set("mix_melee", { Role::Melee, Role::Baton });
@@ -716,6 +714,12 @@ namespace director {
         set("mix_sniper", { Role::Sniper });
         set("mix_heavy", { Role::Heavy });
         set("mix_special", { Role::Special });
+        if (horde) return;   // the rest is the Campaign's
+        cfg.count_mult = settings::Value("count", 100) / 100.0f;
+        cfg.boss_waves = settings::On("bosswaves");
+        cfg.boss_count = settings::Value("bosscount", 0);
+        cfg.crew_mult = settings::Value("crew", 100) / 100.0f;
+        cfg.waves_per_chapter = settings::Value("chapter", 4);
         for (const auto& f : roster::Factions()) {
             if (f.bosses.empty()) continue;
             int idx = settings::Value(std::string("boss_") + f.id, 0);
@@ -1036,7 +1040,7 @@ namespace director {
         uint32_t seed = opt.seed ? opt.seed : std::random_device{}();
         g_rng.seed(seed);
         g_cfg = MakeConfig(opt, g_rng);
-        boons::SetPlayerSettings(opt.player_settings);
+        boons::SetPlayerSettings(opt.player_settings, opt.mode == "horde");
         g_kills = 0;
         g_sinister_done = false;
         g_sinister_first_met = false;

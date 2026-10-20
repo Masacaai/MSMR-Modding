@@ -24,7 +24,7 @@ namespace {
     constexpr uintptr_t kMovie = 0x1d29690;          // the UI movie Flash objects are made in
     constexpr uintptr_t kOpenOptionsName = 0x389f4c0, kResetAllHash = 0x6d8ed88;
     constexpr uintptr_t kSettingType = 0x3a7d6e8, kHeadingType = 0x3a7d838;   // option-type vtables
-    constexpr uint32_t kTabId = 93;                  // the game's tabs are 2-10; its RESET ALL ignores anything above
+    constexpr uint32_t kTabId = 93;                  // our tabs are 93, 94, 95; the game's are 2-10 and its RESET ALL ignores anything above
     constexpr int kFirstSetting = 0x200;             // the game's settings are 0-122
     constexpr size_t kTabBytes = 0x40, kItemBytes = 0x88, kChoiceBytes = 0x50;
     constexpr size_t kRows = settings::kMaxRows, kChoices = settings::kMaxChoices;
@@ -75,17 +75,19 @@ namespace {
     std::atomic<int> g_built{};   // the tab's items: 0 not yet, 1 ready, 2 cannot be built
     thread_local bool t_building = false;
 
-    alignas(16) unsigned char g_tab[kTabBytes];
+    constexpr int kTabs = settings::kTabs;
+    alignas(16) unsigned char g_tab[kTabs][kTabBytes];
     alignas(16) unsigned char g_items[kRows][kItemBytes];
+    alignas(16) unsigned char g_tab_items[kTabs][kRows][kItemBytes];   // each tab's own run of items (copies of g_items)
     alignas(16) unsigned char g_choice[kRows][kChoices][kChoiceBytes];
 
     // Texts by the hash the game looks them up with: CRC-32 of a tag of our own. They answer only while our tab is being
     // built, so a game text sharing a hash is never replaced.
     struct Text { char tag[24]; uint32_t hash; const char* text; };
-    std::array<Text, 2 + kRows * (2 + kChoices)> g_texts{};
-    std::array<uint16_t, 2 + kRows * (2 + kChoices)> g_by_hash{};
+    std::array<Text, 8 + kRows * (2 + kChoices)> g_texts{};
+    std::array<uint16_t, 8 + kRows * (2 + kChoices)> g_by_hash{};
     size_t g_text_count = 0;
-    const Text *g_tab_name{}, *g_tab_heading{};
+    const Text *g_tab_name[kTabs]{}, *g_tab_heading{};
     const Text *g_titles[kRows]{}, *g_helps[kRows]{};
     const Text* g_choice_texts[kRows][kChoices]{};
 
@@ -109,7 +111,11 @@ namespace {
     void AddTexts() {
         if (g_text_count) return;
         const auto& rows = settings::Rows();
-        g_tab_name = AddText("EA_TAB", "ENDLESS ARENA");
+        for (int t = 0; t < kTabs; t++) {
+            char tn[16];
+            snprintf(tn, sizeof(tn), "EA_TAB%d", t);
+            g_tab_name[t] = AddText(tn, settings::TabName(t));
+        }
         g_tab_heading = AddText("EA_HEAD", "ENDLESS ARENA SETTINGS");
         char tag[24];
         for (size_t r = 0; r < rows.size(); ++r) {
@@ -189,13 +195,18 @@ namespace {
                     Put<uint64_t>(c, 0x28, 0);
                 }
             }
-            std::memcpy(g_tab, reinterpret_cast<const void*>(menu_tab), kTabBytes);
-            Put<uint32_t>(g_tab, 8, kTabId);
-            PutTag(g_tab, 0x10, g_tab_name);
-            PutTag(g_tab, 0x20, g_tab_heading);
-            Put<uint64_t>(g_tab, 0x30, (uint64_t)g_items);
-            Put<uint32_t>(g_tab, 0x38, (uint32_t)rows.size());
-            Put<uint32_t>(g_tab, 0x3c, (uint32_t)rows.size());
+            for (int t = 0; t < kTabs; t++) {
+                uint32_t n = 0;
+                for (size_t r = 0; r < rows.size(); ++r)
+                    if (rows[r].tab == t) std::memcpy(g_tab_items[t][n++], g_items[r], kItemBytes);
+                std::memcpy(g_tab[t], reinterpret_cast<const void*>(menu_tab), kTabBytes);
+                Put<uint32_t>(g_tab[t], 8, kTabId + (uint32_t)t);
+                PutTag(g_tab[t], 0x10, g_tab_name[t]);
+                PutTag(g_tab[t], 0x20, g_tab_heading);
+                Put<uint64_t>(g_tab[t], 0x30, (uint64_t)g_tab_items[t]);
+                Put<uint32_t>(g_tab[t], 0x38, n);
+                Put<uint32_t>(g_tab[t], 0x3c, n);
+            }
             return 0;
         } __except (EXCEPTION_EXECUTE_HANDLER) {
             return 9501;
@@ -213,21 +224,29 @@ namespace {
     // Adds our tab, built by the game's own code, to the tabs the pause menu hands to Flash.
     void AddTab(GfxValue& tabs) {
         if (!Ready()) return;
+        LARGE_INTEGER t0, t1, freq;
+        QueryPerformanceCounter(&t0);
         __try {
-            GfxValue value{};
-            std::memset(value.head, 0xff, sizeof(value.head));
             void* movie = reinterpret_cast<void*(__fastcall*)()>(g_base + kMovie)();
             if (!movie) return;
-            t_building = true;
-            const bool made = reinterpret_cast<bool(__fastcall*)(GfxValue*, void*, const void*)>(g_base + kBuildTab)(&value, movie, g_tab);
-            t_building = false;
-            if (made && PushBack(tabs, value)) ++g_tabs_built;
-            ReleaseValue(value);
+            for (int t = 0; t < kTabs; t++) {
+                GfxValue value{};
+                std::memset(value.head, 0xff, sizeof(value.head));
+                t_building = true;
+                const bool made = reinterpret_cast<bool(__fastcall*)(GfxValue*, void*, const void*)>(g_base + kBuildTab)(&value, movie, g_tab[t]);
+                t_building = false;
+                if (made && PushBack(tabs, value)) ++g_tabs_built;
+                ReleaseValue(value);
+            }
         } __except (EXCEPTION_EXECUTE_HANDLER) {
             t_building = false;   // not again this session; the game's own tabs go on
             g_failure = 9503;
             g_built = 2;
         }
+        QueryPerformanceCounter(&t1);
+        QueryPerformanceFrequency(&freq);
+        static int logged = 0;
+        if (logged++ < 8) LOG("menu: built %d tabs in %.1f ms", kTabs, 1000.0 * (double)(t1.QuadPart - t0.QuadPart) / (double)freq.QuadPart);
     }
 
     int RowOf(int setting) {
@@ -244,9 +263,9 @@ namespace {
     }
     void __fastcall CallbackHook(void* ui, uint32_t hash, GfxValue* args, uint32_t count) {
         // Y RESET ALL on our tab: the game's RESET ALL takes only its own tabs.
-        if (g_built == 1 && args && count >= 1 && (args[0].type & kTypeMask) == kInt && (uint32_t)args[0].data == kTabId &&
-            hash == Get<uint32_t>(g_base + kResetAllHash)) {
-            settings::ResetAll();
+        if (g_built == 1 && args && count >= 1 && (args[0].type & kTypeMask) == kInt && (uint32_t)args[0].data >= kTabId &&
+            (uint32_t)args[0].data < kTabId + kTabs && hash == Get<uint32_t>(g_base + kResetAllHash)) {
+            settings::ResetTab((int)((uint32_t)args[0].data - kTabId));
             ++g_changes;
             reinterpret_cast<void(__fastcall*)(void*)>(g_base + kOpenOptions)(ui);   // every tab shows its values again
             return;

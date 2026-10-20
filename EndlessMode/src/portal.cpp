@@ -224,11 +224,12 @@ namespace portal {
         }
         // The player's Settings tab (settings.h) decides the rest of the run.
         run.player_settings = true;
-        run.countdown_s = settings::Value("countdown", 3);
+        const std::string P = run.mode == "horde" ? "h_" : "";   // Horde has its own copy of what applies to it
+        run.countdown_s = settings::Value(P + "countdown", 3);
         run.roguelike = settings::On("boons");
-        run.god = settings::On("practice");
-        run.horde_max = settings::Value("field", 40);
-        run.max_types = settings::Value("budget", 44);
+        run.god = settings::On(P + "practice");
+        run.horde_max = settings::Value(P + "field", 40);
+        run.max_types = settings::Value(P + "budget", 44);
         run.horde_level_ms = settings::Value("horde_level", 60) * 1000;
         if (std::string(a->mode) != "bossrush") run.allow_unverified_bosses = settings::On("unverified");
         arena::Activate(a->name);
