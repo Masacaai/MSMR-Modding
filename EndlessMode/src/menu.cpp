@@ -197,6 +197,38 @@ namespace {
                     Put<uint64_t>(c, 0x30, 0);
                 }
             }
+            // One-off dump (recon): the game's own items that have choices, and ours, byte for byte, to see which fields differ.
+            {
+                auto hex = [](const char* what, uintptr_t at, size_t n) {
+                    char line[600] = {};
+                    int len = snprintf(line, sizeof(line), "%s:", what);
+                    for (size_t i = 0; i < n && len < 580; i++) {
+                        unsigned char b = 0;
+                        std::memcpy(&b, reinterpret_cast<const void*>(at + i), 1);
+                        len += snprintf(line + len, sizeof(line) - (size_t)len, "%s%02x", i % 8 == 0 ? " " : "", b);
+                    }
+                    LOG("menu-dump %s", line);
+                };
+                int shown = 0;
+                for (uint32_t t = 0; t < tab_count && shown < 10; ++t) {
+                    const uintptr_t at = tabs + t * kTabBytes;
+                    const auto list = Get<uintptr_t>(at + 0x30);
+                    const auto count = Get<uint32_t>(at + 0x38);
+                    if (!list || !count || count > 256) continue;
+                    for (uint32_t i = 0; i < count && shown < 10; ++i) {
+                        const uintptr_t item = list + i * kItemBytes;
+                        if (!Get<uintptr_t>(item + 0x70) || !Get<uint32_t>(item + 0x78)) continue;
+                        char w[48];
+                        snprintf(w, sizeof(w), "game tab %u item %u", Get<uint32_t>(at + 8), i);
+                        hex(w, item, kItemBytes);
+                        hex("   its first choice", Get<uintptr_t>(item + 0x70), kChoiceBytes);
+                        ++shown;
+                    }
+                }
+                hex("OURS row 0 item", (uintptr_t)g_items[0], kItemBytes);
+                hex("   its first choice", (uintptr_t)g_choice[0][0], kChoiceBytes);
+                hex("OURS row 1 item", (uintptr_t)g_items[1], kItemBytes);
+            }
             std::memcpy(g_tab, reinterpret_cast<const void*>(menu_tab), kTabBytes);
             Put<uint32_t>(g_tab, 8, kTabId);
             PutTag(g_tab, 0x10, g_tab_name);
