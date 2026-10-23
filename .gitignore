@@ -58,3 +58,6 @@ SpidyVR/
 
 # Maintainer-only notes, never published
 EndlessMode/src/SECRET.md
+
+# Uncontained: separate city-theme mod, local only (game-derived recon inside; never commit)
+Uncontained/

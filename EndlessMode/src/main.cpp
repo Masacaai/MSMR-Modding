@@ -27,6 +27,7 @@
 #include "uilog.h"
 #include "audio.h"
 #include "menu.h"
+#include "missions.h"
 #include "progress.h"
 #include "settings.h"
 #include "runloadout.h"
@@ -1124,6 +1125,8 @@ static void RunCommand(const std::string& line) {
         std::string text;
         in >> type >> std::quoted(text);
         ui::ShowTypedMessage(type, text);
+    } else if (cmd == "mission") {
+        missions::Log();   // the save's state of the known story missions (docs/GAME_INTERNALS.md, missions)
     } else if (cmd == "audio") {
         // audio on | off | mark <text> | post <event> [obj] | state <group> <state> | switch <group> <switch> [obj] | rtpc <name> <value> [obj]
         // Records the game's Wwise calls to <data folder>\EndlessMode_audio.txt, or makes one (see audio.h).
@@ -1382,8 +1385,14 @@ static void Main() {
     }
     LOG("ready; write commands to %s\\EndlessMode.cmd", g_dir.c_str());
 
+    DWORD hero_since = 0;
+    bool missions_logged = false;
     for (;;) {
         PollCommands();
+        if (!missions_logged) {   // once, 20 s after a hero exists: what the loaded save says about the story missions
+            if (ReadHero().ok) { if (!hero_since) hero_since = GetTickCount(); else if (GetTickCount() - hero_since > 20000) { missions::Log(); missions_logged = true; } }
+            else hero_since = 0;
+        }
         Sleep(250);
     }
 }
