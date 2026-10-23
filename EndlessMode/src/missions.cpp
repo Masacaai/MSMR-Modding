@@ -41,12 +41,17 @@ namespace missions {
                       !memcmp(a, find_bytes, 12) && !memcmp(b, state_bytes, 12) ? 1 : -1;
         }
         uintptr_t sys = 0;
-        if (checked != 1 || !memory::Read(scan::FromRva(kSystemPtrRva), sys) || !sys) return false;
+        const bool have = memory::Read(scan::FromRva(kSystemPtrRva), sys);
+        static int logged = 0;
+        if (logged++ < 3) LOG("missions: code check %d, system pointer %s %llx", checked, have ? "read" : "unreadable", (unsigned long long)sys);
+        if (checked != 1 || !have || !sys) return false;
         alignas(16) unsigned char out[64] = {};
         __try {
             reinterpret_cast<void* (*)(uintptr_t, void*, uint32_t)>(scan::FromRva(kFindRva))(sys, out, id);
             state = (int)reinterpret_cast<uint32_t (*)(uintptr_t, void*)>(scan::FromRva(kStateRva))(sys, out);
         } __except (EXCEPTION_EXECUTE_HANDLER) {
+            static int faults = 0;
+            if (faults++ < 3) LOG("missions: the game's code faulted");
             return false;
         }
         return true;
