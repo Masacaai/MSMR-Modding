@@ -10,5 +10,14 @@
 namespace missions {
     uint32_t Hash(const std::string& name, bool normalize);   // Insomniac CRC-32 of a name (ALERT's hash(name, normalize))
     bool State(uint32_t id, int& state);                      // game thread only; false if the system or the code is not as expected
+    // Is a story mission (or any objective) running? Game thread. Mirrors AnyMissionActiveAction (exe+1faf2f0): the objective system is a
+    // singleton (exe+7c4bbb0, empty when nothing runs), its count is at +0x108, exe+201efa0 (system, out, index) fills a record, and state 2 is
+    // "active". Fills the ids of up to `cap` active ones, returns how many are active (0 also when the system does not exist).
+    int Active(uint32_t* ids, int cap);
+
+    // A cached answer for other threads, refreshed about once a second by Poll (call it from any thread; it posts to the game thread).
+    void Poll();
+    bool AnyActiveCached();
+
     void Log();                                               // logs the state of the known story missions (both spellings of each id)
 }

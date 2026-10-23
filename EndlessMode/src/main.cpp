@@ -1389,6 +1389,7 @@ static void Main() {
     bool missions_logged = false;
     for (;;) {
         PollCommands();
+        missions::Poll();
         {   // recon: when does the mission system exist? (logs every change of the two globals the mission-state code reads)
             static uintptr_t last_a = 1, last_b = 1;
             static DWORD next_probe = 0;

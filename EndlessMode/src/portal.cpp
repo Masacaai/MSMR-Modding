@@ -9,6 +9,7 @@
 #include "timescale.h"
 #include "score.h"
 #include "settings.h"
+#include "missions.h"
 #include "progress.h"
 #include "input.h"
 #include "runloadout.h"
@@ -189,7 +190,19 @@ namespace portal {
     }
 
     // Dock -> arena arrival point. The run itself starts when the hero walks into the start area.
+    // The arena cannot start during a story mission (a run begun mid-mission, 2026-10-22): say so, at most every few seconds.
+    static bool MissionBlocks() {
+        if (!missions::AnyActiveCached()) return false;
+        static DWORD last = 0;
+        if (GetTickCount() - last > 8000) {
+            last = GetTickCount();
+            hud::Show("Endless Arena is locked while a story mission is active. Finish the mission first.", 6.0f);
+        }
+        return true;
+    }
+
     static void Go(int v) {
+        if (MissionBlocks()) return;
         if (director::Running()) { LOG("portal: a run is already going"); return; }
         const arena::Bounds* a = arena::Find(kVenues[v].arena);
         if (!a) return;
@@ -203,6 +216,7 @@ namespace portal {
     }
 
     static void StartRun(int v) {
+        if (MissionBlocks()) return;
         const arena::Bounds* a = arena::Find(kVenues[v].arena);
         if (!a || director::Running()) return;
         director::Options run;
@@ -631,7 +645,7 @@ namespace portal {
             // Already at Ryker's without the dock teleport (a save loaded at the dock, or got there on their own):
             // arm it for the venue they last came from, so crossing the line starts a run (user, 2026-10-14). Only on
             // the dock side of the line and near the arrival point, so it never fires mid-yard.
-            if (g_armed < 0 && !g_pending_return) {
+            if (g_armed < 0 && !g_pending_return && !missions::AnyActiveCached()) {
                 int v = LastVenue();
                 const arena::Bounds* a = arena::Find(kVenues[v].arena);
                 if (a && a->wall && arena::WallSide(*a, h.x, h.z) < -1.0f && Near(a->tp, h, 150.0f, 40.0f)) {

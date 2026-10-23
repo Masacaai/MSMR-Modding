@@ -6,6 +6,7 @@
 #include "scan.h"
 
 #include <Windows.h>
+#include <atomic>
 #include <cstring>
 
 namespace missions {
@@ -56,6 +57,56 @@ namespace missions {
         }
         return true;
     }
+
+    static std::atomic<int> g_active{ 0 };
+    static std::atomic<DWORD> g_next_poll{ 0 };
+
+    int Active(uint32_t* ids, int cap) {
+        static const unsigned char index_bytes[] = { 0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10, 0x57, 0x48 };
+        static int checked = 0;
+        if (!checked) {
+            unsigned char a[12] = {};
+            checked = memory::SafeRead(scan::FromRva(0x201efa0), a, 12) && !memcmp(a, index_bytes, 12) ? 1 : -1;
+        }
+        unsigned char flag = 0;
+        uintptr_t sys = 0;
+        if (checked != 1 || !memory::Read(scan::FromRva(0x7c8c1a8), flag) || !flag || !memory::Read(scan::FromRva(kSystemPtrRva), sys) || !sys) return 0;
+        int32_t count = 0;
+        if (!memory::Read(sys + 0x108, count) || count <= 0 || count > 4096) return 0;
+        int active = 0;
+        alignas(16) unsigned char out[64];
+        __try {
+            for (int i = 0; i < count; i++) {
+                memset(out, 0, sizeof(out));
+                reinterpret_cast<void* (*)(uintptr_t, void*, int)>(scan::FromRva(0x201efa0))(sys, out, i);
+                if (reinterpret_cast<uint32_t (*)(uintptr_t, void*)>(scan::FromRva(kStateRva))(sys, out) == 2) {
+                    if (ids && active < cap) memcpy(&ids[active], out + 0x10, 4);
+                    active++;
+                }
+            }
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            return 0;
+        }
+        return active;
+    }
+
+    void Poll() {
+        const DWORD now = GetTickCount();
+        if ((int)(now - g_next_poll) < 0) return;
+        g_next_poll = now + 1000;
+        gamethread::Post([] {
+            uint32_t ids[8] = {};
+            const int n = Active(ids, 8);
+            if (n != g_active.exchange(n)) {
+                char line[160] = {};
+                int len = 0;
+                for (int i = 0; i < n && i < 8; i++) len += snprintf(line + len, sizeof(line) - (size_t)len, " %08x", ids[i]);
+                LOG("missions: %d active%s", n, line);
+            }
+        });
+    }
+
+    bool AnyActiveCached() { return g_active.load() > 0; }
 
     void Log() {
         gamethread::Post([] {
