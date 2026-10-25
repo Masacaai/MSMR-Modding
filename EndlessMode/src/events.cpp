@@ -63,12 +63,27 @@ namespace events {
     static SendEventFn g_orig = nullptr;
     static std::atomic<bool> g_record{ false }, g_mission{ false };
     constexpr uint32_t kMissionStarted = 0x6E588F6D, kObjectiveStarted = 0xD358823E, kMissionComplete = 0xCC580B11, kCheckpointLoaded = 0x414AD37A,
-                       kLevelLoaded = 0xFBE1B646;
+                       kLevelLoaded = 0xFBE1B646, kSetPrimaryMission = 0xAE97E680;
 
     static uintptr_t Detour(uintptr_t sys, uint32_t type, uint32_t target, const uint32_t* source, int32_t a5, uint8_t a6, uint64_t a7, uint32_t a8,
                             uint8_t a9, float f1, float f2, const void* payload, uint64_t payload_size) {
+        // Recon: every occurrence of the mission-related events, with target, source and the start of the payload (what a mid-mission load announces).
+        if (g_record) {
+            static const uint32_t watch[] = { 0x0504bf5e, 0x0f1b34e7, 0xdb953346, 0x520014d4, 0xae97e680, 0x5166b564, 0xd358823e, 0x6e588f6d, 0xcc580b11,
+                                              0x24b2e9a7, 0x414ad37a, 0xfbe1b646, 0x84fc9200, 0x1169aecb, 0x3e870b52, 0x35d6494a };
+            static std::atomic<int> lines{ 0 };
+            for (uint32_t w : watch)
+                if (w == type && lines++ < 150) {
+                    char hex[100] = {};
+                    int len = 0;
+                    const unsigned char* pl = (const unsigned char*)payload;
+                    for (uint64_t i = 0; pl && i < payload_size && i < 32; i++) len += snprintf(hex + len, sizeof(hex) - (size_t)len, "%02x", pl[i]);
+                    LOG("events: mission event %08x target %08x source %08x payload(%llu) %s", type, target, source ? *source : 0, (unsigned long long)payload_size, hex);
+                    break;
+                }
+        }
         switch (type) {
-        case kMissionStarted: case kObjectiveStarted:
+        case kMissionStarted: case kObjectiveStarted: case kSetPrimaryMission:   // the last one is what a mid-mission checkpoint load announces (2026-10-25)
             if (!g_mission.exchange(true)) LOG("missions: a story mission is active (event %08x)", type);
             break;
         case kMissionComplete: case kCheckpointLoaded: case kLevelLoaded:
