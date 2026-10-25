@@ -1387,27 +1387,9 @@ static void Main() {
 
     const bool record_events = GetPrivateProfileIntA("debug", "events", 0, (DataDir() + "\\EndlessMode.ini").c_str()) != 0;
     events::StartTracking(record_events);   // story-mission tracking (the arena stays locked during a mission); also the event-type recording if asked
-    DWORD hero_since = 0;
-    bool missions_logged = false;
     for (;;) {
         PollCommands();
-        missions::Poll();
         if (record_events) { static DWORD next = 0; if (GetTickCount() >= next) { next = GetTickCount() + 3000; events::LogNew(); } }
-        {   // recon: when does the mission system exist? (logs every change of the two globals the mission-state code reads)
-            static uintptr_t last_a = 1, last_b = 1;
-            static DWORD next_probe = 0;
-            if (GetTickCount() >= next_probe) {
-                next_probe = GetTickCount() + 2000;
-                uintptr_t a = 0, b = 0;
-                memory::Read(scan::FromRva(0x7c4bbb0), a);
-                memory::Read(scan::FromRva(0x7c3ef70), b);
-                if (a != last_a || b != last_b) { LOG("missions: probe exe+7c4bbb0 = %llx, exe+7c3ef70 = %llx", (unsigned long long)a, (unsigned long long)b); last_a = a; last_b = b; }
-            }
-        }
-        if (!missions_logged) {   // once, 20 s after a hero exists: what the loaded save says about the story missions
-            if (ReadHero().ok) { if (!hero_since) hero_since = GetTickCount(); else if (GetTickCount() - hero_since > 20000) { missions::Log(); missions_logged = true; } }
-            else hero_since = 0;
-        }
         Sleep(250);
     }
 }
