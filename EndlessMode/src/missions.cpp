@@ -1,5 +1,6 @@
 #include "missions.h"
 
+#include "events.h"
 #include "gamethread.h"
 #include "log.h"
 #include "memory.h"
@@ -106,7 +107,7 @@ namespace missions {
         });
     }
 
-    bool AnyActiveCached() { return g_active.load() > 0; }
+    bool AnyActiveCached() { return events::MissionActive() || g_active.load() > 0; }
 
     void Log() {
         gamethread::Post([] {

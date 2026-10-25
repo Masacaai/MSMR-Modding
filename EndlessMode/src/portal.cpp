@@ -629,17 +629,24 @@ namespace portal {
             }
             if (director::Running() || !cfg.enabled) continue;
 
-            // Markers: the game's replay reticle (blue ground circle) on each dock and each arena's exit pad.
+            // Markers: the game's replay reticle (blue ground circle) on each dock and each arena's exit pad. None during a story mission: Manhattan
+            // is unloaded then (the exit pad dropped the hero into the water) and a run begun mid-mission is broken.
+            const bool mission = missions::AnyActiveCached();
             for (int v = 0; v < kVenueCount; v++) {
-                Pad dock = v == 0 ? cfg.dock : cfg.raft_dock;
+                Pad dock = mission ? Pad{} : v == 0 ? cfg.dock : cfg.raft_dock;
                 UpdateMarker(g_markers[v * 2], dock, h);
                 const arena::Bounds* a = arena::Find(kVenues[v].arena);
                 bool shared = false;   // one exit circle per arena, even when several docks lead there
                 for (int u = 0; u < v; u++) shared |= std::string(kVenues[u].arena) == kVenues[v].arena;
                 if (shared) a = nullptr;
                 const float* ex = a ? (a->exit[0] != 0 ? a->exit : a->tp) : nullptr;
-                Pad exit{ ex != nullptr, ex ? ex[0] : 0, ex ? ex[1] : 0, ex ? ex[2] : 0 };
+                Pad exit{ ex != nullptr && !mission, ex ? ex[0] : 0, ex ? ex[1] : 0, ex ? ex[2] : 0 };
                 UpdateMarker(g_markers[v * 2 + 1], exit, h);
+            }
+            if (mission) {   // no prompts, no auto-arming, no line to cross
+                if (records_for) { records_for = 0; panels::HideRecords(); }
+                g_armed = -1;
+                continue;
             }
 
             // Already at Ryker's without the dock teleport (a save loaded at the dock, or got there on their own):

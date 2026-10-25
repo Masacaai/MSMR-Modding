@@ -1385,11 +1385,14 @@ static void Main() {
     }
     LOG("ready; write commands to %s\\EndlessMode.cmd", g_dir.c_str());
 
+    const bool record_events = GetPrivateProfileIntA("debug", "events", 0, (DataDir() + "\\EndlessMode.ini").c_str()) != 0;
+    events::StartTracking(record_events);   // story-mission tracking (the arena stays locked during a mission); also the event-type recording if asked
     DWORD hero_since = 0;
     bool missions_logged = false;
     for (;;) {
         PollCommands();
         missions::Poll();
+        if (record_events) { static DWORD next = 0; if (GetTickCount() >= next) { next = GetTickCount() + 3000; events::LogNew(); } }
         {   // recon: when does the mission system exist? (logs every change of the two globals the mission-state code reads)
             static uintptr_t last_a = 1, last_b = 1;
             static DWORD next_probe = 0;
