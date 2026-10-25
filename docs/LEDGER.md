@@ -215,3 +215,12 @@ Alongside some bugfixing:
 - Built, not yet run in game: settings tab with presets, boon/curse/reward customization, damage and wave-heal settings, boss phase stepping (Kingpin), Wwise recorder
   (`audio`), allegiance experiments (`alleg`). See docs/NEXT_RELEASE_RECON.md section 4.
 - To try first: open Settings, see the ENDLESS ARENA tab; then `audio on` while in a crime/hideout; then `alleg set kBlueTeam` with enemies up.
+
+### 2026-10-25 - arena locked during story missions; mission-36 gate pending
+- Done: the dock circles, exit circle, prompts, auto-arming, F8 and the start line are off while a story mission is active (tracked from the game's events:
+  MissionStarted / ObjectiveStarted / SetPrimaryMission on, MissionComplete / checkpoint or level load off; a mid-mission load announces SetPrimaryMission). Tested.
+  Runs (and with them the loadout clearing in `runloadout`) can only start through the portal, so none begins mid-mission.
+- Wanted next session: a gate until "Out Of The Frying Pan..." (mission 36, `GP_A2_PRISON`) is complete, with a notification box when it unlocks ("head to the docks
+  near Ryker's"). Findings so far: the objective-system singleton (exe+7c4bbb0, state 2 = active, count at +0x108) is always empty in this build, so the game's
+  own mission-state query cannot be used from free roam; events do not carry the mission id (payload empty). Options: read the Missions menu's list (the pause menu
+  builds it from the save), or find the save block (`ObjectiveSystemSaveBlock` / `MissionSaveDataShared`). `mission` dev command and `tools/sigtools/event_names.py` exist.
