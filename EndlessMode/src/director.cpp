@@ -86,6 +86,7 @@ namespace director {
         DWORD floor_since = 0;        // boss finisher: when it first sat at <= 1 HP
         DWORD phase_check = 0;        // boss phases: last time we looked for a boss pinned at its phase floor
         bool phase_logged = false;
+        bool aggro_tried = false;     // a boss that stood still was told about the hero (entity::ForceAwareHack), once
         spawn::Vec3 anchor{};         // straggler check: where it last was 2 m away from
         DWORD anchor_time = 0;
         uintptr_t head = 0;           // separate head actor (found once it's alive), removed along with the body
@@ -488,6 +489,13 @@ namespace director {
                 }
                 // Boss phases: in a story mission a script moves a boss from phase to phase; here nobody does, so a boss pins at
                 // the floor of its current phase and takes no more damage (Kingpin: no damage at all). Move it on.
+                // A boss that spawned engaged but has not moved in 15 s (Tombstone: engaged, mover present, and he did not fight even when hit,
+                // 2026-11-07) is told about the hero through the awareness components, once. Experimental (entity::ForceAwareHack).
+                if (en.boss && !en.aggro_tried && en.seen_alive && now - en.spawn_time > 15000 && en.max_moved < 3.0f && hero.ok) {
+                    en.aggro_tried = true;
+                    entity::ForceAwareHack(en.entity, hero.handle, entity::kAwareAll);
+                    LOG("director: %s has not moved in 15 s; told it about the hero", en.boss->name);
+                }
                 if (en.boss && now - en.spawn_time > 3000) {
                     if (!en.phase_logged) {
                         en.phase_logged = true;
