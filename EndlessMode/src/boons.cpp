@@ -34,36 +34,46 @@ namespace boons {
     };
 
     // ---- stat boons (levers we control directly) ----
-    enum class Stat { Power, Toughness, Vampire, Recovery };
+    enum class Stat { Power, Toughness, Vampire, Recovery, SpiderSense, Machinery, BlackSuit, Wheatcakes };
     struct StatDef { Stat stat; const char* name; const char* desc; int max_stacks; };
     static const StatDef kStats[] = {
         { Stat::Power, "Heavy Hitter", "+20% damage dealt", 3 },
         { Stat::Toughness, "Reinforced Suit", "-15% damage taken", 3 },
         { Stat::Vampire, "Adrenaline Rush", "heal 4% of max health per kill", 3 },
         { Stat::Recovery, "Second Wind", "heal 30% of max health after each wave", 2 },
+        { Stat::SpiderSense, "Spider-Sense Tingle", "the first hit you take each wave does nothing", 2 },
+        { Stat::Machinery, "Under the Machinery", "below 25% health: -40% damage taken and a slow heal", 1 },
+        { Stat::BlackSuit, "Black Suit", "+4% damage dealt per kill in a row (up to +80%), lost when hit", 2 },
+        { Stat::Wheatcakes, "Wheatcakes", "heal 50% of max health after a boss wave", 2 },
     };
 
     // ---- bittersweet curses (user: always an upside AND a downside; downsides never add enemy health) ----
-    enum class Curse { GlassCannon, RiotCall, OpenSeason, BloodPrice };
+    enum class Curse { GlassCannon, RiotCall, OpenSeason, BloodPrice, ParkerLuck, RentIsDue, CloneSaga, OnePunch };
     struct CurseDef { Curse curse; const char* name; const char* up; const char* down; };
     static const CurseDef kCurses[] = {
         { Curse::GlassCannon, "Glass Cannon", "+40% damage dealt", "+30% damage taken" },
         { Curse::RiotCall, "Riot Call", "4 choices on every reward", "waves bring 40% more enemies" },
         { Curse::OpenSeason, "Open Season", "heal 25% after each wave", "snipers and rockets from the first wave" },
         { Curse::BloodPrice, "Blood Price", "heal 6% per kill", "elites twice as often" },
+        { Curse::ParkerLuck, "Parker Luck", "+25% damage dealt", "one fewer choice on every reward" },
+        { Curse::RentIsDue, "Rent Is Due", "one extra choice on every reward", "every cleared wave costs 8% of your health" },
+        { Curse::CloneSaga, "Clone Saga", "an extra reward after every wave", "every boss wave brings a second copy of its boss" },
+        { Curse::OnePunch, "One-Punch Spider", "everything goes down in one hit, bosses too", "so do you (damage x20 both ways)" },
     };
 
     // ---- state ----
     enum class Kind { Power, Mod, Stat, Curse, Decline };
     struct Option { Kind kind; uint64_t id = 0; int index = 0; std::string label; };
-    struct Offer { std::string title; std::vector<Option> options; bool curse = false; DWORD shown_at = 0; DWORD ready_at = 0; };
+    struct Offer { std::string title; std::vector<Option> options; bool curse = false; bool repeat = false; DWORD shown_at = 0; DWORD ready_at = 0; };
     constexpr DWORD kOfferDelayMs = 3500;   // after the wave clears, let finishers and animations play out (user)
 
     static std::mutex g_mutex;
     static std::atomic<bool> g_active = false;
     static std::mt19937 g_rng;
     static std::vector<uint64_t> g_powers, g_mods;   // owned, by the game's own category
-    static int g_stacks[4] = {};
+    static int g_stacks[8] = {};
+    static std::atomic<int> g_tingle_left = 0, g_streak = 0;
+    constexpr float kOnePunchMult = 20.0f;
     static std::vector<Curse> g_curses;
     static std::vector<std::string> g_taken;          // history for the loadout view
     static std::deque<Offer> g_queue;
@@ -77,12 +87,16 @@ namespace boons {
     static std::string g_pfx;   // "h_" in Horde: the damage rows have a copy per mode
     void SetPlayerSettings(bool on, bool horde) { g_ps = on; g_pfx.clear(); (void)horde; }
     static int SP(const char* key, int def) { return g_ps ? settings::Value(g_pfx + key, def) : def; }
-    static const char* const kStatKeys[4] = { "stat_power", "stat_tough", "stat_vamp", "stat_second" };
-    static const char* const kCurseKeys[4] = { "curse_glass", "curse_riot", "curse_open", "curse_blood" };
+    static const char* const kStatKeys[8] = { "stat_power", "stat_tough", "stat_vamp", "stat_second", "stat_sense", "stat_machinery", "stat_blacksuit", "stat_wheat" };
+    static const char* const kCurseKeys[8] = { "curse_glass", "curse_riot", "curse_open", "curse_blood", "curse_parker", "curse_rent", "curse_clone", "curse_punch" };
     static float CurseStrength() { return S("curse_strength", 100) / 100.0f; }
     static int RewardChoices() { return S("reward_choices", 3); }
 
     static bool HasCurse(Curse c) { return std::find(g_curses.begin(), g_curses.end(), c) != g_curses.end(); }
+    static int Choices() {
+        int n = RewardChoices() + (HasCurse(Curse::RiotCall) ? 1 : 0) + (HasCurse(Curse::RentIsDue) ? 1 : 0) - (HasCurse(Curse::ParkerLuck) ? 1 : 0);
+        return std::max(1, std::min(4, n));
+    }
 
     // The game's own name and description for an item (cached), so rewards read exactly as in the suit menu, including a
     // user's renamed or modded powers. Falls back to our table.
@@ -122,6 +136,9 @@ namespace boons {
         if (!g_active) return base;
         float m = base * (1.0f + 0.20f * g_stacks[(int)Stat::Power]);
         if (HasCurse(Curse::GlassCannon)) m *= 1.40f;
+        if (HasCurse(Curse::ParkerLuck)) m *= 1.25f;
+        if (int bs = g_stacks[(int)Stat::BlackSuit]) m *= 1.0f + std::min(0.80f, 0.04f * bs * g_streak.load());
+        if (HasCurse(Curse::OnePunch)) m *= kOnePunchMult;
         return m;
     }
 
@@ -130,13 +147,25 @@ namespace boons {
         if (!g_active) return base;
         float m = base * std::pow(0.85f, (float)g_stacks[(int)Stat::Toughness]);
         if (HasCurse(Curse::GlassCannon)) m *= 1.0f + 0.30f * CurseStrength();
+        if (HasCurse(Curse::OnePunch)) m *= kOnePunchMult;
+        return m;
+    }
+
+    // The multiplier for one hit on the hero (stats hook): IncomingMult plus the per-hit effects. hp/max_hp: his health before the hit.
+    float IncomingHitMult(float hp, float max_hp) {
+        if (!g_active) return IncomingMult();
+        if (g_tingle_left.load() > 0 && g_tingle_left.fetch_sub(1) > 0) return 0.0f;   // Spider-Sense Tingle
+        g_streak = 0;                                                                    // Black Suit: a hit ends the streak
+        float m = IncomingMult();
+        if (g_stacks[(int)Stat::Machinery] && max_hp > 0 && hp < 0.25f * max_hp) m *= 0.60f;
         return m;
     }
 
     // Heal the hero by a fraction of max health (game thread; Health::SetHealth clamps to max).
-    static void HealHero(float frac) {
-        if (frac <= 0) return;
-        gamethread::Post([frac] {
+    // frac < 0 hurts (never below 1 HP). below: only act while health is under that fraction of max.
+    static void HealHero(float frac, float below = 1.01f) {
+        if (frac == 0) return;
+        gamethread::Post([frac, below] {
             using SetFn = void (*)(uintptr_t, float);
             auto set = (SetFn)natives::Get(natives::HealthSet);
             auto get_actor = (uintptr_t(*)(void*))natives::Get(natives::GetActor);
@@ -147,7 +176,8 @@ namespace boons {
             uintptr_t c = actor ? entity::FindComponent(actor, "HeroHealth") : 0;
             float max_hp = 0, hp = 0;
             if (!c || !memory::Read(c + 0x80, max_hp) || !memory::Read(c + 0x88, hp) || max_hp <= 0 || hp <= 0) return;
-            set(c, std::min(max_hp, hp + max_hp * frac));
+            if (hp >= below * max_hp) return;
+            set(c, std::max(1.0f, std::min(max_hp, hp + max_hp * frac)));
         });
     }
 
@@ -208,6 +238,8 @@ namespace boons {
             g_powers = pools->first;
             g_mods = pools->second;
             std::fill(std::begin(g_stacks), std::end(g_stacks), 0);
+            g_tingle_left = 0;
+            g_streak = 0;
             g_curses.clear();
             g_taken.clear();
             g_queue.clear();
@@ -238,7 +270,7 @@ namespace boons {
     static Offer MakeRewardOffer() {
         Offer o;
         o.title = "Choose a reward";
-        int n = std::min(4, RewardChoices() + (HasCurse(Curse::RiotCall) ? 1 : 0));
+        int n = Choices();
         std::vector<Option> pool;
         uint64_t cur[5];
         inventory::Loadout(cur);
@@ -271,7 +303,7 @@ namespace boons {
         for (uint64_t id : g_powers)
             if (id != cur[1]) pool.push_back(id);
         std::shuffle(pool.begin(), pool.end(), g_rng);
-        int n = std::min(4, RewardChoices() + (HasCurse(Curse::RiotCall) ? 1 : 0));
+        int n = Choices();
         for (int i = 0; i < (int)pool.size() && i < n; i++)
             o.options.push_back({ Kind::Power, pool[i], 0, Described(pool[i]) + (cur[1] ? " (replaces your power)" : "") });
         return o;
@@ -298,17 +330,19 @@ namespace boons {
         if (!g_active) { HealHero(base_heal); return; }
         // Heals first, so they're felt during the pick.
         float heal = base_heal + 0.30f * g_stacks[(int)Stat::Recovery] + (HasCurse(Curse::OpenSeason) ? 0.25f : 0.0f);
+        if (boss_wave) heal += 0.50f * g_stacks[(int)Stat::Wheatcakes];
         HealHero(heal);
+        if (HasCurse(Curse::RentIsDue)) HealHero(-0.08f * CurseStrength());
         std::lock_guard<std::mutex> lock(g_mutex);
         const int every = S("reward_every", 1), curse_when = S("curse_when", 0);
         if (boss_wave) {
             if (S("boss_power", 1) && S("boon_powers", 1)) {
                 Offer p = MakePowerOffer();
-                if (!p.options.empty()) g_queue.push_back(p);
+                if (!p.options.empty()) { p.repeat = HasCurse(Curse::CloneSaga); g_queue.push_back(p); }
             }
         } else if (every > 0 && wave % every == 0) {
             Offer r = MakeRewardOffer();
-            if (!r.options.empty()) g_queue.push_back(r);
+            if (!r.options.empty()) { r.repeat = HasCurse(Curse::CloneSaga); g_queue.push_back(r); }
         }
         if (curse_when == 1 || (curse_when == 0 && boss_wave)) {
             Offer c = MakeCurseOffer();
@@ -324,6 +358,17 @@ namespace boons {
         if (!g_active) return;
         float frac = 0.04f * g_stacks[(int)Stat::Vampire] + (HasCurse(Curse::BloodPrice) ? 0.06f : 0.0f);
         HealHero(frac);
+        g_streak++;
+    }
+
+    // Director loop, every tick: Under the Machinery heals 1% of max health a second while he is below a quarter.
+    void Update() {
+        if (!g_active || !g_stacks[(int)Stat::Machinery]) return;
+        static DWORD last = 0;
+        DWORD now = GetTickCount();
+        if (now - last < 1000) return;
+        last = now;
+        HealHero(0.01f, 0.25f);
     }
 
     bool Offering() { return g_offering; }
@@ -376,7 +421,7 @@ namespace boons {
                                               input::Action::Choice4 };
         input::Update();
         Option chosen{ Kind::Decline };
-        bool have = false;
+        bool have = false, repeat = false;
         {
             std::lock_guard<std::mutex> lock(g_mutex);
             if (g_queue.empty()) { g_offering = false; return; }
@@ -400,12 +445,16 @@ namespace boons {
                 g_last_refresh = now;                                       // something else replaced it
                 Show(o);
             }
-            if (have) g_queue.pop_front();
+            if (have) { repeat = g_queue.front().repeat; g_queue.pop_front(); }
         }
         if (have) {
             hud::Clear();
             Apply(chosen);   // may block on game-thread work (equips)
             std::lock_guard<std::mutex> lock(g_mutex);
+            if (repeat) {   // Clone Saga: a second, fresh reward
+                Offer again = MakeRewardOffer();
+                if (!again.options.empty()) { again.title = "Clone Saga: a second reward"; g_queue.push_front(again); }
+            }
             g_offering = !g_queue.empty();
             g_last_refresh = 0;
             if (!g_offering && g_frozen) { g_frozen = false; timescale::Unfreeze(); }
@@ -414,6 +463,8 @@ namespace boons {
 
     void AdjustWave(plan::WavePlan& p, int horde_max) {
         if (!g_active) return;
+        g_tingle_left = g_stacks[(int)Stat::SpiderSense];
+        if (HasCurse(Curse::CloneSaga) && !p.bosses.empty()) p.bosses.push_back(p.bosses.front());   // a second copy
         if (HasCurse(Curse::RiotCall)) {
             p.count = (int)std::ceil(p.count * (1.0f + 0.4f * CurseStrength()));
             p.max_alive = std::min(p.max_alive + 4, std::max(8, horde_max));

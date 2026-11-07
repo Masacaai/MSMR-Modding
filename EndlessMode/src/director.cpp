@@ -1014,6 +1014,7 @@ namespace director {
                 stats::Sample(hero.x, hero.y, hero.z, hero.has_health ? hero.health : -1, hero.max_health, alive_now);
             }
             if (g_opt.god && hero.ok) TopUpHero();
+            boons::Update();
             if (hero.has_health && hero.health <= 0.0f) return "hero_down";
             {
                 // Style meter and the live score panel (docs/SCORING.md).

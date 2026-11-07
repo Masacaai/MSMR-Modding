@@ -152,7 +152,9 @@ namespace stats {
         float before = 0, after = 0, amount = 0;
         uint32_t attacker = 0;
         memory::Read((uintptr_t)self + 0x88, before);
-        float mult = boons::IncomingMult();
+        float max_hp = 0;
+        memory::Read((uintptr_t)self + 0x80, max_hp);
+        float mult = boons::IncomingHitMult(before, max_hp);
         if (msg && std::fabs(mult - 1.0f) > 0.01f && memory::Read((uintptr_t)msg + 0x144, amount))
             memory::Write<float>((uintptr_t)msg + 0x144, amount * mult);
         bool r = g_hero_orig(self, msg);
