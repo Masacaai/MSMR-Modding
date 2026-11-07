@@ -32,9 +32,40 @@ namespace music {
             audio::PostId(audio::Id("Stop_MUS_OW_A2"), kObject);
             g_level = -1;
             LOG("music: started");
+            Watch();
         }
 
         bool Enabled() { return settings::On("music"); }
+
+        // The game's music segments end by themselves (it re-triggers them as a fight goes on): if nothing is playing on our object while a run
+        // is on, start it again at the current level. Seen 2026-11-07: the music stopped in the middle of a long wave.
+        std::atomic<bool> g_watching{ false };
+        void Watch() {
+            if (g_watching.exchange(true)) return;
+            std::thread([] {
+                int last = -2, silent = 0;
+                for (int tick = 0; g_on; tick++) {
+                    Sleep(2000);
+                    if (!g_on) break;
+                    const int n = audio::PlayingCount(kObject);
+                    if (n != last && tick < 200) LOG("music: %d sound(s) playing", n);
+                    last = n;
+                    if (n == 0) {
+                        if (++silent >= 2) {   // two checks in a row
+                            const int lv = g_level < 0 ? 0 : g_level.load();
+                            audio::PostId(audio::Id("Play_I20_MUS_OW_A1"), kObject);
+                            audio::SetStateId(g_group, kLadder[lv]);
+                            audio::PostId(audio::Id("Play_MUS_combat_stinger"), kObject);
+                            LOG("music: silent for 4 s, restarted at level %d", lv);
+                            silent = 0;
+                        }
+                    } else {
+                        silent = 0;
+                    }
+                }
+                g_watching = false;
+            }).detach();
+        }
     }
 
     void WaveStart(int tier, bool boss) {

@@ -293,4 +293,12 @@ namespace {
         if (!fn) return false;
         return fn(obj, name) == 1;
     }
+
+    int PlayingCount(uint64_t obj) {
+        using CountFn = int (*)(uint64_t, uint32_t&, uint32_t*);
+        auto fn = (CountFn)Export("?GetPlayingIDsFromGameObject@Query@SoundEngine@AK@@YA?AW4AKRESULT@@_KAEAKPEAK@Z");
+        if (!fn) return -1;
+        uint32_t n = 0;
+        return fn(obj, n, nullptr) == 1 ? (int)n : -1;
+    }
 }

@@ -34,4 +34,5 @@ namespace audio {
     uint32_t PostId(uint32_t event_id, uint64_t obj);
     bool SetStateId(uint32_t group_id, uint32_t state_id);
     bool RegisterObject(uint64_t obj, const char* name);
+    int PlayingCount(uint64_t obj);   // sounds currently playing on a game object; -1 if the engine call is not available
 }
