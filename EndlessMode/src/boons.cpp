@@ -34,7 +34,7 @@ namespace boons {
     };
 
     // ---- stat boons (levers we control directly) ----
-    enum class Stat { Power, Toughness, Vampire, Recovery, SpiderSense, Machinery, BlackSuit, Wheatcakes };
+    enum class Stat { Power, Toughness, Vampire, Recovery, SpiderSense, Machinery, BlackSuit, Wheatcakes, SlowBurn, FullTank };
     struct StatDef { Stat stat; const char* name; const char* desc; int max_stacks; };
     static const StatDef kStats[] = {
         { Stat::Power, "Heavy Hitter", "+20% damage dealt", 3 },
@@ -45,10 +45,12 @@ namespace boons {
         { Stat::Machinery, "Under the Machinery", "below 25% health: -40% damage taken and a slow heal", 1 },
         { Stat::BlackSuit, "Black Suit", "+4% damage dealt per kill in a row (up to +80%), lost when hit", 2 },
         { Stat::Wheatcakes, "Wheatcakes", "heal 50% of max health after a boss wave", 2 },
+        { Stat::SlowBurn, "Slow Burn", "Focus fills 30% faster", 2 },
+        { Stat::FullTank, "Full Tank", "every wave starts with a full Focus meter", 1 },
     };
 
     // ---- bittersweet curses (user: always an upside AND a downside; downsides never add enemy health) ----
-    enum class Curse { GlassCannon, RiotCall, OpenSeason, BloodPrice, ParkerLuck, RentIsDue, CloneSaga, OnePunch };
+    enum class Curse { GlassCannon, RiotCall, OpenSeason, BloodPrice, ParkerLuck, RentIsDue, CloneSaga, OnePunch, DrySpell };
     struct CurseDef { Curse curse; const char* name; const char* up; const char* down; };
     static const CurseDef kCurses[] = {
         { Curse::GlassCannon, "Glass Cannon", "+40% damage dealt", "+30% damage taken" },
@@ -58,6 +60,7 @@ namespace boons {
         { Curse::ParkerLuck, "Parker Luck", "+25% damage dealt", "one fewer choice on every reward" },
         { Curse::RentIsDue, "Rent Is Due", "one extra choice on every reward", "every cleared wave costs 8% of your health" },
         { Curse::CloneSaga, "Clone Saga", "an extra reward after every wave", "every boss wave brings a second copy of its boss" },
+        { Curse::DrySpell, "Dry Spell", "+25% damage dealt", "Focus builds 40% slower" },
         { Curse::OnePunch, "One-Punch Spider", "everything goes down in one hit, bosses too", "so do you (damage x20 both ways)" },
     };
 
@@ -71,7 +74,7 @@ namespace boons {
     static std::atomic<bool> g_active = false;
     static std::mt19937 g_rng;
     static std::vector<uint64_t> g_powers, g_mods;   // owned, by the game's own category
-    static int g_stacks[8] = {};
+    static int g_stacks[12] = {};
     static std::atomic<int> g_tingle_left = 0, g_streak = 0;
     constexpr float kOnePunchMult = 20.0f;
     static std::vector<Curse> g_curses;
@@ -87,8 +90,8 @@ namespace boons {
     static std::string g_pfx;   // "h_" in Horde: the damage rows have a copy per mode
     void SetPlayerSettings(bool on, bool horde) { g_ps = on; g_pfx.clear(); (void)horde; }
     static int SP(const char* key, int def) { return g_ps ? settings::Value(g_pfx + key, def) : def; }
-    static const char* const kStatKeys[8] = { "stat_power", "stat_tough", "stat_vamp", "stat_second", "stat_sense", "stat_machinery", "stat_blacksuit", "stat_wheat" };
-    static const char* const kCurseKeys[8] = { "curse_glass", "curse_riot", "curse_open", "curse_blood", "curse_parker", "curse_rent", "curse_clone", "curse_punch" };
+    static const char* const kStatKeys[] = { "stat_power", "stat_tough", "stat_vamp", "stat_second", "stat_sense", "stat_machinery", "stat_blacksuit", "stat_wheat", "stat_burn", "stat_tank" };
+    static const char* const kCurseKeys[] = { "curse_glass", "curse_riot", "curse_open", "curse_blood", "curse_parker", "curse_rent", "curse_clone", "curse_dry", "curse_punch" };
     static float CurseStrength() { return S("curse_strength", 100) / 100.0f; }
     static int RewardChoices() { return S("reward_choices", 3); }
 
@@ -137,6 +140,7 @@ namespace boons {
         float m = base * (1.0f + 0.20f * g_stacks[(int)Stat::Power]);
         if (HasCurse(Curse::GlassCannon)) m *= 1.40f;
         if (HasCurse(Curse::ParkerLuck)) m *= 1.25f;
+        if (HasCurse(Curse::DrySpell)) m *= 1.25f;
         if (int bs = g_stacks[(int)Stat::BlackSuit]) m *= 1.0f + std::min(0.80f, 0.04f * bs * g_streak.load());
         if (HasCurse(Curse::OnePunch)) m *= kOnePunchMult;
         return m;
@@ -362,11 +366,57 @@ namespace boons {
     }
 
     // Director loop, every tick: Under the Machinery heals 1% of max health a second while he is below a quarter.
+    // The Focus meter ("assault" in the game's names): HeroSpiderAssaultManager, three segments as float pairs {fill, cap} from +0x150
+    // (found in game 2026-11-07: filling the meter changed them 0 -> 100, and writing 0 emptied the third segment on screen).
+    // Rate effects need no hook: each tick the change in total fill is scaled and written back, filling the segments in order.
+    static float FocusRate() {
+        float r = 1.0f + 0.30f * g_stacks[(int)Stat::SlowBurn];
+        if (HasCurse(Curse::DrySpell)) r *= 0.60f;
+        return r;
+    }
+    static std::atomic<bool> g_fill_pending = false;   // Full Tank: top the meter up at the next tick
+    static void FocusTick() {
+        const float rate = FocusRate();
+        const bool full = g_fill_pending.exchange(false);
+        if (std::fabs(rate - 1.0f) < 0.01f && !full) return;
+        gamethread::Post([rate, full] {
+            static float last = -1.0f;
+            auto get_actor = (uintptr_t(*)(void*))natives::Get(natives::GetActor);
+            uintptr_t system = scan::FromRva(natives::kHeroSystemRva);
+            uint32_t handle = 0;
+            if (!get_actor || !memory::Read(system + 0x1C, handle) || !handle) return;
+            uintptr_t actor = get_actor(&handle);
+            uintptr_t m = actor ? entity::FindComponent(actor, "HeroSpiderAssaultManager") : 0;
+            uint32_t n = 0;
+            if (!m || !memory::Read(m + 0x168, n) || n < 1 || n > 3) return;
+            float fill[3], cap[3];
+            float total = 0, cap_total = 0;
+            for (uint32_t i = 0; i < n; i++) {
+                if (!memory::Read(m + 0x150 + 8 * i, fill[i]) || !memory::Read(m + 0x154 + 8 * i, cap[i]) || cap[i] <= 0) return;
+                total += fill[i];
+                cap_total += cap[i];
+            }
+            float target = total;
+            if (full) target = cap_total;
+            else if (last >= 0 && total > last) target = std::min(cap_total, last + (total - last) * rate);
+            if (std::fabs(target - total) > 0.01f) {
+                float left = target;
+                for (uint32_t i = 0; i < n; i++) {
+                    float v = std::max(0.0f, std::min(cap[i], left));
+                    left -= cap[i];
+                    memory::Write<float>(m + 0x150 + 8 * i, v);
+                }
+            }
+            last = target;
+        });
+    }
+
     void Update() {
-        if (!g_active || !g_stacks[(int)Stat::Machinery]) return;
-        static DWORD last = 0;
+        if (!g_active) return;
+        static DWORD last = 0, last_focus = 0;
         DWORD now = GetTickCount();
-        if (now - last < 1000) return;
+        if (now - last_focus >= 50) { last_focus = now; FocusTick(); }
+        if (!g_stacks[(int)Stat::Machinery] || now - last < 1000) return;
         last = now;
         HealHero(0.01f, 0.25f);
     }
@@ -464,6 +514,7 @@ namespace boons {
     void AdjustWave(plan::WavePlan& p, int horde_max) {
         if (!g_active) return;
         g_tingle_left = g_stacks[(int)Stat::SpiderSense];
+        if (g_stacks[(int)Stat::FullTank]) g_fill_pending = true;
         if (HasCurse(Curse::CloneSaga) && !p.bosses.empty()) p.bosses.push_back(p.bosses.front());   // a second copy
         if (HasCurse(Curse::RiotCall)) {
             p.count = (int)std::ceil(p.count * (1.0f + 0.4f * CurseStrength()));

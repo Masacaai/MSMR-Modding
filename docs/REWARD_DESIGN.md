@@ -108,6 +108,8 @@ Healing is worth less here because the game already heals through Focus (earn it
 
 Focus recon, offline pass (strings in Spider-Man.exe, config JSON): the meter is the "SpiderAssault" system. Names to look for in memory: `spiderAssaultManager`, `SpiderAssaultConfig`, `UpgradedAssaultMeterMultiplier`, `MinAssaultModeTime`, `HeroSpiderAssaultTimeScale`; events `OnAssaultMeterFull`, `HeroSpiderAssaultSegmentFullEvent` / `SegmentNotFullEvent` / `StartedEvent` / `StoppedEvent`; perk types `SpiderAssaultRatePerkPrius` (fill rate), `AssaultModeDrainPerkPrius`, `AssaultMeterSegmentsPerkPrius`, `StimPackAddsAssaultPerkPrius`. The fill-rate perk is the easiest lever if it can be applied at runtime. Next in-game step: `comps hero` and look for a SpiderAssault/Assault component.
 
+**Focus recon result (2026-11-07, verified in game):** the hero component `HeroSpiderAssaultManager` holds the meter. Segments are float pairs {fill, cap} at +0x150, +0x158, +0x160 (caps +0x154, +0x15c, +0x164, all 100); segment count at +0x168 (3). Writing 0 to the third fill emptied that segment on screen. Not yet known: where the active-mode flag is (+0x188 was 1 after filling), whether more segments (Resolve) extend the array. Built (untested): **Slow Burn** (fill +30%/stack, x2), **Full Tank** (full meter at each wave start), curse **Dry Spell** (+25% damage, Focus builds 40% slower). Rate effects work by scaling the per-tick change of total fill, no hook.
+
 ## 9. Decisions (2026-11-08)
 1. Equalizer stays as a deliberate gamble.
 2. Gadget wheel: the player may swap between gadgets they have unlocked.
