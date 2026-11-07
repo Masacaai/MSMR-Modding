@@ -412,6 +412,8 @@ namespace boons {
             if (full) target = cap_total;
             else if (last >= 0 && total > last) target = std::min(cap_total, last + (total - last) * rate);
             if (std::fabs(target - total) > 0.01f) {
+                static int shown = 0;
+                if (shown++ < 40) LOG("focus: gain %.2f -> %.2f (rate x%.2f, meter %.1f -> %.1f)", total - last, target - last, rate, total, target);
                 float left = target;
                 for (uint32_t i = 0; i < n; i++) {
                     float v = std::max(0.0f, std::min(cap[i], left));
