@@ -88,6 +88,7 @@ Melee-flavoured boons to support Street Brawler (need the melee filter): **Iron 
 | **Spider-Man No More** | +50% damage taken reduction | the suit power is disabled until the next boss [RE: power lock] | ASM #50, Peter hangs up the suit |
 | **Kraven's Last Hunt** | +1 reward tier on the next boss | a lone stalker elite hunts you from the first wave, never leaves [ready via spawn] | Kraven the Hunter |
 | **Clone Saga** | rewards are doubled | the next boss wave brings its duplicate [ready, doubles the boss] | the Clone Saga |
+| **One-Punch Spider** | everything dies in one hit | you die in one hit (x20 both ways) | One-Punch Man |
 | **Great Power** | +60% damage dealt | enemies deal +60% too [ready] | the old classic |
 
 ## 8. Balancing method
@@ -98,11 +99,12 @@ Melee-flavoured boons to support Street Brawler (need the melee filter): **Iron 
 5. **Test loop:** the offline planner already prints the enemy side per wave; add a *player-power* column (the product of the multipliers in a sample build) beside it, so a design can be sanity-checked on paper before a play session. Then three sessions per change set, rather than a long one, and compare *where* runs end.
 6. **Guard against one winning build:** after each balance pass, check the three strongest pairs by hand; if two items share a tag and both multiply damage, the cap above applies.
 
-## 9. Open questions **[ask]**
-1. Equalizer as a deliberate gamble, or cut?
-2. Gadget wheel: locked, or swap between owned gadgets mid-run?
-3. Street Brawler lethal, or floor at 1 HP?
-4. Quips: cut or a joke pick?
-5. Which of sections 6 and 7 do you want first? My order: Spider-Sense Tingle, Under the Machinery, Parker Luck, Rent Is Due, Maximum Carnage (all ready levers), then the gadget rewards (the biggest piece, mostly RE), then Street Brawler (needs the airborne and melee filters).
+## 9. Decisions (2026-11-08)
+1. Equalizer stays as a deliberate gamble.
+2. Gadget wheel: the player may swap between gadgets they have unlocked.
+3. Street Brawler can kill you (lethal).
+4. Quips stays (it is funny).
+5. New curse **One-Punch Spider**: damage dealt and damage taken both x20 (2000%, tunable). Everything dies in one hit, you too. Open points: bosses and phase gates (do they die in one hit or keep their health floors?), and whether it overlaps too much with Equalizer (the curse is run-long, Equalizer is a single pick).
+Build order unchanged: Spider-Sense Tingle, Under the Machinery, Parker Luck, Rent Is Due, Maximum Carnage, then gadget rewards, then Street Brawler.
 
 Sources for the general design points: [Why Roguelikes Keep Growing](https://www.strayspark.studio/blog/building-roguelike-ue5-procedural-progression), [Roguelike itemization: balancing randomness and player agency](https://wayline.io/blog/roguelike-itemization-balancing-randomness-player-agency), [Boons and gods (Hades)](https://saschb2b.github.io/game-mechanics/games/hades/boons-and-gods), [Hades Ascends the Action Roguelike Throne](https://game-wisdom.com/?p=25324), [Balancing a roguelike with a bot that plays a thousand games](https://solodevstack.com/blog/balancing-a-roguelike-with-a-bot-that-plays-1000-games).
