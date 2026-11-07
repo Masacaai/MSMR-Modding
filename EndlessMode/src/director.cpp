@@ -48,9 +48,9 @@ namespace director {
     constexpr float kArenaSpawnMin = 8.0f, kArenaSpawnMax = 40.0f;    // arena: distance from the hero
     constexpr float kMinSpawnM = 24.0f, kFarSpawnM = 45.0f;            // arena spawns: never closer; in view only beyond (and only after kViewFallbackMs of finding nowhere hidden)
     constexpr DWORD kViewFallbackMs = 10000;
-    // Ryker's spawn points that sit inside the overturned police truck and the two cages (found 2026-11-07 by standing beside each with the game
+    // Ryker's spawn points that sit inside the overturned police truck and the two cages (found 2026-11-07, #60 later that day, by standing beside each with the game
     // paused and listing the nearest points): enemies spawned there were stuck in the prop. Never used for spawning or relocating.
-    constexpr int kRetiredRykersPoints[] = { 97, 80,  48, 46,  68, 63, 67, 42 };
+    constexpr int kRetiredRykersPoints[] = { 97, 80,  48, 46, 60,  68, 63, 67, 42 };
     static bool Retired(const arena::Bounds& a, size_t i) {
         if (std::string(a.name) != "rykers") return false;
         for (int r : kRetiredRykersPoints) if ((size_t)r == i) return true;
