@@ -106,7 +106,9 @@ Melee-flavoured boons to support Street Brawler (need the melee filter): **Iron 
 4. Quips stays (it is funny).
 5. One-Punch Spider: bosses also die in one hit (their phases are skipped by advancing them via AdvanceBossPhase).
 6. Liked: Black Suit, Wheatcakes, Clone Saga. Renamed as marked in sections 6-7.
-7. New curse **One-Punch Spider**: damage dealt and damage taken both x20 (2000%, tunable). Everything dies in one hit, you too. Open points: bosses and phase gates (do they die in one hit or keep their health floors?), and whether it overlaps too much with Equalizer (the curse is run-long, Equalizer is a single pick).
+7. The Last Hunt, revised by the maintainer: the hunter is undying (cannot be killed) and keeps coming for you even between waves; the player avoids him and fights the others. Not built yet (needs an invulnerable spawn that persists across waves).
+8. Built 2026-11-07 (commit 3204b0b, untested in game): Spider-Sense Tingle, Under the Machinery, Black Suit, Wheatcakes, Parker Luck, Rent Is Due, Clone Saga, One-Punch Spider.
+9. New curse **One-Punch Spider**: damage dealt and damage taken both x20 (2000%, tunable). Everything dies in one hit, you too. Open points: bosses and phase gates (do they die in one hit or keep their health floors?), and whether it overlaps too much with Equalizer (the curse is run-long, Equalizer is a single pick).
 Build order unchanged: Spider-Sense Tingle, Under the Machinery, Parker Luck, Rent Is Due, Maximum Carnage, then gadget rewards, then Street Brawler.
 
 Sources for the general design points: [Why Roguelikes Keep Growing](https://www.strayspark.studio/blog/building-roguelike-ue5-procedural-progression), [Roguelike itemization: balancing randomness and player agency](https://wayline.io/blog/roguelike-itemization-balancing-randomness-player-agency), [Boons and gods (Hades)](https://saschb2b.github.io/game-mechanics/games/hades/boons-and-gods), [Hades Ascends the Action Roguelike Throne](https://game-wisdom.com/?p=25324), [Balancing a roguelike with a bot that plays a thousand games](https://solodevstack.com/blog/balancing-a-roguelike-with-a-bot-that-plays-1000-games).
