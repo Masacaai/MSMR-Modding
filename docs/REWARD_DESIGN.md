@@ -63,7 +63,7 @@ Thematic names from the comics; effect in brackets.
 
 | Name | Effect | Source of the idea |
 |---|---|---|
-| **Spider-Sense Tingle** | the first hit of each wave is negated [ready: incoming x0 once per wave] | the spider-sense |
+| **Peter Tingle** | the first hit of each wave is negated [ready: incoming x0 once per wave] | the spider-sense |
 | **Under the Machinery** | below 25% health: damage taken -40% and a slow heal [ready] | the Master Planner (Amazing Spider-Man #33), Peter lifting tons of wreckage |
 | **Wheatcakes** | a bigger heal after boss waves only [ready] | Aunt May's cooking (rename of Second Wind is an option) |
 | **Web Fluid Cartridges** | +gadget ammo / refills on kill [RE: ammo] | Peter's running out of web fluid |
@@ -99,6 +99,13 @@ Melee-flavoured boons to support Street Brawler (need the melee filter): **Iron 
 5. **Test loop:** the offline planner already prints the enemy side per wave; add a *player-power* column (the product of the multipliers in a sample build) beside it, so a design can be sanity-checked on paper before a play session. Then three sessions per change set, rather than a long one, and compare *where* runs end.
 6. **Guard against one winning build:** after each balance pass, check the three strongest pairs by hand; if two items share a tag and both multiply damage, the cap above applies.
 
+## 8b. Focus (maintainer, 2026-11-07)
+Healing is worth less here because the game already heals through Focus (earn it by fighting, spend it to heal). So heal rewards (Second Wind, Wheatcakes, Adrenaline Rush) are weaker than they look; consider making the heal numbers smaller and adding Focus-based picks instead.
+- Already in the game's own pool (suit mods, nothing to build): Resolve (+1/2/3 focus segments), Sustained Assault (focus drain x0.7), Fill Focus Meter (suit power).
+- Boon ideas (need a focus-meter read/write, RE not done): **Slow Burn** (Focus fills 30% faster), **Quick Study** (a perfect dodge gives extra Focus), **Full Tank** (each wave starts with a full meter), **Second Gear** (an extra segment but it drains faster).
+- Curse ideas (upside/downside): **Adrenaline Junkie** (Focus fills 2x but you cannot heal from it, it only powers finishers), **Dry Spell** (+25% damage but Focus builds 40% slower), **Overdrive** (Focus never drains, but the meter is one segment shorter).
+- First step is recon: find the Focus meter (the Assault meter) object in memory and its fill/drain rates; the mod's perk items already name the class (AssaultMeterSegments, AssaultModeDrain), a lead.
+
 ## 9. Decisions (2026-11-08)
 1. Equalizer stays as a deliberate gamble.
 2. Gadget wheel: the player may swap between gadgets they have unlocked.
@@ -107,8 +114,8 @@ Melee-flavoured boons to support Street Brawler (need the melee filter): **Iron 
 5. One-Punch Spider: bosses also die in one hit (their phases are skipped by advancing them via AdvanceBossPhase).
 6. Liked: Black Suit, Wheatcakes, Clone Saga. Renamed as marked in sections 6-7.
 7. The Last Hunt, revised by the maintainer: the hunter is undying (cannot be killed) and keeps coming for you even between waves; the player avoids him and fights the others. Not built yet (needs an invulnerable spawn that persists across waves).
-8. Built 2026-11-07 (commit 3204b0b, untested in game): Spider-Sense Tingle, Under the Machinery, Black Suit, Wheatcakes, Parker Luck, Rent Is Due, Clone Saga, One-Punch Spider.
+8. Built 2026-11-07 (commit 3204b0b, untested in game): Peter Tingle, Under the Machinery, Black Suit, Wheatcakes, Parker Luck, Rent Is Due, Clone Saga, One-Punch Spider.
 9. New curse **One-Punch Spider**: damage dealt and damage taken both x20 (2000%, tunable). Everything dies in one hit, you too. Open points: bosses and phase gates (do they die in one hit or keep their health floors?), and whether it overlaps too much with Equalizer (the curse is run-long, Equalizer is a single pick).
-Build order unchanged: Spider-Sense Tingle, Under the Machinery, Parker Luck, Rent Is Due, Maximum Carnage, then gadget rewards, then Street Brawler.
+Build order unchanged: Peter Tingle, Under the Machinery, Parker Luck, Rent Is Due, Maximum Carnage, then gadget rewards, then Street Brawler.
 
 Sources for the general design points: [Why Roguelikes Keep Growing](https://www.strayspark.studio/blog/building-roguelike-ue5-procedural-progression), [Roguelike itemization: balancing randomness and player agency](https://wayline.io/blog/roguelike-itemization-balancing-randomness-player-agency), [Boons and gods (Hades)](https://saschb2b.github.io/game-mechanics/games/hades/boons-and-gods), [Hades Ascends the Action Roguelike Throne](https://game-wisdom.com/?p=25324), [Balancing a roguelike with a bot that plays a thousand games](https://solodevstack.com/blog/balancing-a-roguelike-with-a-bot-that-plays-1000-games).

@@ -41,7 +41,7 @@ namespace boons {
         { Stat::Toughness, "Reinforced Suit", "-15% damage taken", 3 },
         { Stat::Vampire, "Adrenaline Rush", "heal 4% of max health per kill", 3 },
         { Stat::Recovery, "Second Wind", "heal 30% of max health after each wave", 2 },
-        { Stat::SpiderSense, "Spider-Sense Tingle", "the first hit you take each wave does nothing", 2 },
+        { Stat::SpiderSense, "Peter Tingle", "the first hit you take each wave does nothing", 2 },
         { Stat::Machinery, "Under the Machinery", "below 25% health: -40% damage taken and a slow heal", 1 },
         { Stat::BlackSuit, "Black Suit", "+4% damage dealt per kill in a row (up to +80%), lost when hit", 2 },
         { Stat::Wheatcakes, "Wheatcakes", "heal 50% of max health after a boss wave", 2 },
@@ -154,7 +154,7 @@ namespace boons {
     // The multiplier for one hit on the hero (stats hook): IncomingMult plus the per-hit effects. hp/max_hp: his health before the hit.
     float IncomingHitMult(float hp, float max_hp) {
         if (!g_active) return IncomingMult();
-        if (g_tingle_left.load() > 0 && g_tingle_left.fetch_sub(1) > 0) return 0.0f;   // Spider-Sense Tingle
+        if (g_tingle_left.load() > 0 && g_tingle_left.fetch_sub(1) > 0) return 0.0f;   // Peter Tingle
         g_streak = 0;                                                                    // Black Suit: a hit ends the streak
         float m = IncomingMult();
         if (g_stacks[(int)Stat::Machinery] && max_hp > 0 && hp < 0.25f * max_hp) m *= 0.60f;
