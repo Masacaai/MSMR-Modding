@@ -1130,6 +1130,22 @@ static void RunCommand(const std::string& line) {
         std::string text;
         in >> type >> std::quoted(text);
         ui::ShowTypedMessage(type, text);
+    } else if (cmd == "points") {
+        // points [radius=8]: the arena's spawn points within `radius` metres of the hero (index, distance, height), nearest first - stand beside a cage,
+        // wall or prop that swallows spawns and the indices to retire are in the log.
+        float radius = 8.0f;
+        in >> radius;
+        const arena::Bounds* a = arena::Current();
+        HeroInfo h = ReadHero();
+        if (!a || !a->points || !h.ok) { LOG("points: need an active arena (go to Ryker's first) and the hero"); return; }
+        std::vector<std::pair<float, size_t>> close_pts;
+        for (size_t i = 0; i < a->point_count; i++) {
+            float dx = a->points[i].x - h.pos[0], dz = a->points[i].z - h.pos[2], d = sqrtf(dx * dx + dz * dz);
+            if (d <= radius) close_pts.push_back({ d, i });
+        }
+        std::sort(close_pts.begin(), close_pts.end());
+        LOG("points: hero at (%.1f, %.1f, %.1f); %zu spawn point(s) within %.0f m", h.pos[0], h.pos[1], h.pos[2], close_pts.size(), radius);
+        for (auto& [d, i] : close_pts) LOG("points:   #%zu at (%.1f, %.1f, %.1f), %.1f m away", i, a->points[i].x, a->points[i].y, a->points[i].z, d);
     } else if (cmd == "mission") {
         missions::Log();   // the save's state of the known story missions (docs/GAME_INTERNALS.md, missions)
     } else if (cmd == "audio") {
