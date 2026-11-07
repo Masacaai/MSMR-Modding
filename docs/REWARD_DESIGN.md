@@ -106,6 +106,8 @@ Healing is worth less here because the game already heals through Focus (earn it
 - Curse ideas (upside/downside): **Adrenaline Junkie** (Focus fills 2x but you cannot heal from it, it only powers finishers), **Dry Spell** (+25% damage but Focus builds 40% slower), **Overdrive** (Focus never drains, but the meter is one segment shorter).
 - First step is recon: find the Focus meter (the Assault meter) object in memory and its fill/drain rates; the mod's perk items already name the class (AssaultMeterSegments, AssaultModeDrain), a lead.
 
+Focus recon, offline pass (strings in Spider-Man.exe, config JSON): the meter is the "SpiderAssault" system. Names to look for in memory: `spiderAssaultManager`, `SpiderAssaultConfig`, `UpgradedAssaultMeterMultiplier`, `MinAssaultModeTime`, `HeroSpiderAssaultTimeScale`; events `OnAssaultMeterFull`, `HeroSpiderAssaultSegmentFullEvent` / `SegmentNotFullEvent` / `StartedEvent` / `StoppedEvent`; perk types `SpiderAssaultRatePerkPrius` (fill rate), `AssaultModeDrainPerkPrius`, `AssaultMeterSegmentsPerkPrius`, `StimPackAddsAssaultPerkPrius`. The fill-rate perk is the easiest lever if it can be applied at runtime. Next in-game step: `comps hero` and look for a SpiderAssault/Assault component.
+
 ## 9. Decisions (2026-11-08)
 1. Equalizer stays as a deliberate gamble.
 2. Gadget wheel: the player may swap between gadgets they have unlocked.
