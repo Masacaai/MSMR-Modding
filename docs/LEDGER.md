@@ -231,3 +231,8 @@ Alongside some bugfixing:
   a scan of the whole process for live `MissionSystem` / `ObjectiveSystemShared` objects found none (its only hits were its own stack).
 - Not tried: the save file on disk, the `ObjectiveSystemSaveBlock` / `MissionSaveDataShared` structures located through the save-load path, or hooking the code that
   answers CheckMissionStateAction while a mission script runs. Resume with one of those, or accept the mission lock alone.
+
+## Balance ideas noted 2026-11-08 (design in REWARD_DESIGN.md)
+- Gadgets folded into Campaign rewards (removed at run start; unlock gadgets + upgrades during the run). Needs gadget equip/lock RE.
+- New curse "Street Brawler": health drain while airborne, melee damage +150-200%. Drain rate tuned in testing.
+- Pool filtering: cut stealth/scanner/XP items, gate gadget-synergy items on owning a gadget (list in REWARD_DESIGN.md section 3).
