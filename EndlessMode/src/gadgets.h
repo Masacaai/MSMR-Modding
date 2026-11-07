@@ -12,5 +12,12 @@ namespace gadgets {
     void Lock(bool on);             // refuse gadgets that were not allowed
     void Allow(uint32_t id);
     void ClearAllowed();
+    // A run's gadgets (no upgrades: dropped by the user 2026-11-07): BeginRun hides the seven gadgets (red, 0/0) and locks the wheel to the
+    // Web Shooter; Grant unhides and equips one; EndRun restores everything and re-equips what the player had.
+    void BeginRun();
+    void Grant(uint32_t id);
+    bool Owned(uint32_t id);
+    void EndRun();
+    bool Hide(uint32_t id, bool hide);   // hide: zero the table id (red, 0/0, unusable); show: restore it. Needs one observed equip call first
     bool Equip(uint32_t id, int slot);   // our own equip through the game's function (game thread); needs one observed call first
 }

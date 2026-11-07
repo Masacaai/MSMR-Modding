@@ -1,7 +1,10 @@
 #include "gadgets.h"
 
+#include "entity.h"
+#include "gamethread.h"
 #include "log.h"
 #include "memory.h"
+#include "natives.h"
 #include "scan.h"
 
 #include <Windows.h>
@@ -58,6 +61,100 @@ namespace gadgets {
     void Lock(bool on) { if (on && !Install()) return; g_lock = on; LOG("gadgets: lock %s", on ? "on" : "off"); }
     void Allow(uint32_t id) { std::lock_guard<std::mutex> lock(g_mutex); g_allowed.insert(id); LOG("gadgets: allowed %04X", id); }
     void ClearAllowed() { std::lock_guard<std::mutex> lock(g_mutex); g_allowed.clear(); }
+
+    // Hide: the manager's gadget table (entries of 0x18 bytes at +0x1B8, count at +0x628, id first) is the game's lookup; with an entry's
+    // id zeroed the wheel still lists the gadget but red, ammo 0/0 and unusable (verified 2026-11-07). Show writes the id back.
+    static std::set<uint32_t> g_hidden;
+    static uintptr_t Entry(uint32_t id) {
+        uintptr_t mgr = g_mgr.load();
+        uint32_t n = 0;
+        if (!mgr || !memory::Read(mgr + 0x628, n) || n > 64) return 0;
+        for (uint32_t i = 0; i < n; i++) {
+            uint32_t v = 0;
+            if (memory::Read(mgr + 0x1B8 + 0x18 * i, v) && v == id) return mgr + 0x1B8 + 0x18 * i;
+        }
+        return 0;
+    }
+    bool Hide(uint32_t id, bool hide) {
+        if (!g_mgr) { LOG("gadgets: no manager seen yet (equip a gadget once with the hook on)"); return false; }
+        std::lock_guard<std::mutex> lock(g_mutex);
+        if (hide) {
+            uintptr_t e = Entry(id);
+            if (!e) { LOG("gadgets: hide %04X: not in the table (already hidden?)", id); return false; }
+            memory::Write<uint32_t>(e, 0);
+            g_hidden.insert(id);
+        } else {
+            uintptr_t mgr = g_mgr.load();
+            uint32_t n = 0;
+            if (!g_hidden.count(id) || !memory::Read(mgr + 0x628, n)) return false;
+            for (uint32_t i = 0; i < n && i < 64; i++) {   // the zeroed entry still carries the gadget's hash after the id: find it by slot order
+                uint32_t v = 1;
+                if (memory::Read(mgr + 0x1B8 + 0x18 * i, v) && v == 0 && id >= 0x9C82 && id - 0x9C82 == i - 1) {   // table order: 9C43, 9C82..9C89, 9C92
+                    memory::Write<uint32_t>(mgr + 0x1B8 + 0x18 * i, id);
+                    g_hidden.erase(id);
+                    break;
+                }
+            }
+        }
+        LOG("gadgets: %s %04X", hide ? "hid" : "showed", id);
+        return true;
+    }
+
+    // The hero's HeroWeaponManagerLocal is the EquipGadget `this` (the gadget table was at its +0x1B8): found without waiting for an equip call.
+    static void FindManager() {   // game thread
+        auto get_actor = (uintptr_t(*)(void*))natives::Get(natives::GetActor);
+        uintptr_t system = scan::FromRva(natives::kHeroSystemRva);
+        uint32_t handle = 0;
+        if (!get_actor || !memory::Read(system + 0x1C, handle) || !handle) return;
+        uintptr_t actor = get_actor(&handle);
+        uintptr_t m = actor ? entity::FindComponent(actor, "HeroWeaponManagerLocal") : 0;
+        if (m) g_mgr = m;
+    }
+
+    // ---- a run's gadgets (Campaign rewards) ----
+    static uint32_t g_saved = 0;   // what was equipped before the run
+    static const uint32_t kWebShooter = 0x9C89;
+    static bool g_run = false;
+
+    void BeginRun() {
+        if (!Install()) return;
+        gamethread::Run([] {
+            FindManager();
+            if (!g_mgr) { LOG("gadgets: no weapon manager; gadgets stay as they are"); return; }
+            memory::Read(g_mgr.load() + 0x6c, g_saved);
+            for (uint32_t id = 0x9C82; id <= 0x9C88; id++) Hide(id, true);
+            ClearAllowed();
+            Allow(kWebShooter);
+            Lock(true);
+            Equip(kWebShooter, 0);
+            g_run = true;
+            LOG("gadgets: run start: all gadgets hidden, Web Shooter equipped (was %04X)", g_saved);
+        }, 5000);
+    }
+
+    void Grant(uint32_t id) {
+        gamethread::Run([id] {
+            if (!g_run) FindManager();
+            Hide(id, false);
+            Allow(id);
+            Equip(id, 0);
+            LOG("gadgets: granted %04X", id);
+        }, 5000);
+    }
+
+    bool Owned(uint32_t id) { std::lock_guard<std::mutex> lock(g_mutex); return g_allowed.count(id) > 0 && id != kWebShooter; }
+
+    void EndRun() {
+        if (!g_run) return;
+        g_run = false;
+        gamethread::Run([] {
+            for (uint32_t id = 0x9C82; id <= 0x9C88; id++) Hide(id, false);
+            Lock(false);
+            ClearAllowed();
+            if (g_saved) Equip(g_saved, 0);
+            LOG("gadgets: run end: gadgets restored (equipped %04X)", g_saved);
+        }, 5000);
+    }
 
     bool Equip(uint32_t id, int slot) {
         if (!g_orig || !g_mgr) { LOG("gadgets: no manager seen yet (equip a gadget once with `gadget watch on`)"); return false; }

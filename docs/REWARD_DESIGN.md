@@ -133,3 +133,24 @@ Clone Saga verified (2026-11-08): the second reward screen follows each pick, an
 - Hero components of interest: `HeroWeaponManagerLocal`, `ItemLoadoutComponent`, `GadgetItemAmmoManager`; exe classes `GadgetItem`, `GadgetConfig`, `HeroGadgetConfig`, `MasterWeaponListConfig`, `MasterItemLoadoutListConfig`; UI calls `UIQuickSelectWheelEquip`, events `kEquipGadgetUp/Left/Right`.
 - A write watch on `HeroWeaponManagerLocal`+0x58 (swap) found exe+2162c01/2162c0f: an insertion into a sorted list of {float, id} pairs at +0x48/+0x58 with ids 0x9C82-0x9C89. It looks like a most-recently-used history of gadgets, not the equipped set. Callers: 2162783 <- 216284f <- 21623d4 <- 1f55e8c <- bbdcda.
 - Not found yet: where the set of available gadgets / the equipped slots live, and the function that equips one. Guessing config paths for the gadget lists failed (extract.py reports MISSING).
+
+### Gadget ids (verified in game 2026-11-07, EquipGadget exe+2162300, all slot 0)
+9C82 Electric Web, 9C83 Impact Web, 9C84 Web Bomb, 9C85 Trip Mine, 9C86 Concussive Blast, 9C87 Spider Drone, 9C88 Suspension Matrix, 9C89 Web Shooter.
+
+
+### Curse idea: "Out of Web Fluid" (name TBD; user, 2026-11-07)
+Peter loses every web-based gadget for the rest of the run, the Web Shooter included: Web Shooter, Trip Mine, Web Bomb, Impact Web, Electric Web. Suspension Matrix, Concussive Blast and Spider Drone stay. Upside: Focus builds faster ("cornered"). Hide them from the wheel too if possible.
+Verified: `gadget equip 0 0` empties the slot: HUD shows the old name but the ammo bar is gone, R1 does nothing, switching does nothing. That is the right state for the curse's web shooter (but the wheel/state must be restored after the run).
+Verified: EquipGadget lock + allow list works (refused equips are logged; an allowed id switches).
+Gadget table (HeroWeaponManagerLocal, found by disassembling lookup exe+2163500): entries 0x18 bytes at manager+0x1B8, count at +0x628, entry = {u32 id, FF01..., bytes 03 02/01 01 00, hash...}. No obvious unlock flag in the entry yet; the wheel's source list is still unknown.
+
+Verified: zeroing a gadget's table id (manager+0x1B8+i*0x18) greys it red in the wheel with ammo 0/0 (still listed, unusable). Good enough for the web curse. User wants that curse to also disable throwables and web-swinging (all the way); levers for those not found yet.
+
+
+HeroAbilityLock (hero component): 128 abilities x 4 layers; lock counter byte at comp+0x1C8 + layer*0x80 + abilityIndex; locked if any layer >0 (vtable fns at exe+1E8A640 unlock, 1E8A6D0 IsLocked, 1E8A730 debug draw). Ability indices unknown; bisecting by writing counters and testing swing.
+
+
+Ability-lock bisect (2026-11-07, layer 0, HeroAbilityLock byte index): 0-3 = attacks/shooting (punch, web shoot), 4 = ground movement (walk; shooting also failed with it locked), 5 = likely swinging (4+5 locked blocked swing; 4 alone did not). Not confirmed: 5 alone (user hit a bug and reloaded). PINNED: the user recalls Harry's Research Station mission removing Spidey's webs; observe what the game does there before building the "no webs" curse's swing/throwable part.
+
+### Gadget rewards built (2026-11-07, untested)
+Decision: gadget upgrades dropped (mostly ammo/radius bumps); gadgets alone are the reward. `gadgets::BeginRun` (called from boons Begin) hides the 7 gadgets via the table-id trick, locks the wheel to the Web Shooter and equips it; `Grant(id)` unhides, allows and equips; `EndRun` restores all and re-equips the saved gadget. Offers: from wave 2 one gadget option may join a screen; the first is guaranteed by wave 3. Commands: `gadget begin|end|grant <hex>|hide|show <hex|all>`. Still to do: gate Resupply/Battle Tech/Scavenger/Metabolic Converter on owning a gadget; the web-fluid curse.

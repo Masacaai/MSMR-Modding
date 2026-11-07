@@ -1054,6 +1054,13 @@ static void RunCommand(const std::string& line) {
         else if (sub == "lock") gadgets::Lock(v != "off");
         else if (sub == "allow") gadgets::Allow((uint32_t)strtoul(v.c_str(), nullptr, 16));
         else if (sub == "clear") gadgets::ClearAllowed();
+        else if (sub == "begin") gadgets::BeginRun();
+        else if (sub == "end") gadgets::EndRun();
+        else if (sub == "grant") gadgets::Grant((uint32_t)strtoul(v.c_str(), nullptr, 16));
+        else if (sub == "hide" || sub == "show") {   // gadget hide|show <hex id | all>
+            if (v == "all") { for (uint32_t id = 0x9C82; id <= 0x9C88; id++) gadgets::Hide(id, sub == "hide"); }
+            else gadgets::Hide((uint32_t)strtoul(v.c_str(), nullptr, 16), sub == "hide");
+        }
         else if (sub == "equip") { uint32_t id = (uint32_t)strtoul(v.c_str(), nullptr, 16); gamethread::Post([id, slot] { gadgets::Equip(id, slot); }); }
     } else if (cmd == "dbg") {
         // dbg <give|curse|power|mod|clear|list|status|cleared|heal|focus|begin|end> ...: debug mode toolbox (boons.cpp)

@@ -1,6 +1,7 @@
 #include "boons.h"
 
 #include "entity.h"
+#include "gadgets.h"
 #include "gamethread.h"
 #include "hud.h"
 #include "input.h"
@@ -66,7 +67,19 @@ namespace boons {
     };
 
     // ---- state ----
-    enum class Kind { Power, Mod, Stat, Curse, Decline };
+    enum class Kind { Power, Mod, Stat, Curse, Decline, Gadget };
+    static int g_wave = 0;   // the wave just cleared (offers read it)
+    struct GadgetDef { uint32_t id; const char* name; const char* desc; };
+    static const GadgetDef kGadgets[] = {
+        { 0x9C83, "Impact Web", "a web blast that pins enemies to walls" },
+        { 0x9C84, "Web Bomb", "a bomb that glues enemies together" },
+        { 0x9C85, "Trip Mine", "a web mine that triggers when enemies come near" },
+        { 0x9C82, "Electric Web", "a web that shocks everything it hits" },
+        { 0x9C87, "Spider Drone", "a drone that fights for you" },
+        { 0x9C86, "Concussive Blast", "a gust of air that knocks enemies back" },
+        { 0x9C88, "Suspension Matrix", "lifts enemies into the air" },
+    };
+    static int OwnedGadgets() { int n = 0; for (const auto& g : kGadgets) if (gadgets::Owned(g.id)) n++; return n; }
     struct Option { Kind kind; uint64_t id = 0; int index = 0; std::string label; };
     struct Offer { std::string title; std::vector<Option> options; bool curse = false; bool repeat = false; DWORD shown_at = 0; DWORD ready_at = 0; };
     constexpr DWORD kOfferDelayMs = 3500;   // after the wave clears, let finishers and animations play out (user)
@@ -255,6 +268,7 @@ namespace boons {
             g_offering = false;
         }
         LOG("boons: pools: %zu suit powers, %zu suit mods (owned, by game category)", g_powers.size(), g_mods.size());
+        gadgets::BeginRun();
         runloadout::Begin();   // snapshot, clear power and mods, lock the menu (blocking game-thread work)
         g_active = true;
     }
@@ -278,6 +292,7 @@ namespace boons {
         if (g_frozen.exchange(false)) timescale::Unfreeze();
         hud::Clear();
         runloadout::End();
+        gadgets::EndRun();
     }
 
     bool Active() { return g_active; }
@@ -298,7 +313,16 @@ namespace boons {
         for (int i = 0; i < (int)std::size(kStats); i++)
             if (g_stacks[i] < (S("stat_stacks", 0) > 0 ? S("stat_stacks", 0) : kStats[i].max_stacks) && S(kStatKeys[i], 1))
                 pool.push_back({ Kind::Stat, 0, i, std::string(kStats[i].name) + " (" + kStats[i].desc + ")" });
+        // Gadgets (no upgrades): from wave 2 one gadget option may join a screen; the first is guaranteed by wave 3.
+        std::vector<Option> fresh;
+        if (g_wave >= 2 && S("boon_gadgets", 1))
+            for (const auto& g : kGadgets)
+                if (!gadgets::Owned(g.id)) fresh.push_back({ Kind::Gadget, g.id, 0, std::string("Gadget: ") + g.name + " (" + g.desc + ")" });
+        std::shuffle(fresh.begin(), fresh.end(), g_rng);
+        bool force_gadget = !fresh.empty() && g_wave >= 3 && OwnedGadgets() == 0;
+        if (!fresh.empty() && !force_gadget) pool.push_back(fresh.front());
         std::shuffle(pool.begin(), pool.end(), g_rng);
+        if (force_gadget) o.options.push_back(fresh.front());
         // Until the run has a suit power, one option is always a power.
         if (power_empty && !g_powers.empty() && S("boon_powers", 1)) {
             uint64_t id = g_powers[std::uniform_int_distribution<size_t>(0, g_powers.size() - 1)(g_rng)];
@@ -345,6 +369,7 @@ namespace boons {
     void OnWaveCleared(int wave, bool boss_wave) {
         const float base_heal = S("wave_heal", 0) / 100.0f;
         if (!g_active) { HealHero(base_heal); return; }
+        g_wave = wave;
         // Heals first, so they're felt during the pick.
         float heal = base_heal + 0.30f * g_stacks[(int)Stat::Recovery] + (HasCurse(Curse::OpenSeason) ? 0.25f : 0.0f);
         if (boss_wave) heal += 0.50f * g_stacks[(int)Stat::Wheatcakes];
@@ -586,6 +611,10 @@ namespace boons {
         case Kind::Curse:
             g_curses.push_back(kCurses[op.index].curse);
             what = std::string("Curse: ") + kCurses[op.index].name;
+            break;
+        case Kind::Gadget:
+            gadgets::Grant((uint32_t)op.id);
+            for (const auto& g : kGadgets) if (g.id == op.id) what = std::string("Gadget: ") + g.name;
             break;
         case Kind::Decline:
             what = "No deal";
