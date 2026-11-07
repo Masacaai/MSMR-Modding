@@ -1127,6 +1127,7 @@ static void RunCommand(const std::string& line) {
         ui::ShowTypedMessage(type, text);
     } else if (cmd == "mission") {
         missions::DumpSystemEntity();
+        missions::ScanForSystems();
         missions::Log();   // the save's state of the known story missions (docs/GAME_INTERNALS.md, missions)
     } else if (cmd == "audio") {
         // audio on | off | mark <text> | post <event> [obj] | state <group> <state> | switch <group> <switch> [obj] | rtpc <name> <value> [obj]
@@ -1395,7 +1396,7 @@ static void Main() {
         PollCommands();
         {   // recon: 20 s after the game announces its mission system, list what is on that entity
             const uint32_t h = events::MissionSystemHandle();
-            if (h && h != dumped_for) { if (!dump_at) dump_at = GetTickCount() + 20000; else if ((int)(GetTickCount() - dump_at) >= 0) { missions::DumpSystemEntity(); dumped_for = h; dump_at = 0; } }
+            if (h && h != dumped_for) { if (!dump_at) dump_at = GetTickCount() + 20000; else if ((int)(GetTickCount() - dump_at) >= 0) { missions::DumpSystemEntity(); missions::ScanForSystems(); dumped_for = h; dump_at = 0; } }
         }
         if (record_events) { static DWORD next = 0; if (GetTickCount() >= next) { next = GetTickCount() + 3000; events::LogNew(); } }
         Sleep(250);

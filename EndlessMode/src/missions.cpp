@@ -8,8 +8,11 @@
 #include "scan.h"
 
 #include <Windows.h>
+#include <algorithm>
 #include <atomic>
 #include <cstring>
+#include <thread>
+#include <vector>
 
 namespace missions {
     constexpr uintptr_t kSystemPtrRva = 0x7c4bbb0, kFindRva = 0x201f640, kStateRva = 0x201f800;
@@ -126,6 +129,48 @@ namespace missions {
         } __except (EXCEPTION_EXECUTE_HANDLER) {
             LOG("missions:     (the game's code faulted)");
         }
+    }
+
+    void ScanForSystems() {
+        std::thread([] {
+            const uintptr_t base = scan::Game().base;
+            const uintptr_t vts[2] = { base + 0x4f6df50, base + 0x4f74658 };
+            const char* names[2] = { "MissionSystem", "ObjectiveSystemShared" };
+            std::vector<unsigned char> buf(8u << 20);
+            int found = 0;
+            const uint32_t wanted[4] = { Hash("GP_A2_PRISON", false), Hash("GP_A2_PRISON", true), Hash("GP_A1_FISK", false), Hash("GP_A1_FISK", true) };
+            MEMORY_BASIC_INFORMATION mbi;
+            uintptr_t at = 0x10000;
+            while (VirtualQuery((void*)at, &mbi, sizeof(mbi)) == sizeof(mbi) && found < 12) {
+                const uintptr_t region = (uintptr_t)mbi.BaseAddress, size = mbi.RegionSize;
+                at = region + size;
+                if (mbi.State != MEM_COMMIT || (mbi.Protect & (PAGE_GUARD | PAGE_NOACCESS)) || !(mbi.Protect & (PAGE_READWRITE | PAGE_WRITECOPY))) continue;
+                if (region >= base && region < base + 0x8000000) continue;   // the exe's own image
+                for (uintptr_t off = 0; off < size && found < 12; off += buf.size()) {
+                    const size_t n = (size_t)std::min<uintptr_t>(buf.size(), size - off);
+                    SIZE_T got = 0;
+                    if (!ReadProcessMemory(GetCurrentProcess(), (void*)(region + off), buf.data(), n, &got) || got < 8) continue;
+                    for (size_t i = 0; i + 8 <= got; i += 8) {
+                        uintptr_t v;
+                        memcpy(&v, &buf[i], 8);
+                        for (int k = 0; k < 2; k++)
+                            if (v == vts[k]) {
+                                const uintptr_t obj = region + off + i;
+                                int32_t count = 0;
+                                memory::Read(obj + 0x108, count);
+                                LOG("missions: scan: %s instance at %llx, [+0x108]=%d", names[k], (unsigned long long)obj, count);
+                                found++;
+                                if (count > 0 && count < 4096) {
+                                    int hist[8] = {};
+                                    Survey(obj, count, hist, wanted);
+                                    LOG("missions: scan:   states: 0:%d 1:%d 2:%d 3:%d 4:%d 5:%d 6:%d 7:%d", hist[0], hist[1], hist[2], hist[3], hist[4], hist[5], hist[6], hist[7]);
+                                }
+                            }
+                    }
+                }
+            }
+            LOG("missions: scan done, %d instance(s)", found);
+        }).detach();
     }
 
     void DumpSystemEntity() {
