@@ -244,7 +244,10 @@ namespace director {
     // Rooftop perches (rykers_perches.h): snipers and rocket launchers use them from wave 5 / Horde level 3, mostly (7 in 10), so the
     // fight is not only a street brawl. Several may share one perch (a little jitter keeps them apart). A perch must be 20+ m
     // away and either out of the camera's view or 45+ m away, like ground spawns.
+    // OFF (user, 2026-11-08, after a test): the effect was not as good as hoped and one enemy fell through or was moved. The code and points stay.
+    constexpr bool kPerchesOn = false;
     static bool PickPerch(const HeroPos& h, spawn::Vec3& out) {
+        if (!kPerchesOn) return false;
         const arena::Bounds* a = arena::Current();
         if (!a || strcmp(a->name, "rykers") != 0) return false;
         if (g_plan.wave < (g_opt.mode == "horde" ? 3 : 5)) return false;
@@ -303,6 +306,7 @@ namespace director {
         en.point = (!boss && strstr(path, "enm_meleethug")) ? point : -1;
         en.spawn_point = point;
         en.perched = perched;
+        if (perched) LOG("director: PERCH spawn %s at (%.0f, %.0f, %.0f), %.0f m from the hero", type.c_str(), pos.x, pos.y, pos.z, sqrtf((pos.x - h.x) * (pos.x - h.x) + (pos.z - h.z) * (pos.z - h.z)));
         en.spawned_at = pos;
         en.spawn_time = en.last_change = GetTickCount();
         {
