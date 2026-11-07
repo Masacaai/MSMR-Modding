@@ -126,6 +126,7 @@ namespace settings {
             Switch("boons", "BOONS AND CURSES", "Campaign: pick a power-up after each wave, and take the curse that comes with it. OFF: no picks, you start with your normal suit and gadgets.", true);
 
             Sect(1);
+            Switch("music", "ARENA MUSIC", "The game's own combat music, building with the waves. OFF: silence, as before.", true);
             List("count", "ENEMIES PER WAVE", "How many enemies each wave sends, as a share of the normal number.",
                  { "50%", "75%", "100%", "125%", "150%", "200%", "300%" }, { 50, 75, 100, 125, 150, 200, 300 }, 2);
             List("field", "ENEMIES AT ONCE", "The most enemies on the field together (also the Horde cap). Past 100 the game can stutter or hang.",
@@ -228,7 +229,7 @@ namespace settings {
         void ChooseShown() {
             struct Shown { const char* key; const char* scope; };
             static const Shown kShown[] = {
-                { "preset2", "BOTH MODES. " }, { "boons", "CAMPAIGN ONLY. " }, { "count", "CAMPAIGN ONLY. " }, { "field", "BOTH MODES. " },
+                { "preset2", "BOTH MODES. " }, { "music", "BOTH MODES. " }, { "boons", "CAMPAIGN ONLY. " }, { "count", "CAMPAIGN ONLY. " }, { "field", "BOTH MODES. " },
                 { "chapter", "CAMPAIGN ONLY. " }, { "bosswaves", "CAMPAIGN ONLY. " }, { "elites", "BOTH MODES. " }, { "dmg_out", "BOTH MODES. " },
                 { "dmg_in", "BOTH MODES. " }, { "horde_level", "HORDE ONLY. " } };
             for (auto& r : g_rows) {

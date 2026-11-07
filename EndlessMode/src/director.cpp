@@ -7,6 +7,7 @@
 #include "hud.h"
 #include "timescale.h"
 #include "log.h"
+#include "music.h"
 #include "memory.h"
 #include "natives.h"
 #include "paths.h"
@@ -288,6 +289,7 @@ namespace director {
             gfx::Invoke(0x210, 0x38, "ShowCrimeScanner", { gfx::Node::Of(std::string(boss->name)), gfx::Node::Of("has joined the fight!"),
                                                            gfx::Node::Of(2), gfx::Node::Of(5), gfx::Node::Arr() });
             g_boss_banner_hide = GetTickCount() + 7000;
+            music::Sting();
         }
         return true;
     }
@@ -879,6 +881,7 @@ namespace director {
         if (g_plan.sinister) SyncSinister();
         else if (g_cfg.mode != plan::Mode::BossRush) SyncCampaignPreloads(g_plan.chapter);
         if (g_cfg.mode == plan::Mode::Campaign && !g_plan.sinister && g_plan.step == 0 && g_plan.faction) progress::MarkSeen(g_plan.faction->id);
+        music::WaveStart(g_plan.step == 0 ? 0 : g_plan.step == 1 ? 1 : 2, g_plan.boss_wave);
         boons::AdjustWave(g_plan, g_cfg.horde_max);   // curses: more enemies, mix, elites (never more health)
         g_remaining = g_plan.count;
         g_boss_queue = g_plan.bosses;
@@ -969,6 +972,7 @@ namespace director {
             if (gen == g_release_gen && !g_running) spawn::ReleaseAll();
             else LOG("director: post-run release skipped (a new run started)");
         }).detach();
+        music::End();
         boons::End();   // restores the player's own suit power and mods
         boons::SetPlayerSettings(false);
         LOG("director: run ended (%s) at wave %d, %d kills", end_reason.c_str(), g_plan.wave, g_kills);
@@ -989,6 +993,7 @@ namespace director {
             LOG("director: === horde step %d: %s === (up to %d on the field, hp x%.2f)", l,
                 g_plan.title.empty() ? "(silent)" : g_plan.title.c_str(), g_plan.max_alive, g_plan.health_mult);
             stats::WaveStart(l, "horde", "horde", 0, g_plan.max_alive, g_plan.health_mult, {});
+            music::WaveStart(l >= 6 ? 2 : l >= 3 ? 1 : 0, false);
             // Only when a faction joins. Both the opening line and the "X join the riot" lines use the notification box, for
             // consistency (user, 2026-10-15; the opening line is too long for the banner anyway).
             if (!g_plan.title.empty()) hud::Show(g_plan.title, l == 1 ? 6.0f : 5.0f);
@@ -1174,6 +1179,7 @@ namespace director {
                         hud::HideCounter();
                         shown_left = -1;
                         stats::WaveCleared(g_plan.wave);
+                        music::WaveCleared();
                         boons::OnWaveCleared(g_plan.wave, g_plan.boss_wave);
                         if (g_plan.sinister && g_plan.step == std::max(1, g_cfg.waves_per_chapter) - 1) {
                             g_sinister_done = true;

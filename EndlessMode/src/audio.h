@@ -29,4 +29,9 @@ namespace audio {
     bool SetSwitch(const char* group, const char* sw, uint64_t obj);
     bool SetRtpc(const char* name, float value, uint64_t obj, int fade_ms = 0);
     void StopPlaying(uint32_t playing_id, int fade_ms = 0);
+
+    // By id (what the game itself posts, see Id): the music module uses these. RegisterObject makes a Wwise game object of our own to post on.
+    uint32_t PostId(uint32_t event_id, uint64_t obj);
+    bool SetStateId(uint32_t group_id, uint32_t state_id);
+    bool RegisterObject(uint64_t obj, const char* name);
 }

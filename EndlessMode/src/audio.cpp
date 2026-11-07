@@ -270,4 +270,27 @@ namespace {
         fn(playing_id, fade_ms, 4);
         t_ours = false;
     }
+
+    uint32_t PostId(uint32_t event_id, uint64_t obj) {
+        auto fn = Fn(o_post_id, kPostEventId);
+        if (!fn) return 0;
+        t_ours = true;
+        uint32_t r = fn(event_id, obj, 0, nullptr, nullptr, 0, nullptr, 0);
+        t_ours = false;
+        return r;
+    }
+    bool SetStateId(uint32_t group_id, uint32_t state_id) {
+        auto fn = Fn(o_state_id, kSetStateId);
+        if (!fn) return false;
+        t_ours = true;
+        int r = fn(group_id, state_id);
+        t_ours = false;
+        return r == 1;
+    }
+    bool RegisterObject(uint64_t obj, const char* name) {
+        using RegFn = int (*)(uint64_t, const char*);
+        auto fn = (RegFn)Export("?RegisterGameObj@SoundEngine@AK@@YA?AW4AKRESULT@@_KPEBD@Z");
+        if (!fn) return false;
+        return fn(obj, name) == 1;
+    }
 }
