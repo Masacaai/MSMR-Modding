@@ -379,7 +379,7 @@ namespace boons {
     }
 
     // Director loop, every tick: Under the Machinery heals 1% of max health a second while he is below a quarter.
-    // The Focus meter ("assault" in the game's names): HeroSpiderAssaultManager, three segments as float pairs {fill, cap} from +0x150
+    // The Focus meter ("assault" in the game's names): HeroSpiderAssaultManager, three segments as float pairs {fill, cap} from +0x110
     // (found in game 2026-11-07: filling the meter changed them 0 -> 100, and writing 0 emptied the third segment on screen).
     // Rate effects need no hook: each tick the change in total fill is scaled and written back, filling the segments in order.
     static float FocusRate() {
@@ -400,11 +400,11 @@ namespace boons {
             uintptr_t actor = get_actor(&handle);
             uintptr_t m = actor ? entity::FindComponent(actor, "HeroSpiderAssaultManager") : 0;
             uint32_t n = 0;
-            if (!m || !memory::Read(m + 0x168, n) || n < 1 || n > 3) return;
+            if (!m || !memory::Read(m + 0x128, n) || n < 1 || n > 3) return;
             float fill[3], cap[3];
             float total = 0, cap_total = 0;
             for (uint32_t i = 0; i < n; i++) {
-                if (!memory::Read(m + 0x150 + 8 * i, fill[i]) || !memory::Read(m + 0x154 + 8 * i, cap[i]) || cap[i] <= 0) return;
+                if (!memory::Read(m + 0x110 + 8 * i, fill[i]) || !memory::Read(m + 0x114 + 8 * i, cap[i]) || cap[i] <= 0) return;
                 total += fill[i];
                 cap_total += cap[i];
             }
@@ -416,7 +416,7 @@ namespace boons {
                 for (uint32_t i = 0; i < n; i++) {
                     float v = std::max(0.0f, std::min(cap[i], left));
                     left -= cap[i];
-                    memory::Write<float>(m + 0x150 + 8 * i, v);
+                    memory::Write<float>(m + 0x110 + 8 * i, v);
                 }
             }
             last = target;
@@ -518,12 +518,12 @@ namespace boons {
             gamethread::Run([v] {
                 uintptr_t m = FocusManager();
                 uint32_t n = 0;
-                if (!m || !memory::Read(m + 0x168, n)) { LOG("dbg: no Focus component"); return; }
+                if (!m || !memory::Read(m + 0x128, n)) { LOG("dbg: no Focus component"); return; }
                 for (uint32_t i = 0; i < n && i < 3; i++) {
                     float f = 0, cap = 0;
-                    memory::Read(m + 0x150 + 8 * i, f);
-                    memory::Read(m + 0x154 + 8 * i, cap);
-                    if (v >= 0) { f = std::max(0.0f, std::min(cap, v - 100.0f * i)); memory::Write<float>(m + 0x150 + 8 * i, f); }
+                    memory::Read(m + 0x110 + 8 * i, f);
+                    memory::Read(m + 0x114 + 8 * i, cap);
+                    if (v >= 0) { f = std::max(0.0f, std::min(cap, v - 100.0f * i)); memory::Write<float>(m + 0x110 + 8 * i, f); }
                     LOG("dbg: focus segment %u: %.1f / %.1f", i, f, cap);
                 }
             }, 5000);
