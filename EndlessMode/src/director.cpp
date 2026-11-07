@@ -1,4 +1,5 @@
 #include "director.h"
+#include "rykers_perches.h"
 
 #include "arena.h"
 #include "boons.h"
@@ -76,6 +77,7 @@ namespace director {
         bool seen_health = false;     // health was readable at least once (unreadable before that is not a death)
         bool seen_alive = false;      // health was above 0 at least once (0 right after spawn is not a death)
         float last_health = -1;
+        bool perched = false;         // spawned on a rooftop perch: holds position, never "stationary"-moved
         DWORD last_change = 0;        // last health change (bosses: activity)
         int point = -1;               // arena spawn point index for stuck checks, -1 = not checked
         spawn::Vec3 spawned_at{};
@@ -239,11 +241,35 @@ namespace director {
 
     // ---- spawning ----
 
+    // Rooftop perches (rykers_perches.h): snipers and rocket launchers use them from wave 5 / Horde level 3, mostly (7 in 10), so the
+    // fight is not only a street brawl. Several may share one perch (a little jitter keeps them apart). A perch must be 20+ m
+    // away and either out of the camera's view or 45+ m away, like ground spawns.
+    static bool PickPerch(const HeroPos& h, spawn::Vec3& out) {
+        const arena::Bounds* a = arena::Current();
+        if (!a || strcmp(a->name, "rykers") != 0) return false;
+        if (g_plan.wave < (g_opt.mode == "horde" ? 3 : 5)) return false;
+        if (std::uniform_real_distribution<float>(0.0f, 1.0f)(g_rng) > 0.7f) return false;
+        std::vector<size_t> ok;
+        for (size_t i = 0; i < std::size(rykers::kPerches); i++) {
+            const auto& p = rykers::kPerches[i];
+            float dx = p.x - h.x, dz = p.z - h.z, d = sqrtf(dx * dx + dz * dz);
+            if (d >= 20.0f && (Hidden(h, p.x, p.z) || d >= 45.0f)) ok.push_back(i);
+        }
+        if (ok.empty()) return false;
+        const auto& p = rykers::kPerches[ok[std::uniform_int_distribution<size_t>(0, ok.size() - 1)(g_rng)]];
+        std::uniform_real_distribution<float> j(-1.0f, 1.0f);
+        out = { p.x + j(g_rng), p.y + kSpawnDrop, p.z + j(g_rng) };
+        return true;
+    }
+
     static bool g_spawn_deferred = false;   // the last SpawnOne found no hidden point (director thread)
 
     static bool SpawnOne(const HeroPos& h, const char* path, roster::Role role, const roster::Boss* boss, bool calm = false) {
         int point = -1;
-        spawn::Vec3 pos = PickSpawnPoint(h, point);
+        spawn::Vec3 pos{};
+        bool perched = false;
+        if ((role == roster::Role::Sniper || role == roster::Role::Rocket) && !boss) perched = PickPerch(h, pos);
+        if (!perched) pos = PickSpawnPoint(h, point);
         g_spawn_deferred = point == -2;
         if (g_spawn_deferred) return false;   // nowhere out of sight right now: try again next tick (not a failure)
         // Every wave, wave 1 included, spawns everywhere (user, 2026-10-13: the wave-1 corner is gone).
@@ -276,6 +302,7 @@ namespace director {
         // Ranged enemies may hold position and shoot, so only melee types are judged for stuck spawns.
         en.point = (!boss && strstr(path, "enm_meleethug")) ? point : -1;
         en.spawn_point = point;
+        en.perched = perched;
         en.spawned_at = pos;
         en.spawn_time = en.last_change = GetTickCount();
         {
@@ -424,7 +451,7 @@ namespace director {
                 // probably stuck (cages, rooftops, a bad spawn). Quietly move them to a spawn point 12-30 m from the hero
                 // so they come running - only while the camera can see neither spot (the picker only returns hidden
                 // points). Replaces the spawn-point blacklist, which ended up excluding 130 of Ryker's 139 points.
-                if (have_pos && !en.boss && en.anchor_time && now - en.anchor_time > kStationaryMs && Hidden(hero, p[0], p[2])) {
+                if (have_pos && !en.boss && !en.perched && en.anchor_time && now - en.anchor_time > kStationaryMs && Hidden(hero, p[0], p[2])) {
                     float hx = p[0] - hero.x, hz = p[2] - hero.z;
                     if (sqrtf(hx * hx + hz * hz) > kStationaryM) {
                         int pt = -1;
