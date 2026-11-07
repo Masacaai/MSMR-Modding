@@ -1386,6 +1386,7 @@ static void Main() {
     LOG("ready; write commands to %s\\EndlessMode.cmd", g_dir.c_str());
 
     const bool record_events = GetPrivateProfileIntA("debug", "events", 0, (DataDir() + "\\EndlessMode.ini").c_str()) != 0;
+    if (GetPrivateProfileIntA("debug", "uilog", 0, (DataDir() + "\EndlessMode.ini").c_str()) != 0) uilog::Enable(true);   // recon: the UI calls from the first frame
     events::StartTracking(record_events);   // story-mission tracking (the arena stays locked during a mission); also the event-type recording if asked
     for (;;) {
         PollCommands();
