@@ -135,7 +135,7 @@ namespace director {
     static float g_cull_dir[2] = {};
     static bool g_roam_ok = false;
     static DWORD g_view_defer_since = 0;   // since when no spawn point out of the camera's sight was found (0 = one was)
-    static bool g_engage_calm = false;      // [run] engage_calm=1: spawn the "calm" units (heavies, Tombstone) engaged like everyone else (experiment)
+    static bool g_engage_calm = false;      // [run] engage_calm (default 1): the "calm" units (heavies, Tombstone) spawn engaged like everyone else; 0 brings back the old calm spawns
     static float g_roam_x = 0, g_roam_z = 0;
 
     // No spawn-point blacklist any more (user, 2026-10-14): enemies that stand still are quietly moved closer instead
@@ -1051,8 +1051,8 @@ namespace director {
         g_cfg = MakeConfig(opt, g_rng);
         boons::SetPlayerSettings(opt.player_settings, opt.mode == "horde");
         g_kills = 0;
-        g_engage_calm = GetPrivateProfileIntA("run", "engage_calm", 0, (DataDir() + "\\EndlessMode.ini").c_str()) != 0;
-        if (g_engage_calm) LOG("director: engage_calm=1: calm units (heavies, Tombstone) spawn engaged (experiment)");
+        g_engage_calm = GetPrivateProfileIntA("run", "engage_calm", 1, (DataDir() + "\\EndlessMode.ini").c_str()) != 0;
+        if (!g_engage_calm) LOG("director: engage_calm=0: heavies and Tombstone spawn calm (the old behaviour)");
         g_sinister_done = false;
         g_sinister_first_met = false;
         g_plan = {};
