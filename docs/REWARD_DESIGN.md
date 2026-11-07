@@ -154,3 +154,8 @@ Ability-lock bisect (2026-11-07, layer 0, HeroAbilityLock byte index): 0-3 = att
 
 ### Gadget rewards built (2026-11-07, untested)
 Decision: gadget upgrades dropped (mostly ammo/radius bumps); gadgets alone are the reward. `gadgets::BeginRun` (called from boons Begin) hides the 7 gadgets via the table-id trick, locks the wheel to the Web Shooter and equips it; `Grant(id)` unhides, allows and equips; `EndRun` restores all and re-equips the saved gadget. Offers: from wave 2 one gadget option may join a screen; the first is guaranteed by wave 3. Commands: `gadget begin|end|grant <hex>|hide|show <hex|all>`. Still to do: gate Resupply/Battle Tech/Scavenger/Metabolic Converter on owning a gadget; the web-fluid curse.
+
+### Gadget test results (2026-11-07)
+- Verified: `gadget begin` hides all 7 (red, 0/0), wheel locked to Web Shooter; `gadget grant` unhides + equips; `gadget end` restores everything. Hiding/showing does NOT change a gadget's real ammo (Web Bomb 3/4 stayed 3/4; all gadgets were back at their old ammo after `end`).
+- A granted gadget shows the player's real saved ammo (Impact Web was 0/4 in the save, so it was red and unusable). A refill is needed on grant.
+- Ammo storage NOT found: no gadget ids in GadgetItemAmmoManager (first 0x800 bytes), no change in HeroWeaponManagerLocal (first 0x800) between two shots of Trip Mine, and `inv watch` logged nothing when firing. Next ideas: the GadgetItem objects behind pointers in the ammo manager, a write watchpoint after finding the address by value search, or the game's own refill (GadgetResupplyPerk).
