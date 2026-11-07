@@ -70,10 +70,10 @@ Thematic names from the comics; effect in brackets.
 | **Spider-Tracer** | the first enemy you hit each wave is "tagged" and takes +100% from everything [needs a target mark; may be **RE**] | the tracers |
 | **Front Page** | +25% score, no combat effect [ready; score only] | Peter selling photos to the Bugle |
 | **Black Suit** | damage dealt rises with consecutive kills, resets on a hit taken [ready] | the symbiote suit |
-| **Scarlet Spider** | a decoy hit absorbs the first hit of each wave [Holo Decoy overlap; may fold into it] | Ben Reilly |
+| **Stand-In** (was Scarlet Spider) | a decoy hit absorbs the first hit of each wave [Holo Decoy overlap; may fold into it] | Ben Reilly |
 | **Great Responsibility** | +damage proportional to enemies alive [ready] | "with great power comes great responsibility" |
-| **Hobgoblin Pumpkin** | thrown objects hit harder [**RE**] | the Goblin line |
-| **Spider-Verse** | each boss defeated adds +5% damage dealt, permanently for the run [ready] | the Spider-Verse |
+| **Pumpkin Toss** | thrown objects hit harder [**RE**] | the Goblin line |
+| **Trophy Hunter** (was Spider-Verse) | each boss defeated adds +5% damage dealt, permanently for the run [ready] | the Spider-Verse |
 
 Melee-flavoured boons to support Street Brawler (need the melee filter): **Iron Fists** (+melee damage), **Counter Puncher** (perfect dodge adds melee damage for 5 s; the Discharge Power Cells mod is already a version of this).
 
@@ -83,10 +83,10 @@ Melee-flavoured boons to support Street Brawler (need the melee filter): **Iron 
 | **Street Brawler** | melee damage x2.5-3.0 | health drain while airborne | the maintainer |
 | **Parker Luck** | +25% damage dealt | rewards offer one fewer choice [ready] | Peter's bad luck |
 | **Rent Is Due** | one extra reward choice | each wave cleared costs 8% max health [ready] | the rent that is always late |
-| **Daily Bugle Smear Campaign** | score x1.5 | elites twice as common [ready; score row] | J. Jonah Jameson |
+| **Smear Campaign** | score x1.5 | elites twice as common [ready; score row] | J. Jonah Jameson |
 | **Maximum Carnage** | kills heal 6% | +30% enemies and an extra boss every third chapter [ready] | the Carnage crossover |
 | **Spider-Man No More** | +50% damage taken reduction | the suit power is disabled until the next boss [RE: power lock] | ASM #50, Peter hangs up the suit |
-| **Kraven's Last Hunt** | +1 reward tier on the next boss | a lone stalker elite hunts you from the first wave, never leaves [ready via spawn] | Kraven the Hunter |
+| **The Last Hunt** | +1 reward tier on the next boss | one persistent elite (from the current faction, forced aggro, respawns if killed) stalks you [ready via the spawner] | Kraven the Hunter |
 | **Clone Saga** | rewards are doubled | the next boss wave brings its duplicate [ready, doubles the boss] | the Clone Saga |
 | **One-Punch Spider** | everything dies in one hit | you die in one hit (x20 both ways) | One-Punch Man |
 | **Great Power** | +60% damage dealt | enemies deal +60% too [ready] | the old classic |
@@ -104,7 +104,9 @@ Melee-flavoured boons to support Street Brawler (need the melee filter): **Iron 
 2. Gadget wheel: the player may swap between gadgets they have unlocked.
 3. Street Brawler can kill you (lethal).
 4. Quips stays (it is funny).
-5. New curse **One-Punch Spider**: damage dealt and damage taken both x20 (2000%, tunable). Everything dies in one hit, you too. Open points: bosses and phase gates (do they die in one hit or keep their health floors?), and whether it overlaps too much with Equalizer (the curse is run-long, Equalizer is a single pick).
+5. One-Punch Spider: bosses also die in one hit (their phases are skipped by advancing them via AdvanceBossPhase).
+6. Liked: Black Suit, Wheatcakes, Clone Saga. Renamed as marked in sections 6-7.
+7. New curse **One-Punch Spider**: damage dealt and damage taken both x20 (2000%, tunable). Everything dies in one hit, you too. Open points: bosses and phase gates (do they die in one hit or keep their health floors?), and whether it overlaps too much with Equalizer (the curse is run-long, Equalizer is a single pick).
 Build order unchanged: Spider-Sense Tingle, Under the Machinery, Parker Luck, Rent Is Due, Maximum Carnage, then gadget rewards, then Street Brawler.
 
 Sources for the general design points: [Why Roguelikes Keep Growing](https://www.strayspark.studio/blog/building-roguelike-ue5-procedural-progression), [Roguelike itemization: balancing randomness and player agency](https://wayline.io/blog/roguelike-itemization-balancing-randomness-player-agency), [Boons and gods (Hades)](https://saschb2b.github.io/game-mechanics/games/hades/boons-and-gods), [Hades Ascends the Action Roguelike Throne](https://game-wisdom.com/?p=25324), [Balancing a roguelike with a bot that plays a thousand games](https://solodevstack.com/blog/balancing-a-roguelike-with-a-bot-that-plays-1000-games).
