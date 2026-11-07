@@ -38,31 +38,29 @@ namespace music {
 
         bool Enabled() { return settings::On("music"); }
 
-        // The game's music segments end by themselves (it re-triggers them as a fight goes on): if nothing is playing on our object while a run
-        // is on, start it again at the current level. Seen 2026-11-07: the music stopped in the middle of a long wave.
-        std::atomic<bool> g_watching{ false };
+        // A state's music runs out after 40-80 s and then goes quiet while the sound still counts as playing (seen 2026-11-07: it stopped in the
+        // middle of a long wave; re-posting the start event did nothing, but the next wave's state change brought it back). The game keeps a
+        // hideout going by changing state and stinging every so often, so a wave that goes on does the same: every kRefreshMs it steps up the
+        // ladder, and at the top alternates the two highest states.
+        constexpr DWORD kRefreshMs = 35000;
+        std::atomic<bool> g_watching{ false }, g_wave{ false };
+        std::atomic<DWORD> g_changed{ 0 };
         void Watch() {
             if (g_watching.exchange(true)) return;
             std::thread([] {
-                int last = -2, silent = 0;
-                for (int tick = 0; g_on; tick++) {
-                    Sleep(2000);
+                bool alt = false;
+                while (g_on) {
+                    Sleep(1000);
                     if (!g_on) break;
-                    const int n = audio::PlayingCount(kObject);
-                    if (n != last && tick < 200) LOG("music: %d sound(s) playing", n);
-                    last = n;
-                    if (n == 0) {
-                        if (++silent >= 2) {   // two checks in a row
-                            const int lv = g_level < 0 ? 0 : g_level.load();
-                            audio::PostId(audio::Id("Play_I20_MUS_OW_A1"), kObject);
-                            audio::SetStateId(g_group, kLadder[lv]);
-                            audio::PostId(audio::Id("Play_MUS_combat_stinger"), kObject);
-                            LOG("music: silent for 4 s, restarted at level %d", lv);
-                            silent = 0;
-                        }
-                    } else {
-                        silent = 0;
-                    }
+                    if (!g_wave || GetTickCount() - g_changed < kRefreshMs) continue;
+                    int next = g_level < 0 ? 0 : g_level.load();
+                    if (next < 2) next++;
+                    else next = (alt = !alt) ? 1 : 2;
+                    audio::SetStateId(g_group, kLadder[next]);
+                    audio::PostId(audio::Id("Play_MUS_combat_stinger"), kObject);
+                    LOG("music: refresh, level %d -> %d", g_level.load(), next);
+                    g_level = next;
+                    g_changed = GetTickCount();
                 }
                 g_watching = false;
             }).detach();
@@ -79,11 +77,14 @@ namespace music {
         audio::PostId(audio::Id("Play_MUS_combat_stinger"), kObject);
         if (boss) audio::PostId(audio::Id("Play_MUS_combat_stinger"), kObject);
         g_level = tier;
+        g_wave = true;
+        g_changed = GetTickCount();
         LOG("music: wave tier %d%s", tier, boss ? " (boss)" : "");
     }
 
     void WaveCleared() {
         if (!g_on) return;
+        g_wave = false;
         audio::SetStateId(g_group, kLastHit);
         std::thread([] {
             Sleep(3000);
@@ -98,6 +99,7 @@ namespace music {
 
     void End() {
         if (!g_on.exchange(false)) return;
+        g_wave = false;
         audio::SetStateId(g_group, kLastHit);
         std::thread([] {
             Sleep(2500);
