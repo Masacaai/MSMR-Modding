@@ -47,6 +47,14 @@ namespace director {
     constexpr float kArenaSpawnMin = 8.0f, kArenaSpawnMax = 40.0f;    // arena: distance from the hero
     constexpr float kMinSpawnM = 24.0f, kFarSpawnM = 45.0f;            // arena spawns: never closer; in view only beyond (and only after kViewFallbackMs of finding nowhere hidden)
     constexpr DWORD kViewFallbackMs = 10000;
+    // Ryker's spawn points that sit inside the overturned police truck and the two cages (found 2026-11-07 by standing beside each with the game
+    // paused and listing the nearest points): enemies spawned there were stuck in the prop. Never used for spawning or relocating.
+    constexpr int kRetiredRykersPoints[] = { 97, 80,  48, 46,  68, 63, 67, 42 };
+    static bool Retired(const arena::Bounds& a, size_t i) {
+        if (std::string(a.name) != "rykers") return false;
+        for (int r : kRetiredRykersPoints) if ((size_t)r == i) return true;
+        return false;
+    }
     constexpr float kSpawnFrontCos = -0.1f;                            // a point is "in front" if it lies within ~96 degrees of where the camera looks (was 78: spawns still popped in on screen, 2026-11-07)
     constexpr float kSpawnDrop = 1.5f;                                 // spawn this far above ground and let them land
 
@@ -159,6 +167,7 @@ namespace director {
             float t_near = 0, t_any = 0, t_view = 0;
             for (size_t i = 0; i < a->point_count; i++) {
                 const auto& sp = a->points[i];
+                if (Retired(*a, i)) continue;
                 if (a->wall && arena::WallSide(*a, sp.x, sp.z) < 2.0f) continue;
                 float dx = sp.x - h.x, dz = sp.z - h.z, d = sqrtf(dx * dx + dz * dz);
                 if (d < kMinSpawnM) continue;
