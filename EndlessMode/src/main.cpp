@@ -232,7 +232,12 @@ static director::HeroPos HeroPosNow() {
 
 // Boss verification flags persist in EndlessMode.ini [bosses] (key = boss name, 1 = works standalone, 0 = broken).
 static void LoadBossFlags() {
-    std::string ini = g_dir + "\\EndlessMode.ini";
+    // Bosses fought standalone and found working (docs/BUGS.md; Kingpin since his phase stepping, 2026-11-07). The generated roster marks none of them.
+    for (const char* name : { "Taskmaster", "Silver Sable", "Tombstone", "Tombstone (Chained)", "Mister Negative", "Hammerhead", "Kingpin" })
+        roster::SetVerified(name, true);
+    // [bosses] in the data folder's ini overrides (1 works, 0 broken). It used to be read from scripts\, which Overstrike wipes, so a boss
+    // could never be benched or verified for good.
+    const std::string ini = DataDir() + "\\EndlessMode.ini";
     for (const auto& b : roster::Bosses()) {
         int v = GetPrivateProfileIntA("bosses", b.name, -1, ini.c_str());
         if (v >= 0) roster::SetVerified(b.name, v != 0);
@@ -775,7 +780,7 @@ static void RunCommand(const std::string& line) {
             in >> who >> v;
             const roster::Boss* b = roster::FindBoss(who);
             if (!b) { LOG("boss: unknown '%s' (use the short actor name, e.g. rhino)", who.c_str()); return; }
-            WritePrivateProfileStringA("bosses", b->name, v ? "1" : "0", (g_dir + "\\EndlessMode.ini").c_str());
+            WritePrivateProfileStringA("bosses", b->name, v ? "1" : "0", (DataDir() + "\\EndlessMode.ini").c_str());
             roster::SetVerified(b->name, v != 0);
             LOG("boss: %s marked %s", b->name, v ? "verified" : "broken");
             return;

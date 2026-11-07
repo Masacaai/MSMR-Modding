@@ -45,7 +45,9 @@ namespace director {
     constexpr DWORD kTickMs = 400;
     constexpr float kSpawnRadiusMin = 6.0f, kSpawnRadiusMax = 10.0f;   // no arena: ring around the hero
     constexpr float kArenaSpawnMin = 8.0f, kArenaSpawnMax = 40.0f;    // arena: distance from the hero
-    constexpr float kMinSpawnM = 18.0f, kFarSpawnM = 45.0f;            // arena spawns: never closer; in view only beyond
+    constexpr float kMinSpawnM = 24.0f, kFarSpawnM = 45.0f;            // arena spawns: never closer; in view only beyond (and only after kViewFallbackMs of finding nowhere hidden)
+    constexpr DWORD kViewFallbackMs = 10000;
+    constexpr float kSpawnFrontCos = -0.1f;                            // a point is "in front" if it lies within ~96 degrees of where the camera looks (was 78: spawns still popped in on screen, 2026-11-07)
     constexpr float kSpawnDrop = 1.5f;                                 // spawn this far above ground and let them land
 
     constexpr DWORD kStationaryMs = 20000;   // not moved 2 m in this long (and > kStationaryM away): moved closer
@@ -123,6 +125,8 @@ namespace director {
     static bool g_cull_blocked = false;
     static float g_cull_dir[2] = {};
     static bool g_roam_ok = false;
+    static DWORD g_view_defer_since = 0;   // since when no spawn point out of the camera's sight was found (0 = one was)
+    static bool g_engage_calm = false;      // [run] engage_calm=1: spawn the "calm" units (heavies, Tombstone) engaged like everyone else (experiment)
     static float g_roam_x = 0, g_roam_z = 0;
 
     // No spawn-point blacklist any more (user, 2026-10-14): enemies that stand still are quietly moved closer instead
@@ -173,9 +177,9 @@ namespace director {
                 bool front;
                 if (float clen = sqrtf(h.cam_fx * h.cam_fx + h.cam_fz * h.cam_fz); h.cam_ok && clen > 0.01f) {
                     float cx = sp.x - h.cam_x, cz = sp.z - h.cam_z, cd = sqrtf(cx * cx + cz * cz);
-                    front = cd < 0.01f || (cx * h.cam_fx + cz * h.cam_fz) / (cd * clen) > 0.2f;
+                    front = cd < 0.01f || (cx * h.cam_fx + cz * h.cam_fz) / (cd * clen) > kSpawnFrontCos;
                 } else {
-                    front = flen < 0.01f || (dx * h.fwd_x + dz * h.fwd_z) / (d * flen) > 0.0f;
+                    front = flen < 0.01f || (dx * h.fwd_x + dz * h.fwd_z) / (d * flen) > kSpawnFrontCos;
                 }
                 if (front) { if (d >= kFarSpawnM) { far_view.push_back({ i, w }); t_view += w; } continue; }
                 any_cand.push_back({ i, w }); t_any += w;
@@ -188,9 +192,11 @@ namespace director {
                 point_out = (int)pick;
                 return spawn::Vec3{ a->points[pick].x, a->points[pick].y + kSpawnDrop, a->points[pick].z };
             };
-            if (!near_cand.empty()) return pick_from(near_cand, t_near);
-            if (!any_cand.empty()) return pick_from(any_cand, t_any);
-            if (!far_view.empty()) return pick_from(far_view, t_view);
+            if (!near_cand.empty()) { g_view_defer_since = 0; return pick_from(near_cand, t_near); }
+            if (!any_cand.empty()) { g_view_defer_since = 0; return pick_from(any_cand, t_any); }
+            // Nothing out of sight: wait (no spawn this tick). Only after kViewFallbackMs of that does a far point in view do, so a wave cannot stall.
+            if (!g_view_defer_since) g_view_defer_since = GetTickCount();
+            if (!far_view.empty() && GetTickCount() - g_view_defer_since > kViewFallbackMs) return pick_from(far_view, t_view);
             point_out = -2;
             return { h.x, h.y, h.z };
         }
@@ -232,12 +238,23 @@ namespace director {
         // Every wave, wave 1 included, spawns everywhere (user, 2026-10-13: the wave-1 corner is gone).
         // Face the hero: transform row 2 is forward, heading = atan2(dz, dx) (verified in game).
         float heading = atan2f(h.z - pos.z, h.x - pos.x) * 57.29578f;
-        uintptr_t e = spawn::SpawnActor(path, pos, heading, g_force_aggro && !calm);
+        uintptr_t e = spawn::SpawnActor(path, pos, heading, g_force_aggro && (!calm || g_engage_calm));
         std::string type = roster::ShortName(path);
         if (!e) {
             LOG("director: spawn failed: %s", type.c_str());
             stats::SpawnFailed(type);
             return false;
+        }
+        {   // where it appeared relative to the camera (or Spidey's facing without it): angle 0 = dead ahead, 180 = behind
+            static int shown = 0;
+            float fx = h.cam_fx, fz = h.cam_fz, ox = h.cam_x, oz = h.cam_z;
+            const bool cam = h.cam_ok && fx * fx + fz * fz > 1e-4f;
+            if (!cam) { fx = h.fwd_x; fz = h.fwd_z; ox = h.x; oz = h.z; }
+            const float dx = pos.x - ox, dz = pos.z - oz, fl = sqrtf(fx * fx + fz * fz), dl = sqrtf(dx * dx + dz * dz);
+            if (fl > 0.01f && dl > 0.01f) {
+                const float ang = acosf(std::clamp((dx * fx + dz * fz) / (fl * dl), -1.0f, 1.0f)) * 57.29578f;
+                if (shown++ < 200 || ang < 100.0f) LOG("director: spawn %s %.0f degrees off the %s, %.0f m from the hero", roster::ShortName(path).c_str(), ang, cam ? "camera" : "facing", sqrtf((pos.x - h.x) * (pos.x - h.x) + (pos.z - h.z) * (pos.z - h.z)));
+            }
         }
         Enemy en;
         en.entity = e;
@@ -1017,6 +1034,8 @@ namespace director {
         g_cfg = MakeConfig(opt, g_rng);
         boons::SetPlayerSettings(opt.player_settings, opt.mode == "horde");
         g_kills = 0;
+        g_engage_calm = GetPrivateProfileIntA("run", "engage_calm", 0, (DataDir() + "\\EndlessMode.ini").c_str()) != 0;
+        if (g_engage_calm) LOG("director: engage_calm=1: calm units (heavies, Tombstone) spawn engaged (experiment)");
         g_sinister_done = false;
         g_sinister_first_met = false;
         g_plan = {};
