@@ -455,7 +455,13 @@ namespace boons {
             Begin(GetTickCount());
             LOG("dbg: sandbox on (loadout cleared like a run; `dbg end` restores it)");
         };
-        if (cmd == "begin") { begin(); return; }
+        // Outside a run nothing calls Update (the director's loop does): the sandbox ticks the per-tick effects (Focus, Machinery) itself.
+        static std::atomic<bool> ticker = false;
+        auto start_ticker = [] {
+            if (ticker.exchange(true)) return;
+            std::thread([] { while (g_sandbox) { Update(); Sleep(50); } ticker = false; }).detach();
+        };
+        if (cmd == "begin") { begin(); start_ticker(); return; }
         if (cmd == "end") { g_sandbox = false; End(); SetPlayerSettings(false); LOG("dbg: sandbox off, loadout restored"); return; }
         if (cmd == "list") {
             for (const auto& d : kStats) LOG("dbg: boon   %s (max %d): %s", d.name, d.max_stacks, d.desc);
@@ -471,6 +477,7 @@ namespace boons {
         }
         if (cmd == "give" || cmd == "curse" || cmd == "power" || cmd == "mod") {
             begin();
+            start_ticker();
             std::lock_guard<std::mutex> lock(g_mutex);
             if (cmd == "give") {
                 for (int i = 0; i < (int)std::size(kStats); i++)
