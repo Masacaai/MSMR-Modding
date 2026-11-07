@@ -1,5 +1,6 @@
 #include "missions.h"
 
+#include "entity.h"
 #include "events.h"
 #include "gamethread.h"
 #include "log.h"
@@ -108,6 +109,45 @@ namespace missions {
     }
 
     bool AnyActiveCached() { return events::MissionActive() || g_active.load() > 0; }
+
+    // Walks the missions of a candidate objective system (POD only: __try).
+    static void Survey(uintptr_t c, int count, int* hist, const uint32_t* wanted) {
+        __try {
+            alignas(16) unsigned char out[64];
+            for (int i = 0; i < count; i++) {
+                memset(out, 0, sizeof(out));
+                reinterpret_cast<void* (*)(uintptr_t, void*, int)>(scan::FromRva(0x201efa0))(c, out, i);
+                const uint32_t st = reinterpret_cast<uint32_t (*)(uintptr_t, void*)>(scan::FromRva(kStateRva))(c, out);
+                uint32_t id = 0;
+                memcpy(&id, out + 0x10, 4);
+                if (st < 8) hist[st]++;
+                for (int k = 0; k < 4; k++) if (id == wanted[k]) LOG("missions:     FOUND id %08x at index %d, state %u", id, i, st);
+            }
+        } __except (EXCEPTION_EXECUTE_HANDLER) {
+            LOG("missions:     (the game's code faulted)");
+        }
+    }
+
+    void DumpSystemEntity() {
+        gamethread::Post([] {
+            const uint32_t handle = events::MissionSystemHandle();
+            uintptr_t ent = handle ? entity::FromHandle(handle) : 0;
+            LOG("missions: system entity handle %08x -> %llx", handle, (unsigned long long)ent);
+            if (!ent) return;
+            entity::ForEachComponent(ent, [&](const std::string& name, uintptr_t c) {
+                uintptr_t vt = 0;
+                int32_t count = 0;
+                memory::Read(c, vt);
+                memory::Read(c + 0x108, count);
+                LOG("missions:   component %-40s at %llx vtable exe+%llx  [+0x108]=%d", name.c_str(), (unsigned long long)c, (unsigned long long)(vt - scan::Game().base), count);
+                if (count <= 0 || count > 4096) return;
+                int hist[8] = {};
+                const uint32_t wanted[4] = { Hash("GP_A2_PRISON", false), Hash("GP_A2_PRISON", true), Hash("GP_A1_FISK", false), Hash("GP_A1_FISK", true) };
+                Survey(c, count, hist, wanted);
+                LOG("missions:     states of %d entries: 0:%d 1:%d 2:%d 3:%d 4:%d 5:%d 6:%d 7:%d", count, hist[0], hist[1], hist[2], hist[3], hist[4], hist[5], hist[6], hist[7]);
+            });
+        });
+    }
 
     void Log() {
         gamethread::Post([] {

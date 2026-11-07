@@ -19,5 +19,9 @@ namespace missions {
     void Poll();
     bool AnyActiveCached();
 
+    // Recon: lists the components of the entity the game announced the mission system on (MissionSystemLoaded's target) and, for any that looks like
+    // the objective system (a count at +0x108), the state of every mission in it. Posts to the game thread.
+    void DumpSystemEntity();
+
     void Log();                                               // logs the state of the known story missions (both spellings of each id)
 }

@@ -20,6 +20,7 @@ namespace events {
     // until MissionCompleteEvent; a loaded checkpoint starts from "none" and relies on the game announcing the mission again. Installs the SendEvent hook.
     bool StartTracking(bool record_types);
     bool MissionActive();
+    uint32_t MissionSystemHandle();   // the target of the last MissionSystemLoaded event (an entity; 0 if none yet)
     void LogNew();
 
     // Group::Alert(group, alerter, 1): what a bot that spots the hero calls on its group.

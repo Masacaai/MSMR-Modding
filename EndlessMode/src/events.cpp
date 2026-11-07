@@ -62,6 +62,7 @@ namespace events {
     static bool g_logged[kSlots];
     static SendEventFn g_orig = nullptr;
     static std::atomic<bool> g_record{ false }, g_mission{ false };
+    static std::atomic<uint32_t> g_mission_sys{ 0 };
     constexpr uint32_t kMissionStarted = 0x6E588F6D, kObjectiveStarted = 0xD358823E, kMissionComplete = 0xCC580B11, kCheckpointLoaded = 0x414AD37A,
                        kLevelLoaded = 0xFBE1B646, kSetPrimaryMission = 0xAE97E680;
 
@@ -82,6 +83,7 @@ namespace events {
                     break;
                 }
         }
+        if (type == 0x24b2e9a7) g_mission_sys = target;   // MissionSystemLoaded
         switch (type) {
         case kMissionStarted: case kObjectiveStarted: case kSetPrimaryMission:   // the last one is what a mid-mission checkpoint load announces (2026-10-25)
             if (!g_mission.exchange(true)) LOG("missions: a story mission is active (event %08x)", type);
@@ -117,6 +119,7 @@ namespace events {
 
     bool StartRecording() { return StartTracking(true); }
     bool MissionActive() { return g_mission.load(); }
+    uint32_t MissionSystemHandle() { return g_mission_sys.load(); }
 
     void LogNew() {
         for (size_t i = 0; i < kSlots; i++) {
