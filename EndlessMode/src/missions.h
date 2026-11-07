@@ -19,13 +19,5 @@ namespace missions {
     void Poll();
     bool AnyActiveCached();
 
-    // Recon: lists the components of the entity the game announced the mission system on (MissionSystemLoaded's target) and, for any that looks like
-    // the objective system (a count at +0x108), the state of every mission in it. Posts to the game thread.
-    void DumpSystemEntity();
-
-    // Recon: scans the process's memory for live instances of the mission-system classes (vtables exe+4f6df50 MissionSystem, exe+4f74658 ObjectiveSystemShared)
-    // and surveys each. The globals the game's code reads stay empty in free roam, so the objects may sit elsewhere. Worker thread.
-    void ScanForSystems();
-
     void Log();                                               // logs the state of the known story missions (both spellings of each id)
 }

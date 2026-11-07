@@ -224,3 +224,10 @@ Alongside some bugfixing:
   near Ryker's"). Findings so far: the objective-system singleton (exe+7c4bbb0, state 2 = active, count at +0x108) is always empty in this build, so the game's
   own mission-state query cannot be used from free roam; events do not carry the mission id (payload empty). Options: read the Missions menu's list (the pause menu
   builds it from the save), or find the save block (`ObjectiveSystemSaveBlock` / `MissionSaveDataShared`). `mission` dev command and `tools/sigtools/event_names.py` exist.
+
+### 2026-11-07 - mission-36 gate: shelved after four dead ends (record for whoever resumes)
+- The pause menu's Missions tab holds only the active main mission and side quests (no completed list), so completion cannot be read from the UI.
+- The objective-system global (exe+7c4bbb0) is empty in free roam and in missions; the entity named by MissionSystemLoaded carries only a `SystemEventHelper`;
+  a scan of the whole process for live `MissionSystem` / `ObjectiveSystemShared` objects found none (its only hits were its own stack).
+- Not tried: the save file on disk, the `ObjectiveSystemSaveBlock` / `MissionSaveDataShared` structures located through the save-load path, or hooking the code that
+  answers CheckMissionStateAction while a mission script runs. Resume with one of those, or accept the mission lock alone.
