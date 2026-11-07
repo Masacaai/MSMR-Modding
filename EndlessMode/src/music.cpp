@@ -48,14 +48,13 @@ namespace music {
         void Watch() {
             if (g_watching.exchange(true)) return;
             std::thread([] {
-                bool alt = false;
                 while (g_on) {
                     Sleep(1000);
                     if (!g_on) break;
                     if (!g_wave || GetTickCount() - g_changed < kRefreshMs) continue;
-                    int next = g_level < 0 ? 0 : g_level.load();
-                    if (next < 2) next++;
-                    else next = (alt = !alt) ? 1 : 2;
+                    // 0 -> 1 -> 2 -> 1 -> 2 ...: always a real change (a refresh to the same state did nothing: seen as "2 -> 2")
+                    const int cur = g_level < 0 ? 0 : g_level.load();
+                    const int next = cur == 0 ? 1 : cur == 1 ? 2 : 1;
                     audio::SetStateId(g_group, kLadder[next]);
                     audio::PostId(audio::Id("Play_MUS_combat_stinger"), kObject);
                     LOG("music: refresh, level %d -> %d", g_level.load(), next);
