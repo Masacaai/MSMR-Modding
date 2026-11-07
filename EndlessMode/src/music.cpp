@@ -20,6 +20,7 @@ namespace music {
         std::atomic<bool> g_on{ false };
         std::atomic<int> g_level{ -1 };
         uint32_t g_group = 0;
+        void Watch();
 
         void Begin() {
             if (g_on.exchange(true)) return;
