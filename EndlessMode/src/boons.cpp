@@ -26,6 +26,7 @@
 #include <memory>
 #include <mutex>
 #include <random>
+#include <thread>
 
 namespace boons {
     struct Item { uint64_t id; const char* internal; const char* display; };
@@ -76,6 +77,9 @@ namespace boons {
     static std::vector<uint64_t> g_powers, g_mods;   // owned, by the game's own category
     static int g_stacks[12] = {};
     static std::atomic<int> g_tingle_left = 0, g_streak = 0;
+    static std::atomic<bool> g_sandbox = false;   // debug: gifts given by command; a run's Begin/End keep them
+    static float FocusRate();
+    static std::atomic<bool> g_fill_pending = false;
     constexpr float kOnePunchMult = 20.0f;
     static std::vector<Curse> g_curses;
     static std::vector<std::string> g_taken;          // history for the loadout view
@@ -186,6 +190,7 @@ namespace boons {
     }
 
     void Begin(uint32_t seed) {
+        if (g_sandbox && g_active) { LOG("boons: debug sandbox keeps its boons, curses and loadout"); return; }
         // The game's own item category decides what's a power (1) or a mod (2); skills never qualify.
         auto pools = std::make_shared<std::pair<std::vector<uint64_t>, std::vector<uint64_t>>>();
         gamethread::Run([pools] {
@@ -256,6 +261,14 @@ namespace boons {
 
     void End() {
         if (!g_active) return;
+        if (g_sandbox) {   // debug: keep what was given; only the run's offers go
+            std::lock_guard<std::mutex> lock(g_mutex);
+            g_queue.clear();
+            g_offering = false;
+            if (g_frozen.exchange(false)) timescale::Unfreeze();
+            hud::Clear();
+            return;
+        }
         {
             std::lock_guard<std::mutex> lock(g_mutex);
             g_active = false;
@@ -374,7 +387,6 @@ namespace boons {
         if (HasCurse(Curse::DrySpell)) r *= 0.60f;
         return r;
     }
-    static std::atomic<bool> g_fill_pending = false;   // Full Tank: top the meter up at the next tick
     static void FocusTick() {
         const float rate = FocusRate();
         const bool full = g_fill_pending.exchange(false);
@@ -410,6 +422,117 @@ namespace boons {
             last = target;
         });
     }
+
+
+    // ---- debug mode (docs/HOW_TO.md): everything by command; `dbg ...` ----
+
+    static uintptr_t FocusManager() {   // game thread
+        auto get_actor = (uintptr_t(*)(void*))natives::Get(natives::GetActor);
+        uintptr_t system = scan::FromRva(natives::kHeroSystemRva);
+        uint32_t handle = 0;
+        if (!get_actor || !memory::Read(system + 0x1C, handle) || !handle) return 0;
+        uintptr_t actor = get_actor(&handle);
+        return actor ? entity::FindComponent(actor, "HeroSpiderAssaultManager") : 0;
+    }
+
+    static bool Has(const std::string& hay, const std::string& needle) {
+        std::string a = hay, b = needle;
+        for (auto& c : a) c = (char)tolower((unsigned char)c);
+        for (auto& c : b) c = (char)tolower((unsigned char)c);
+        return a.find(b) != std::string::npos;
+    }
+
+    static void DebugRun(std::string args) {
+        std::string cmd;
+        { size_t sp = args.find(' '); cmd = args.substr(0, sp); args = sp == std::string::npos ? "" : args.substr(sp + 1); }
+        while (!args.empty() && args.back() == ' ') args.pop_back();
+        auto begin = [] {
+            if (g_active) { g_sandbox = true; return; }
+            SetPlayerSettings(true);
+            g_sandbox = true;
+            Begin(GetTickCount());
+            LOG("dbg: sandbox on (loadout cleared like a run; `dbg end` restores it)");
+        };
+        if (cmd == "begin") { begin(); return; }
+        if (cmd == "end") { g_sandbox = false; End(); SetPlayerSettings(false); LOG("dbg: sandbox off, loadout restored"); return; }
+        if (cmd == "list") {
+            for (const auto& d : kStats) LOG("dbg: boon   %s (max %d): %s", d.name, d.max_stacks, d.desc);
+            for (const auto& d : kCurses) LOG("dbg: curse  %s: %s, but %s", d.name, d.up, d.down);
+            for (uint64_t id : g_powers) LOG("dbg: power  %s", Label(id).c_str());
+            for (uint64_t id : g_mods) LOG("dbg: mod    %s", Label(id).c_str());
+            return;
+        }
+        if (cmd == "status") {
+            for (const auto& line : Summary()) LOG("dbg:   %s", line.c_str());
+            LOG("dbg: active=%d sandbox=%d dmg out x%.2f in x%.2f, focus rate x%.2f", (int)g_active, (int)g_sandbox, OutgoingMult(), IncomingMult(), FocusRate());
+            return;
+        }
+        if (cmd == "give" || cmd == "curse" || cmd == "power" || cmd == "mod") {
+            begin();
+            std::lock_guard<std::mutex> lock(g_mutex);
+            if (cmd == "give") {
+                for (int i = 0; i < (int)std::size(kStats); i++)
+                    if (Has(kStats[i].name, args)) {
+                        g_stacks[i] = std::min(kStats[i].max_stacks, g_stacks[i] + 1);
+                        if (kStats[i].stat == Stat::FullTank) g_fill_pending = true;
+                        LOG("dbg: %s %d/%d", kStats[i].name, g_stacks[i], kStats[i].max_stacks);
+                        return;
+                    }
+            } else if (cmd == "curse") {
+                for (const auto& d : kCurses)
+                    if (Has(d.name, args)) {
+                        if (!HasCurse(d.curse)) g_curses.push_back(d.curse);
+                        LOG("dbg: curse %s", d.name);
+                        return;
+                    }
+            } else {
+                for (uint64_t id : cmd == "power" ? g_powers : g_mods)
+                    if (Has(Label(id), args)) {
+                        if (cmd == "power") runloadout::SetPower(id); else runloadout::AddMod(id);
+                        LOG("dbg: %s %s", cmd.c_str(), Label(id).c_str());
+                        return;
+                    }
+            }
+            LOG("dbg: nothing matches '%s' (dbg list)", args.c_str());
+            return;
+        }
+        if (cmd == "clear") {
+            std::lock_guard<std::mutex> lock(g_mutex);
+            std::fill(std::begin(g_stacks), std::end(g_stacks), 0);
+            g_curses.clear();
+            g_taken.clear();
+            LOG("dbg: boons and curses cleared (power and mods stay; `dbg end` restores yours)");
+            return;
+        }
+        if (cmd == "heal") { HealHero((float)atof(args.c_str())); LOG("dbg: heal %s of max (negative hurts, never below 1 HP)", args.c_str()); return; }
+        if (cmd == "cleared") {   // dbg cleared [wave] [boss]: the reward screens a cleared wave brings, driven here (no run needed)
+            begin();
+            int wave = atoi(args.c_str());
+            OnWaveCleared(wave > 0 ? wave : 1, Has(args, "boss"));
+            while (Offering()) { Tick(); Sleep(100); }
+            return;
+        }
+        if (cmd == "focus") {   // dbg focus [full|empty|<0-300>]: show or set the Focus meter
+            float v = -1;
+            if (args == "full") v = 300; else if (args == "empty") v = 0; else if (!args.empty()) v = (float)atof(args.c_str());
+            gamethread::Run([v] {
+                uintptr_t m = FocusManager();
+                uint32_t n = 0;
+                if (!m || !memory::Read(m + 0x168, n)) { LOG("dbg: no Focus component"); return; }
+                for (uint32_t i = 0; i < n && i < 3; i++) {
+                    float f = 0, cap = 0;
+                    memory::Read(m + 0x150 + 8 * i, f);
+                    memory::Read(m + 0x154 + 8 * i, cap);
+                    if (v >= 0) { f = std::max(0.0f, std::min(cap, v - 100.0f * i)); memory::Write<float>(m + 0x150 + 8 * i, f); }
+                    LOG("dbg: focus segment %u: %.1f / %.1f", i, f, cap);
+                }
+            }, 5000);
+            return;
+        }
+        LOG("dbg: give <boon> | curse <name> | power <name> | mod <name> | clear | list | status | cleared [wave] [boss] | heal <frac> | focus [full|empty|N] | begin | end");
+    }
+
+    void Debug(const std::string& args) { std::thread([args] { DebugRun(args); }).detach(); }
 
     void Update() {
         if (!g_active) return;

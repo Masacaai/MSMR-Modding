@@ -24,5 +24,7 @@ namespace portal {
     void Enter();
     void Leave();
 
+    void SetDebug(bool on);   // debug mode: crossing the start line starts nothing; everything is driven by commands (`dbg`, `run`)
+    bool Debug();
     void Enable(bool on);   // pads + hotkeys on/off (persisted)
 }

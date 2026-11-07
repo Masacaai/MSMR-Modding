@@ -30,6 +30,7 @@ namespace boons {
     float OutgoingMult();         // damage the hero deals
     float IncomingMult();         // damage the hero takes
     float IncomingHitMult(float hp, float max_hp);   // per hit (stats hook): adds Spider-Sense Tingle, Black Suit reset, Under the Machinery
+    void Debug(const std::string& args);   // `dbg ...` dev command: give boons/curses/powers/mods, offers, Focus, heal; see boons.cpp
     void Update();                // director loop: slow heal effects
 
     std::vector<std::string> Summary();   // current boons and curses, for a loadout view

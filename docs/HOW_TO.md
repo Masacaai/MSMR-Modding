@@ -170,3 +170,20 @@ The spawn log has 8 numbered steps (`spawn: [1] load ...` to `[8] done`):
 | spawns but is a white cube / bodiless | missing dependency actors: regenerate `preload_deps.inc`; check the "not fully loaded" line |
 | spawns, never fights | not engaged (`engaged:` line), or the unit is in `CALM_CLASSES` |
 | spawns and crashes | take the dump through REVERSE_ENGINEERING section 4 |
+
+## Debug mode (testing rewards, curses, Focus, gadgets without runs)
+Turn it on with the command `debug on` (or `[debug] arena=1` in `EndlessMode.ini`): crossing the start line in the yard then starts nothing. Start a run yourself with `run ...` (after `arena rykers`) when you want one. Commands go through the usual command file; `dbg` is the toolbox:
+
+| Command | Does |
+|---|---|
+| `dbg give <name>` | one stack of a boon (name part is enough, e.g. `dbg give tingle`) |
+| `dbg curse <name>` | takes a curse |
+| `dbg power <name>` / `dbg mod <name>` | equips a suit power / mod |
+| `dbg clear` | removes boons and curses |
+| `dbg list` / `dbg status` | all names / what you have and the damage and Focus multipliers |
+| `dbg cleared [wave] [boss]` | the reward screens a cleared wave brings (pick with the usual buttons) |
+| `dbg heal <frac>` | heals (negative hurts, never below 1 HP) |
+| `dbg focus [full\|empty\|N]` | shows or sets the Focus meter |
+| `dbg begin` / `dbg end` | the first give starts the sandbox (loadout cleared like a run); `end` restores your loadout |
+
+Gifts survive a `run` started in debug mode. Gadgets: the existing `inv`, `equip`, `unequip` commands.

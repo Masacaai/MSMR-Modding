@@ -1045,6 +1045,17 @@ static void RunCommand(const std::string& line) {
             else out += text[i];
         }
         hud::Show(out, 6.0f, slot);
+    } else if (cmd == "dbg") {
+        // dbg <give|curse|power|mod|clear|list|status|cleared|heal|focus|begin|end> ...: debug mode toolbox (boons.cpp)
+        std::string rest;
+        std::getline(in, rest);
+        if (!rest.empty() && rest[0] == ' ') rest.erase(0, 1);
+        boons::Debug(rest);
+    } else if (cmd == "debug") {
+        // debug on|off: entering the yard starts no run (also [debug] arena=1 in EndlessMode.ini)
+        std::string v;
+        in >> v;
+        portal::SetDebug(v != "off");
     } else if (cmd == "boons") {
         // boons: current run loadout, boons and curses
         for (const auto& line : boons::Summary()) LOG("  %s", line.c_str());
@@ -1408,6 +1419,7 @@ static void Main() {
 
     const bool record_events = GetPrivateProfileIntA("debug", "events", 0, (DataDir() + "\\EndlessMode.ini").c_str()) != 0;
     if (GetPrivateProfileIntA("debug", "uilog", 0, (DataDir() + "\\EndlessMode.ini").c_str()) != 0) uilog::Enable(true);   // recon: the UI calls from the first frame
+    if (GetPrivateProfileIntA("debug", "arena", 0, (DataDir() + "\\EndlessMode.ini").c_str()) != 0) portal::SetDebug(true);
     events::StartTracking(record_events);   // story-mission tracking (the arena stays locked during a mission); also the event-type recording if asked
     for (;;) {
         PollCommands();

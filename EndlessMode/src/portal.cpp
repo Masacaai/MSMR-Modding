@@ -215,8 +215,13 @@ namespace portal {
                                                              : " - walk into the yard to begin"), 5.0f);
     }
 
+    static std::atomic<bool> g_debug = false;
+    void SetDebug(bool on) { g_debug = on; LOG("portal: debug mode %s", on ? "on (no automatic runs)" : "off"); }
+    bool Debug() { return g_debug; }
+
     static void StartRun(int v) {
         if (MissionBlocks()) return;
+        if (g_debug) { hud::Show("Debug mode: no run started (use commands)", 4.0f); LOG("portal: debug mode, start line crossed, no run"); return; }
         const arena::Bounds* a = arena::Find(kVenues[v].arena);
         if (!a || director::Running()) return;
         director::Options run;
