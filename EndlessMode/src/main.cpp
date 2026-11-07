@@ -7,6 +7,7 @@
 #include "damage.h"
 #include "director.h"
 #include "entity.h"
+#include "gadgets.h"
 #include "events.h"
 #include "guards.h"
 #include "hud.h"
@@ -1045,6 +1046,15 @@ static void RunCommand(const std::string& line) {
             else out += text[i];
         }
         hud::Show(out, 6.0f, slot);
+    } else if (cmd == "gadget") {
+        // gadget watch on|off | lock on|off | allow <hex id> | clear | equip <hex id> <slot>: gadget equip hook (gadgets.h)
+        std::string sub, v; int slot = 0;
+        in >> sub >> v >> slot;
+        if (sub == "watch") gadgets::Watch(v != "off");
+        else if (sub == "lock") gadgets::Lock(v != "off");
+        else if (sub == "allow") gadgets::Allow((uint32_t)strtoul(v.c_str(), nullptr, 16));
+        else if (sub == "clear") gadgets::ClearAllowed();
+        else if (sub == "equip") { uint32_t id = (uint32_t)strtoul(v.c_str(), nullptr, 16); gamethread::Post([id, slot] { gadgets::Equip(id, slot); }); }
     } else if (cmd == "dbg") {
         // dbg <give|curse|power|mod|clear|list|status|cleared|heal|focus|begin|end> ...: debug mode toolbox (boons.cpp)
         std::string rest;
