@@ -236,3 +236,5 @@ Alongside some bugfixing:
 - Gadgets folded into Campaign rewards (removed at run start; unlock gadgets + upgrades during the run). Needs gadget equip/lock RE.
 - New curse "Street Brawler": health drain while airborne, melee damage +150-200%. Drain rate tuned in testing.
 - Pool filtering: cut stealth/scanner/XP items, gate gadget-synergy items on owning a gadget (list in REWARD_DESIGN.md section 3).
+
+Dropped Ryker's spawn point (1252.3, 2.0, -782.6) at the user's request (2026-11-07); 138 points left. Built, installs when the game is closed.
