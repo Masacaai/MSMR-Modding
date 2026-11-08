@@ -79,6 +79,7 @@ namespace director {
         float last_health = -1;
         bool perched = false;         // spawned on a rooftop perch: holds position, never "stationary"-moved
         DWORD last_change = 0;        // last health change (bosses: activity)
+        DWORD idle_move_at = 0;       // sinister finale: when an idle boss was last brought near the hero (repeats every 60 s)
         int point = -1;               // arena spawn point index for stuck checks, -1 = not checked
         spawn::Vec3 spawned_at{};
         DWORD spawn_time = 0;
@@ -266,6 +267,32 @@ namespace director {
         return true;
     }
 
+    // Sinister Six finale (user, 2026-11-07): bosses spawned off-camera behind the hero 25-67 m away stood still and were removed as
+    // "never fought", while a boss spawned near and in view (`boss` command) fights at once, even at 60 m. So finale bosses appear in
+    // front of the camera, 20-35 m away. Returns false when no designer point fits (the normal pick is used then).
+    static bool PickFrontPoint(const HeroPos& h, spawn::Vec3& out, int& point_out) {
+        const arena::Bounds* a = arena::Current();
+        if (!a || !a->points || !a->point_count) return false;
+        float fx = h.cam_ok ? h.cam_fx : h.fwd_x, fz = h.cam_ok ? h.cam_fz : h.fwd_z;
+        float fl = sqrtf(fx * fx + fz * fz);
+        if (fl < 0.01f) return false;
+        std::vector<size_t> ok;
+        for (size_t i = 0; i < a->point_count; i++) {
+            if (Retired(*a, i)) continue;
+            const auto& sp = a->points[i];
+            float dx = sp.x - h.x, dz = sp.z - h.z, d = sqrtf(dx * dx + dz * dz);
+            if (d < 20.0f || d > 35.0f) continue;
+            if ((dx * fx + dz * fz) / (d * fl) < 0.6f) continue;   // within about 53 degrees of where the camera looks
+            if (a->wall && arena::WallSide(*a, sp.x, sp.z) < 2.0f) continue;
+            ok.push_back(i);
+        }
+        if (ok.empty()) return false;
+        size_t i = ok[std::uniform_int_distribution<size_t>(0, ok.size() - 1)(g_rng)];
+        out = { a->points[i].x, a->points[i].y, a->points[i].z };
+        point_out = (int)i;
+        return true;
+    }
+
     static bool g_spawn_deferred = false;   // the last SpawnOne found no hidden point (director thread)
 
     static bool SpawnOne(const HeroPos& h, const char* path, roster::Role role, const roster::Boss* boss, bool calm = false) {
@@ -273,7 +300,8 @@ namespace director {
         spawn::Vec3 pos{};
         bool perched = false;
         if ((role == roster::Role::Sniper || role == roster::Role::Rocket) && !boss) perched = PickPerch(h, pos);
-        if (!perched) pos = PickSpawnPoint(h, point);
+        if (!perched && boss && g_plan.sinister && PickFrontPoint(h, pos, point)) {}
+        else if (!perched) pos = PickSpawnPoint(h, point);
         g_spawn_deferred = point == -2;
         if (g_spawn_deferred) return false;   // nowhere out of sight right now: try again next tick (not a failure)
         // Every wave, wave 1 included, spawns everywhere (user, 2026-10-13: the wave-1 corner is gone).
@@ -489,15 +517,28 @@ namespace director {
                 if (readable && hp > 0.0f) en.seen_alive = true;
                 // The secret finale must never deadlock: a boss that has not lost health for 90 s (and has been out for two minutes)
                 // is finished, once (Kingpin is the one nobody has beaten outside the story yet).
+                // First (user, 2026-11-07: Kingpin and Tombstone were finished while merely far away) an idle boss is moved to a hidden
+                // spot 12-30 m from the hero after 60 s; the finish only comes after 180 s.
+                if (g_plan.sinister && en.boss && have_pos && readable && hp > 0.0f && en.last_change &&
+                    now - en.spawn_time > 60000 && now - en.last_change > 60000 && (!en.idle_move_at || now - en.idle_move_at > 60000) &&
+                    Hidden(hero, p[0], p[2])) {
+                    int pt = -1;
+                    spawn::Vec3 np = PickSpawnPoint(hero, pt, 30.0f);
+                    if (Hidden(hero, np.x, np.z)) {
+                        arena::MoveEntity(en.entity, np.x, np.y, np.z);
+                        en.idle_move_at = now;
+                        LOG("director: idle %s moved near the hero (%.0f, %.0f, %.0f)", en.boss->name, np.x, np.y, np.z);
+                    }
+                }
                 if (g_plan.sinister && en.boss && readable && hp > 0.0f && en.last_change && now - en.spawn_time > 120000 &&
-                    now - en.last_change > 90000 && now - en.floor_since > 0 && en.floor_since < now) {
+                    now - en.last_change > 480000 && now - en.floor_since > 0 && en.floor_since < now) {
                     uintptr_t e = en.entity;
                     gamethread::Post([e] {
                         using SetFn = void (*)(uintptr_t, float);
                         auto set = (SetFn)natives::Get(natives::HealthSet);
                         if (uintptr_t hc = entity::HealthComponent(e); hc && set) set(hc, 0.0f);
                     });
-                    LOG("director: %s finished after 90 s without losing health (sinister finale)", en.boss->name);
+                    LOG("director: %s finished after 8 minutes without losing health (sinister finale)", en.boss->name);
                     en.last_change = now + 3600000;   // once
                 }
                 // Boss finisher: outside their missions bosses stop taking damage at a known gate (1 HP for most,
@@ -599,7 +640,7 @@ namespace director {
                 }
                 if (en.boss) {
                     bool no_health = !en.seen_health && now - en.spawn_time > kNoHealthMs;
-                    bool idle = now - en.last_change > kBossIdleMs && en.max_moved < 3.0f;
+                    bool idle = now - en.last_change > kBossIdleMs && en.max_moved < 3.0f && !g_plan.sinister;   // the finale has its own idle guard
                     if (no_health || idle) {
                         LOG("director: boss %s %s; removing it and skipping it for this run", en.boss->name,
                             no_health ? "has no readable health" : "never fought");
