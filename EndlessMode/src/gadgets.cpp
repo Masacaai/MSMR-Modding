@@ -27,7 +27,10 @@ namespace gadgets {
         bool allowed;
         {
             std::lock_guard<std::mutex> lock(g_mutex);
-            allowed = !g_lock || t_ours || g_allowed.count((uint32_t)id) > 0;
+            // The lock only guards the gadget ids (9C82-9C89). Everything else the game equips (id 0 clears, C350/C351 companions of a
+            // gadget, ...) must go through: refusing those left slot 0 without a record and crashed the game (2026-11-07, exe+374237).
+            const bool gadget = id >= 0x9C82 && id <= 0x9C89;
+            allowed = !g_lock || t_ours || !gadget || g_allowed.count((uint32_t)id) > 0;
         }
         if (!allowed) {
             LOG("gadgets: refused equip of %04X (slot %d): locked", id, slot);
