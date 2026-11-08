@@ -136,29 +136,13 @@ namespace gadgets {
         }, 5000);
     }
 
+    // No auto-equip (user, 2026-11-07): the player picks the new gadget from the wheel; it just becomes selectable.
     void Grant(uint32_t id) {
         gamethread::Run([id] {
             if (!g_run) FindManager();
             Hide(id, false);
             Allow(id);
-            bool ok = Equip(id, 0);
-            LOG("gadgets: granted %04X%s", id, ok ? "" : " (equip refused for now; retrying)");
-            if (ok) return;
-            // The game takes a few seconds to see an unhidden gadget (ammo shows red 0/0 until then, user 2026-11-07): retry the equip.
-            std::thread([id] {
-                for (int i = 0; i < 8 && g_run; i++) {
-                    Sleep(800);
-                    bool done = false;
-                    gamethread::Run([id, &done] {
-                        FindManager();
-                        uint32_t cur = 0;
-                        if (!g_mgr || !memory::Read(g_mgr.load() + 0x6c, cur)) { done = true; return; }
-                        if (cur != kWebShooter && cur != 0) { done = true; return; }   // the game (or the player) already switched: leave it
-                        done = Equip(id, 0);
-                    }, 3000);
-                    if (done) return;
-                }
-            }).detach();
+            LOG("gadgets: granted %04X (not equipped; pick it in the wheel)", id);
         }, 5000);
     }
 
