@@ -136,15 +136,31 @@ namespace gadgets {
         }, 5000);
     }
 
-    // No auto-equip (user, 2026-11-07): the player picks the new gadget from the wheel; it just becomes selectable.
+    // Auto-equip again (user, 2026-11-07): a granted gadget shows red 0/0 until an equip goes through, and only an equip the player makes
+    // cleared it in tests, so the grant equips it itself and retries while the Web Shooter is still in hand (the first equip often
+    // returns 0 for a few seconds).
     void Grant(uint32_t id) {
         gamethread::Run([id] {
             if (!g_run) FindManager();
             Hide(id, false);
             Allow(id);
-            // A granted gadget shows red 0/0 in the wheel until the player equips it; equipping it from our code (even with a put-back)
-            // does not refresh that (tested 2026-11-07), so boons shows a hint instead.
-            LOG("gadgets: granted %04X (not equipped; pick it in the wheel)", id);
+            bool ok = Equip(id, 0);
+            LOG("gadgets: granted %04X%s", id, ok ? "" : " (equip refused for now; retrying)");
+            if (ok) return;
+            std::thread([id] {
+                for (int i = 0; i < 10 && g_run; i++) {
+                    Sleep(800);
+                    bool done = false;
+                    gamethread::Run([id, &done] {
+                        FindManager();
+                        uint32_t cur = 0;
+                        if (!g_mgr || !memory::Read(g_mgr.load() + 0x6c, cur)) { done = true; return; }
+                        if (cur != kWebShooter && cur != 0) { done = true; return; }   // already switched (by the game or the player): leave it
+                        done = Equip(id, 0);
+                    }, 3000);
+                    if (done) return;
+                }
+            }).detach();
         }, 5000);
     }
 
