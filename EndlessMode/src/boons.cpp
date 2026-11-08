@@ -623,7 +623,8 @@ namespace boons {
         if (op.kind != Kind::Decline) g_taken.push_back(what);
         stats::Event("boon", what);
         LOG("boons: took %s", what.c_str());
-        hud::Show(what, 3.0f);
+        hud::Show(op.kind == Kind::Gadget ? what + "
+Select it in the gadget wheel (it shows red until you do)" : what, op.kind == Kind::Gadget ? 6.0f : 3.0f);
     }
 
     void Tick() {

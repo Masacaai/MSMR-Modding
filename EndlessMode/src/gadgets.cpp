@@ -142,13 +142,9 @@ namespace gadgets {
             if (!g_run) FindManager();
             Hide(id, false);
             Allow(id);
-            // The wheel keeps showing a granted gadget as red 0/0 until some equip goes through (user, 2026-11-07). So equip it and put back
-            // what was in hand in the same game-thread call: nothing changes visibly, the wheel refreshes.
-            uint32_t cur = kWebShooter;
-            if (g_mgr) memory::Read(g_mgr.load() + 0x6c, cur);
-            bool a = Equip(id, 0);
-            bool b = Equip(cur ? cur : kWebShooter, 0);
-            LOG("gadgets: granted %04X (refresh equip %d, put back %04X %d)", id, (int)a, cur, (int)b);
+            // A granted gadget shows red 0/0 in the wheel until the player equips it; equipping it from our code (even with a put-back)
+            // does not refresh that (tested 2026-11-07), so boons shows a hint instead.
+            LOG("gadgets: granted %04X (not equipped; pick it in the wheel)", id);
         }, 5000);
     }
 
