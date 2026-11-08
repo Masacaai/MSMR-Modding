@@ -136,36 +136,16 @@ namespace gadgets {
         }, 5000);
     }
 
-    // Auto-equip with a guard (user, 2026-11-07: it worked in one run; in another it crashed inside EquipGadget, with the game's own
-    // equips of id 0 around). The mod only equips while slot 0 holds a real gadget (9C82-9C89); if the slot holds anything else (id 0
-    // while the game is mid-change) it skips the equip and the gadget just stays red until the player picks it.
-    static bool SafeToEquip() {
-        uint32_t cur = 0;
-        return g_mgr && memory::Read(g_mgr.load() + 0x6c, cur) && (cur == 0 || (cur >= 0x9C82 && cur <= 0x9C89));   // 0 = the game's own "no gadget" (Web Shooter) state in real runs
-    }
+    // NO equip calls from the mod during a run (final, 2026-11-07): four crashes ended in the game's gadget-state code (exe+1ce9e67, a call
+    // to address 0) right at one of our EquipGadget calls or table rewrites, and a forced equip left slot 0 in a state the wheel could not
+    // undo (no way back to the Web Shooter). The same call is fine in free roam and the debug sandbox, so it is the live run's state.
+    // A granted gadget is unhidden and allowed; it shows red until the player equips it from the wheel (a hint says so).
     void Grant(uint32_t id) {
         gamethread::Run([id] {
             if (!g_run) FindManager();
             Hide(id, false);
             Allow(id);
-            if (!SafeToEquip()) { LOG("gadgets: granted %04X (slot 0 is not a gadget right now: not equipping)", id); return; }
-            bool ok = Equip(id, 0);
-            LOG("gadgets: granted %04X%s", id, ok ? "" : " (equip refused for now; retrying)");
-            if (ok) return;
-            std::thread([id] {
-                for (int i = 0; i < 10 && g_run; i++) {
-                    Sleep(800);
-                    bool done = false;
-                    gamethread::Run([id, &done] {
-                        FindManager();
-                        uint32_t cur = 0;
-                        if (!g_mgr || !memory::Read(g_mgr.load() + 0x6c, cur)) { done = true; return; }
-                        if (cur != kWebShooter && cur != 0) { done = true; return; }   // switched already (the game or the player), or not a safe state
-                        done = Equip(id, 0);
-                    }, 3000);
-                    if (done) return;
-                }
-            }).detach();
+            LOG("gadgets: granted %04X (not equipped; pick it in the wheel)", id);
         }, 5000);
     }
 

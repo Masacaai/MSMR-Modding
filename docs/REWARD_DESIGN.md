@@ -173,3 +173,5 @@ Test 4 (2026-11-07): crash inside our EquipGadget(9C83) call at grant (execute a
 Test 4 follow-up: auto-equip back, guarded: it only equips while slot 0 holds a gadget id 9C82-9C89 (the crash happened with the game's own id-0 equips around); otherwise it skips and the gadget stays red until picked.
 
 Test 5: red-until-equip only happens in real runs, where the game keeps slot 0 at id 0 and the guard skipped the equip; in debug sandbox / free roam the equip works and the gadget is blue with right ammo. Guard loosened to also allow slot 0 == 0 (the state of the one Impact Web crash). Collect more runs.
+
+Test 6 (2026-11-07): after a guarded auto-equip of Trip Mine in a real run the player could not switch back to the Web Shooter (wheel equips id 0 -> returns 1, slot 0 stays 9C85); then our own forced equip of 9C89 crashed the game (execute at 0, via exe+1ce9e67). Conclusion: no EquipGadget calls from the mod during a run, ever. A granted gadget is red until the player equips it; a hint says so. Open: why the red state persists (only in real runs; free roam and the debug sandbox refresh it instantly).
