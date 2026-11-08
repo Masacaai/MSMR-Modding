@@ -142,7 +142,13 @@ namespace gadgets {
             if (!g_run) FindManager();
             Hide(id, false);
             Allow(id);
-            LOG("gadgets: granted %04X (not equipped; pick it in the wheel)", id);
+            // The wheel keeps showing a granted gadget as red 0/0 until some equip goes through (user, 2026-11-07). So equip it and put back
+            // what was in hand in the same game-thread call: nothing changes visibly, the wheel refreshes.
+            uint32_t cur = kWebShooter;
+            if (g_mgr) memory::Read(g_mgr.load() + 0x6c, cur);
+            bool a = Equip(id, 0);
+            bool b = Equip(cur ? cur : kWebShooter, 0);
+            LOG("gadgets: granted %04X (refresh equip %d, put back %04X %d)", id, (int)a, cur, (int)b);
         }, 5000);
     }
 
