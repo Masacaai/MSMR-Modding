@@ -130,37 +130,21 @@ namespace gadgets {
             ClearAllowed();
             Allow(kWebShooter);
             Lock(true);
-            Equip(kWebShooter, 0);
+            g_watch = true;   // log every equip during a run (diagnosing: the player could not switch back to the Web Shooter, 2026-11-07)
             g_run = true;
             LOG("gadgets: run start: all gadgets hidden, Web Shooter equipped (was %04X)", g_saved);
         }, 5000);
     }
 
-    // Auto-equip again (user, 2026-11-07): a granted gadget shows red 0/0 until an equip goes through, and only an equip the player makes
-    // cleared it in tests, so the grant equips it itself and retries while the Web Shooter is still in hand (the first equip often
-    // returns 0 for a few seconds).
+    // No equip calls from the mod at all (2026-11-07): three crashes were inside or right after our EquipGadget calls (the game itself
+    // equips id 0 into slot 0 all the time, and forcing an equip on top of that crashed it). A granted gadget is just unhidden and allowed;
+    // it shows red until the player equips it from the wheel, so boons shows a hint.
     void Grant(uint32_t id) {
         gamethread::Run([id] {
             if (!g_run) FindManager();
             Hide(id, false);
             Allow(id);
-            bool ok = Equip(id, 0);
-            LOG("gadgets: granted %04X%s", id, ok ? "" : " (equip refused for now; retrying)");
-            if (ok) return;
-            std::thread([id] {
-                for (int i = 0; i < 10 && g_run; i++) {
-                    Sleep(800);
-                    bool done = false;
-                    gamethread::Run([id, &done] {
-                        FindManager();
-                        uint32_t cur = 0;
-                        if (!g_mgr || !memory::Read(g_mgr.load() + 0x6c, cur)) { done = true; return; }
-                        if (cur != kWebShooter && cur != 0) { done = true; return; }   // already switched (by the game or the player): leave it
-                        done = Equip(id, 0);
-                    }, 3000);
-                    if (done) return;
-                }
-            }).detach();
+            LOG("gadgets: granted %04X (not equipped; pick it in the wheel)", id);
         }, 5000);
     }
 
