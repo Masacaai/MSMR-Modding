@@ -12,6 +12,7 @@
 #include <atomic>
 #include <mutex>
 #include <set>
+#include <thread>
 
 namespace gadgets {
     using EquipFn = bool (*)(void* self, int id, int slot, bool force);
@@ -140,8 +141,24 @@ namespace gadgets {
             if (!g_run) FindManager();
             Hide(id, false);
             Allow(id);
-            Equip(id, 0);
-            LOG("gadgets: granted %04X", id);
+            bool ok = Equip(id, 0);
+            LOG("gadgets: granted %04X%s", id, ok ? "" : " (equip refused for now; retrying)");
+            if (ok) return;
+            // The game takes a few seconds to see an unhidden gadget (ammo shows red 0/0 until then, user 2026-11-07): retry the equip.
+            std::thread([id] {
+                for (int i = 0; i < 8 && g_run; i++) {
+                    Sleep(800);
+                    bool done = false;
+                    gamethread::Run([id, &done] {
+                        FindManager();
+                        uint32_t cur = 0;
+                        if (!g_mgr || !memory::Read(g_mgr.load() + 0x6c, cur)) { done = true; return; }
+                        if (cur != kWebShooter && cur != 0) { done = true; return; }   // the game (or the player) already switched: leave it
+                        done = Equip(id, 0);
+                    }, 3000);
+                    if (done) return;
+                }
+            }).detach();
         }, 5000);
     }
 
@@ -151,11 +168,16 @@ namespace gadgets {
         if (!g_run) return;
         g_run = false;
         gamethread::Run([] {
-            for (uint32_t id = 0x9C82; id <= 0x9C88; id++) Hide(id, false);
+            // The hero may be dead or respawning: the manager pointer from the run start is stale then (calling EquipGadget on it
+            // crashed the game at respawn, 2026-11-07). Re-find it; with no live manager only the lock is cleared, and no equip
+            // call is made at all (the Web Shooter or the last gadget simply stays equipped).
+            g_mgr = 0;
+            FindManager();
+            if (g_mgr) for (uint32_t id = 0x9C82; id <= 0x9C88; id++) Hide(id, false);
+            { std::lock_guard<std::mutex> lock(g_mutex); g_hidden.clear(); }
             Lock(false);
             ClearAllowed();
-            if (g_saved) Equip(g_saved, 0);
-            LOG("gadgets: run end: gadgets restored (equipped %04X)", g_saved);
+            LOG("gadgets: run end: gadgets %s", g_mgr ? "restored" : "left hidden (no live hero; reload fixes it)");
         }, 5000);
     }
 

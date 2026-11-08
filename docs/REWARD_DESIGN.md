@@ -161,3 +161,8 @@ Decision: gadget upgrades dropped (mostly ammo/radius bumps); gadgets alone are 
 - Ammo storage NOT found: no gadget ids in GadgetItemAmmoManager (first 0x800 bytes), no change in HeroWeaponManagerLocal (first 0x800) between two shots of Trip Mine, and `inv watch` logged nothing when firing. Next ideas: the GadgetItem objects behind pointers in the ammo manager, a write watchpoint after finding the address by value search, or the game's own refill (GadgetResupplyPerk).
 
 Crash 2026-11-07 18:02:44 (accepting Suspension Matrix, wave 2): null deref at exe+374237 after 2163360(mgr, slot) returned null (no table record for the slot-0 id). Just before, the game's own equips of id 0 (all slots) and C350 were refused by our lock. Fix: the lock only guards gadget ids 9C82-9C89; everything else passes. Re-test.
+
+### Test 2 (2026-11-07): grant lag + respawn crash
+- Taking Suspension Matrix at wave 3: nothing for a few seconds (still on Web Shooter, gadget red 0/0), then the game auto-equipped it with full ammo. `Equip` returned 0 right after the unhide. Fix: Grant retries the equip every 0.8 s (max 8) while the Web Shooter is still the equipped one.
+- Crash at respawn after death (0.7 s after `EndRun`): execute at address 0 / stale weapon manager from the dead hero. Fix: `EndRun` re-finds the live manager, unhides only if there is one, and makes no EquipGadget call at all (what was equipped before the run is no longer restored).
+- User wish: make "unlocked" vs "waiting on a refill" visible on the wheel. Plan: the user records the wheel in early game (before the gadgets are unlocked) so we can see how the game hides locked gadgets, then copy that state instead of the red 0/0 trick.
