@@ -17,12 +17,12 @@ Two modes, each from its own dock circle in Manhattan:
 | | **Campaign** | **Horde** |
 |---|---|---|
 | Structure | Chapters of 4 waves, one faction per chapter, a boss on every 4th wave, endless cycles that get tougher | One continuous riot; factions join as it goes |
-| Between waves | Pick 1 of 3 **boons** (suit powers, suit mods, stat boons); bittersweet **curses** after bosses | none |
+| Between waves | Pick 1 of 3 **boons** (suit powers, suit mods, gadgets, stat boons); bittersweet **curses** after bosses | none |
 | Bosses | Mister Negative, Tombstone, Taskmaster, Hammerhead, Silver Sable | none |
 | Scoring | Results panel: enemy score, wave bonus, hits taken | Style meter with DMC-style ranks, combo bonus, survival bonus, tiers |
 | Ends | You go down, or you step out of the yard and abandon | same |
 
-You start every Campaign run with **no suit power and no suit mods** (your real loadout is saved and restored at the end)
+You start every Campaign run with **no suit power, no suit mods and no gadgets** (your real loadout is saved and restored at the end)
 and earn them wave by wave. The mod uses the game's own HUD panels: the hideout-style circle panel at the docks, the
 Taskmaster-challenge score panel and results panel, crime pop-ups for bosses, and so on.
 
@@ -31,7 +31,7 @@ never extra enemy health), boons never touch Spider-Man's skills, every curse ha
 
 ## Install (players)
 
-**Download:** [Releases](https://github.com/Masacaai/Spider-Man-Endless-Mode/releases) (latest: alpha; grab `EndlessArena.script`).
+**Download:** [Releases](https://github.com/Masacaai/Spider-Man-Endless-Mode/releases) (latest: beta; grab `EndlessArena.script`).
 
 1. Install [Overstrike](https://www.nexusmods.com/marvelsspidermanremastered/mods/4199) 1.8.1 and enable
    **"Enable .script support"** and **"Add '-scripts' to commandline.txt"** in its settings.

@@ -119,7 +119,8 @@ plus a few stat boons; names and descriptions come from the game's text (`invent
 - **Stat boons**: look for the `Stat` kind and the multiplier helpers (damage dealt/taken multipliers near line 100).
 - **Curses**: the `kCurses` table (`name`, upside, downside) and where each `HasCurse(...)` is read. Rule: every curse has an upside and a
   downside, and downsides never add enemy health.
-- **Removing items from the pool**: `kCuratePools` and the blocklist in `boons.cpp` (currently off; the candidates are in LEDGER.md).
+- **Removing items from the pool**: the `kBlocked` list in `boons.cpp` (on by default, the "Skip useless powers" setting; players can add their own names in `EndlessArena_pools.txt`) and `NeedsGadget` (Resupply, Battle Tech, Scavenger and Metabolic Converter are only offered once the player owns a gadget). The decisions are in REWARD_DESIGN.md.
+- **Gadgets as rewards**: `gadgets.cpp` hides the seven gadgets at run start (the table id trick), `Grant` unhides one; the mod makes no equip calls during a run (they crashed the game, see REWARD_DESIGN.md). The offer list is `kGadgets` in `boons.cpp`.
 - The offer UI is the notification box plus the choice buttons; `kOfferTimeoutMs` is the AFK timeout.
 
 ## Add a dev command
