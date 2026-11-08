@@ -155,7 +155,7 @@ namespace settings {
             Switch("stat_second", "BOON: SECOND WIND", "Heal 30% of max health after each wave, per stack.", true);
             List("stat_stacks", "BOON STACK LIMIT", "How many times one stat boon can be taken. DEFAULT: 3, and 2 for Second Wind.",
                  { "DEFAULT", "1", "2", "3", "5", "10" }, { 0, 1, 2, 3, 5, 10 }, 0);
-            Switch("curated", "SKIP USELESS POWERS", "Leave out the suit powers and mods that do nothing in the arena (the author's list). You can also list your own in EndlessArena_pools.txt in the data folder.", false);
+            Switch("curated", "SKIP USELESS POWERS", "Leave out the suit powers and mods that do nothing in the arena (the author's list). You can also list your own in EndlessArena_pools.txt in the data folder.", true);
 
             Sect(3);
             List("curse_when", "CURSE OFFERS", "When a bittersweet deal is offered: after boss waves, after every wave, or never.",

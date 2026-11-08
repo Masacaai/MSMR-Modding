@@ -219,11 +219,9 @@ namespace boons {
         // the English names are the ones the suit menu uses).
         static const char* const kBlocked[] = {
             // no effect against enemies that are already engaged / not combat
-            "Equalizer",                // "Everyone goes down in one hit, including you": a curse, not a reward
-            "Quips", "Sound Of Silence", "Blur Projector",
+            // (Equalizer and Quips stay in the pool: user, 2026-11-07. Equalizer is also a curse: One-Punch Spider.)
+            "Sound Of Silence", "Blur Projector",
             "Combat Analyzer", "Proximity Sensor", "Long Range Scanner", "Silent Step", "Bio Scanner",
-            // need gadgets, which are locked during runs
-            "Resupply", "Battle Tech", "Scavenger", "Metabolic Converter",
         };
         // The player's own list: EndlessArena_pools.txt in the data folder, one item name per line (# starts a comment).
         std::vector<std::string> mine;
@@ -238,7 +236,7 @@ namespace boons {
                 if (b < line.size()) mine.push_back(line.substr(b));
             }
         }
-        const bool curated = S("curated", 0) != 0;
+        const bool curated = S("curated", 1) != 0;
         auto blocked = [&](uint64_t id) {
             const inventory::ItemText& t = GameText(id);
             if (!t.ok) return false;
@@ -299,6 +297,15 @@ namespace boons {
 
     // ---- offers ----
 
+    // Items that only work with a gadget (they refill or empower gadgets): offered once the player owns one.
+    static bool NeedsGadget(uint64_t id) {
+        const inventory::ItemText& t = GameText(id);
+        if (!t.ok) return false;
+        for (const char* n : { "Resupply", "Battle Tech", "Scavenger", "Metabolic Converter" })
+            if (_stricmp(t.name.c_str(), n) == 0) return true;
+        return false;
+    }
+
     static Offer MakeRewardOffer() {
         Offer o;
         o.title = "Choose a reward";
@@ -309,7 +316,7 @@ namespace boons {
         bool power_empty = cur[1] == 0;
         if (runloadout::FreeModSlot() >= 0 && S("boon_mods", 1))
             for (uint64_t id : g_mods)
-                if (!runloadout::HasItem(id)) pool.push_back({ Kind::Mod, id, 0, Described(id) });
+                if (!runloadout::HasItem(id) && (OwnedGadgets() > 0 || !NeedsGadget(id))) pool.push_back({ Kind::Mod, id, 0, Described(id) });
         for (int i = 0; i < (int)std::size(kStats); i++)
             if (g_stacks[i] < (S("stat_stacks", 0) > 0 ? S("stat_stacks", 0) : kStats[i].max_stacks) && S(kStatKeys[i], 1))
                 pool.push_back({ Kind::Stat, 0, i, std::string(kStats[i].name) + " (" + kStats[i].desc + ")" });
@@ -326,7 +333,9 @@ namespace boons {
         // Until the run has a suit power, one option is always a power.
         if (power_empty && !g_powers.empty() && S("boon_powers", 1)) {
             uint64_t id = g_powers[std::uniform_int_distribution<size_t>(0, g_powers.size() - 1)(g_rng)];
-            o.options.push_back({ Kind::Power, id, 0, Described(id) });
+            for (int tries = 0; tries < 20 && NeedsGadget(id) && OwnedGadgets() == 0; tries++)
+                id = g_powers[std::uniform_int_distribution<size_t>(0, g_powers.size() - 1)(g_rng)];
+            if (!(NeedsGadget(id) && OwnedGadgets() == 0)) o.options.push_back({ Kind::Power, id, 0, Described(id) });
         }
         for (auto& op : pool) {
             if ((int)o.options.size() >= n) break;
@@ -342,7 +351,7 @@ namespace boons {
         inventory::Loadout(cur);
         std::vector<uint64_t> pool;
         for (uint64_t id : g_powers)
-            if (id != cur[1]) pool.push_back(id);
+            if (id != cur[1] && (OwnedGadgets() > 0 || !NeedsGadget(id))) pool.push_back(id);
         std::shuffle(pool.begin(), pool.end(), g_rng);
         int n = Choices();
         for (int i = 0; i < (int)pool.size() && i < n; i++)
