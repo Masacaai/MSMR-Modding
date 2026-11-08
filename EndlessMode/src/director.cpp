@@ -133,6 +133,7 @@ namespace director {
     // Spawn points where an enemy never left its spawn spot (cages, blocked cells): run-local, forgotten at the next run (user,
     // 2026-10-15: no saved blacklist). Struck points are strongly avoided as spawn and relocation targets.
     static std::map<int, int> g_run_strikes;
+    static DWORD g_next_boss_at = 0;       // Sinister Six finale: earliest tick for the next boss (the pop-ups overlapped, user 2026-11-07)
     static DWORD g_boss_banner_hide = 0;   // when to hide the boss pop-up (0 = none showing)
     static bool g_cull_blocked = false;
     static float g_cull_dir[2] = {};
@@ -1178,14 +1179,14 @@ namespace director {
                 bool spawned = false;
                 if (!g_boss_queue.empty() && GetTickCount() - g_preload_time < 20000) {
                     // Give the boss assets time to stream in (rare: only if the first boss wave comes very early).
-                } else if (!g_boss_queue.empty()) {
+                } else if (!g_boss_queue.empty() && (!g_plan.sinister || (LONG)(GetTickCount() - g_next_boss_at) >= 0)) {
                     spawned = true;
                     const roster::Boss* b = g_boss_queue.front();
                     g_boss_queue.erase(g_boss_queue.begin());
                     if (!SpawnOne(hero, b->path, roster::Role::Count, b, b->calm)) {
                         if (g_spawn_deferred) g_boss_queue.insert(g_boss_queue.begin(), b);   // next tick
                         else g_cfg.failed_bosses.insert(b->name);
-                    }
+                    } else if (g_plan.sinister) g_next_boss_at = GetTickCount() + 8000;   // one arrival every 8 s in the finale
                 } else if (g_remaining > 0) {
                     int room = std::min(g_plan.max_alive - alive, g_opt.body_pool - g_pool_used);
                     int batch = std::min({ room, g_remaining, g_cfg.riot ? 8 : 4 });
