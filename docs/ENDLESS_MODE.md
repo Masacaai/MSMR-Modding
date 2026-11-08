@@ -27,7 +27,7 @@ A run is a sequence of **chapters**, one faction each, **4 waves per chapter**:
    - boss waves 3–4: a boss plus their crew;
    - boss wave 5 onward: 2–3 bosses at once, mixing the chapter's boss with bosses from factions already fought.
 
-Default faction order is the user's list: Street Thugs → Fisk's Men → Inner Demons → Ryker's Inmates → Sable International → Hammerhead's Maggia, then Tombstone's Crew → Taskmaster's Drills. `shuffle` randomizes everything after the first faction (the seed is recorded). Once all 8 factions have had a chapter, the **cycle** repeats tougher: every role is in play from wave 1 of each chapter, health goes up a step, and more elites appear.
+Default faction order is the user's list: Street Thugs → Fisk's Men → Inner Demons → Ryker's Inmates → Sable International → Hammerhead's Maggia, then Tombstone's Crew → Taskmaster's Mercs. `shuffle` randomizes everything after the first faction (the seed is recorded). Once all 8 factions have had a chapter, the **cycle** repeats tougher: every role is in play from wave 1 of each chapter, health goes up a step, and more elites appear.
 
 Other modes: `faction <id>` (one faction forever), `bossrush` (every wave is a boss wave), and `riot` on top of any mode (40 on the field, long waves).
 
