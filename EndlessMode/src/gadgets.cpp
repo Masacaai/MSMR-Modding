@@ -136,15 +136,36 @@ namespace gadgets {
         }, 5000);
     }
 
-    // No equip calls from the mod at all (2026-11-07): three crashes were inside or right after our EquipGadget calls (the game itself
-    // equips id 0 into slot 0 all the time, and forcing an equip on top of that crashed it). A granted gadget is just unhidden and allowed;
-    // it shows red until the player equips it from the wheel, so boons shows a hint.
+    // Auto-equip with a guard (user, 2026-11-07: it worked in one run; in another it crashed inside EquipGadget, with the game's own
+    // equips of id 0 around). The mod only equips while slot 0 holds a real gadget (9C82-9C89); if the slot holds anything else (id 0
+    // while the game is mid-change) it skips the equip and the gadget just stays red until the player picks it.
+    static bool SafeToEquip() {
+        uint32_t cur = 0;
+        return g_mgr && memory::Read(g_mgr.load() + 0x6c, cur) && cur >= 0x9C82 && cur <= 0x9C89;
+    }
     void Grant(uint32_t id) {
         gamethread::Run([id] {
             if (!g_run) FindManager();
             Hide(id, false);
             Allow(id);
-            LOG("gadgets: granted %04X (not equipped; pick it in the wheel)", id);
+            if (!SafeToEquip()) { LOG("gadgets: granted %04X (slot 0 is not a gadget right now: not equipping)", id); return; }
+            bool ok = Equip(id, 0);
+            LOG("gadgets: granted %04X%s", id, ok ? "" : " (equip refused for now; retrying)");
+            if (ok) return;
+            std::thread([id] {
+                for (int i = 0; i < 10 && g_run; i++) {
+                    Sleep(800);
+                    bool done = false;
+                    gamethread::Run([id, &done] {
+                        FindManager();
+                        uint32_t cur = 0;
+                        if (!g_mgr || !memory::Read(g_mgr.load() + 0x6c, cur)) { done = true; return; }
+                        if (cur != kWebShooter) { done = true; return; }   // switched already (the game or the player), or not a safe state
+                        done = Equip(id, 0);
+                    }, 3000);
+                    if (done) return;
+                }
+            }).detach();
         }, 5000);
     }
 
