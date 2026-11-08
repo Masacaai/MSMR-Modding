@@ -171,3 +171,5 @@ Crash 2026-11-07 18:02:44 (accepting Suspension Matrix, wave 2): null deref at e
 Test 4 (2026-11-07): crash inside our EquipGadget(9C83) call at grant (execute at address 0). The game equips id 0 into slot 0 constantly; forcing an equip is fragile. Decision: the mod makes NO EquipGadget calls (not at run start, not on grant); grant = unhide + allow + on-screen hint; red until the player equips it. Also: the player could not switch back to the Web Shooter in an earlier run (cause unknown; equip logging is on during runs).
 
 Test 4 follow-up: auto-equip back, guarded: it only equips while slot 0 holds a gadget id 9C82-9C89 (the crash happened with the game's own id-0 equips around); otherwise it skips and the gadget stays red until picked.
+
+Test 5: red-until-equip only happens in real runs, where the game keeps slot 0 at id 0 and the guard skipped the equip; in debug sandbox / free roam the equip works and the gadget is blue with right ammo. Guard loosened to also allow slot 0 == 0 (the state of the one Impact Web crash). Collect more runs.

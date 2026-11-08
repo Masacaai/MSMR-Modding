@@ -141,7 +141,7 @@ namespace gadgets {
     // while the game is mid-change) it skips the equip and the gadget just stays red until the player picks it.
     static bool SafeToEquip() {
         uint32_t cur = 0;
-        return g_mgr && memory::Read(g_mgr.load() + 0x6c, cur) && cur >= 0x9C82 && cur <= 0x9C89;
+        return g_mgr && memory::Read(g_mgr.load() + 0x6c, cur) && (cur == 0 || (cur >= 0x9C82 && cur <= 0x9C89));   // 0 = the game's own "no gadget" (Web Shooter) state in real runs
     }
     void Grant(uint32_t id) {
         gamethread::Run([id] {
@@ -160,7 +160,7 @@ namespace gadgets {
                         FindManager();
                         uint32_t cur = 0;
                         if (!g_mgr || !memory::Read(g_mgr.load() + 0x6c, cur)) { done = true; return; }
-                        if (cur != kWebShooter) { done = true; return; }   // switched already (the game or the player), or not a safe state
+                        if (cur != kWebShooter && cur != 0) { done = true; return; }   // switched already (the game or the player), or not a safe state
                         done = Equip(id, 0);
                     }, 3000);
                     if (done) return;
