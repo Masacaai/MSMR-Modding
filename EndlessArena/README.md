@@ -31,7 +31,7 @@ never extra enemy health), boons never touch Spider-Man's skills, every curse ha
 
 ## Install (players)
 
-**Download:** [Releases](https://github.com/Masacaai/Spider-Man-Endless-Mode/releases) (latest: beta; grab `EndlessArena.script`).
+**Download:** [Releases](https://github.com/Masacaai/MSMR-Modding/releases) (latest: beta; grab `EndlessArena.script`).
 
 1. Install [Overstrike](https://www.nexusmods.com/marvelsspidermanremastered/mods/4199) 1.8.1 and enable
    **"Enable .script support"** and **"Add '-scripts' to commandline.txt"** in its settings.

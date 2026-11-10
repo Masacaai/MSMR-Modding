@@ -43,7 +43,7 @@ Also done 2026-11-09:
 - **Uncontained stays fully git-ignored** until it is ready for release; only release-ready mods leave the ignore list.
 
 Still open:
-- **Renaming the GitHub repository** (now `Masacaai/Spider-Man-Endless-Mode`) to MSMR-Modding is outward-facing (links, issues, forks, the Nexus page): confirm first.
+- ~~Renaming the GitHub repository~~ done 2026-11-09: `Masacaai/MSMR-Modding` (GitHub redirects the old `Spider-Man-Endless-Mode` URLs). Still to do by hand: the Nexus page and any pinned links elsewhere.
 - **Releases.** Endless Arena's beta.1 is out; the ModMenu refactor needs a beta.2 whatever else happens.
 - `docs/GETTING_STARTED.md` and `docs/GAME_INTERNALS.md` are still mostly Endless Arena material in their older sections; trim or split them as the other mods grow.
 
