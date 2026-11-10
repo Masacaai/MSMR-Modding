@@ -2,7 +2,7 @@
 
 > **Parts of this document are historical** (it was written 2026-10-12/13). The code is the source of truth: wave formulas, the roster, the portal flow and the UI have all changed since. For current how-tos see [HOW_TO.md](HOW_TO.md), [ARCHITECTURE.md](ARCHITECTURE.md) and [LEDGER.md](LEDGER.md).
 
-Game build 4.0630.0.0 only. Everything in this document is built in `EndlessMode/`. Status tags: ✅ verified in game, 🧪 built but untested in game.
+Game build 4.0630.0.0 only. Everything in this document is built in `EndlessArena/`. Status tags: ✅ verified in game, 🧪 built but untested in game.
 
 ## Playing it
 

@@ -1,6 +1,8 @@
 # Getting started: build, install, test, repeat
 
-This is the whole loop for changing the mod yourself. Plan on about 30 minutes the first time, then edits take a minute.
+This is the whole loop for changing a mod yourself. The steps use Endless Arena; the other mods work the same way: build **Endless Arena first** (its `build.cmd` installs MinHook through vcpkg, which the others borrow), then run `ManhattanSkies\mod\build.cmd`. Each mod compiles in `common/` (shared `log`, `memory`, `scan`, `gamethread`, `watchpoint`) and `ModMenu/`; the command file and log are named after the mod (`ManhattanSkies.cmd`, `ManhattanSkies.log`).
+
+This is the whole loop. Plan on about 30 minutes the first time, then edits take a minute.
 
 ## 0. What you need
 
@@ -8,7 +10,7 @@ This is the whole loop for changing the mod yourself. Plan on about 30 minutes t
 |---|---|
 | Marvel's Spider-Man Remastered (developed on Steam; the mod checks the exe version, not the store, other stores untested) | `Spider-Man.exe` file version **4.0630.0.0** exactly (right-click the exe, Properties, Details). The mod refuses to run on another build. Turn off automatic updates for the game, or an update will shift every address. |
 | Windows 10/11 | The game and all tools are Windows-only |
-| Visual Studio 2022 | Community is fine; install the **Desktop development with C++** workload. `build.cmd` expects it at `C:\Program Files\Microsoft Visual Studio\2022\Community` (edit the `VS=` line in `EndlessMode\build.cmd` if yours differs) |
+| Visual Studio 2022 | Community is fine; install the **Desktop development with C++** workload. `build.cmd` expects it at `C:\Program Files\Microsoft Visual Studio\2022\Community` (edit the `VS=` line in `EndlessArena\build.cmd` if yours differs) |
 | [Overstrike](https://www.nexusmods.com/marvelsspidermanremastered/mods/4199) 1.8.1 | The mod manager that loads `.script` mods. Needs the .NET 7 Desktop Runtime |
 | Python 3.12 | Only for the tools in `tools/` (optional for plain mod changes) |
 | Git | obviously |
@@ -21,13 +23,13 @@ vcpkg ships with Visual Studio; `build.cmd` uses it to fetch MinHook (the only d
 ## 1. Build
 
 ```
-EndlessMode\build.cmd
+EndlessArena\build.cmd
 ```
 
 Output:
 
-- `EndlessMode\build\EndlessArena.dll`: the mod itself (static CRT and static MinHook; imports only KERNEL32, USER32, SHELL32 and the HID/SetupAPI libraries)
-- `EndlessMode\build\EndlessArena.script`: the same DLL zipped with an `info.json`, the format Overstrike installs (made by `pack.ps1`)
+- `EndlessArena\build\EndlessArena.dll`: the mod itself (static CRT and static MinHook; imports only KERNEL32, USER32, SHELL32 and the HID/SetupAPI libraries)
+- `EndlessArena\build\EndlessArena.script`: the same DLL zipped with an `info.json`, the format Overstrike installs (made by `pack.ps1`)
 
 It prints `BUILD OK` at the end. A full build takes under a minute. If it fails with a compiler error, that is real;
 read the message. Don't build while the game is running and you intend to install: the game locks the DLL.
@@ -58,7 +60,7 @@ After the first Overstrike install, you do **not** need Overstrike again for cod
 the new DLL over the installed one:
 
 ```
-copy EndlessMode\build\EndlessArena.dll "<game folder>\scripts\EndlessArena.dll"
+copy EndlessArena\build\EndlessArena.dll "<game folder>\scripts\EndlessArena.dll"
 ```
 
 The game folder is usually `C:\Program Files (x86)\Steam\steamapps\common\Marvel's Spider-Man Remastered`.
@@ -114,13 +116,13 @@ before expecting output.
 
 Goal: make Campaign waves 20% bigger.
 
-1. Open `EndlessMode/src/plan.cpp`, find `GoonCount` and multiply the result by 1.2.
-2. Print the curve without launching the game: `EndlessMode	ests
+1. Open `EndlessArena/src/plan.cpp`, find `GoonCount` and multiply the result by 1.2.
+2. Print the curve without launching the game: `EndlessArena	ests
 un_plan.cmd 20` (waves 1 to 20). Compare before and after.
 3. Close the game, run `build.cmd`, copy the DLL (step 3), launch, start a Campaign run from the dock.
 4. Look at `EndlessMode.log`: each wave logs a `plan wN ...` line with its goon count.
 
-More recipes: [HOW_TO.md](HOW_TO.md). How the code is laid out: [ARCHITECTURE.md](ARCHITECTURE.md).
+More recipes: [HOW_TO.md](../EndlessArena/docs/HOW_TO.md). How the code is laid out: [ARCHITECTURE.md](../EndlessArena/docs/ARCHITECTURE.md).
 
 ## 7. When something goes wrong
 

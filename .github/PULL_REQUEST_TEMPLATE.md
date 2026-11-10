@@ -2,7 +2,7 @@
 
 ## How it was tested
 
-- [ ] Built with `EndlessMode\build.cmd`
+- [ ] Built with `EndlessArena\build.cmd`
 - [ ] Tested in game on 4.0630.0.0 (describe the steps and what the log showed)
 - [ ] `tests\run_offline.cmd` still resolves all natives (if natives changed)
 - [ ] `tests\run_plan.cmd` output checked (if `plan.cpp` changed)

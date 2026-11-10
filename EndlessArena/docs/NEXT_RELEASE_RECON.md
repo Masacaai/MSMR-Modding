@@ -2,7 +2,7 @@
 
 Goals (from the maintainer, see [LEDGER.md](LEDGER.md), "Next release"): (1) dynamic music for EndlessArena using the game's own tracks; (2) user
 customization (blacklist factions, set faction order, choose bosses...) with a way to control the mod **inside the game**. Confidence tags as in
-[GAME_INTERNALS.md](GAME_INTERNALS.md): **[verified]**, **[RE]** (read from the exe, not run), **[?]** (unknown).
+[GAME_INTERNALS.md](../../docs/GAME_INTERNALS.md): **[verified]**, **[RE]** (read from the exe, not run), **[?]** (unknown).
 
 ## 1. Music
 

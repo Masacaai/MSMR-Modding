@@ -1,6 +1,6 @@
 # Build output and package caches
-EndlessMode/build/
-EndlessMode/vcpkg_installed/
+EndlessArena/build/
+EndlessArena/vcpkg_installed/
 tools/toctool/vcpkg_installed/
 *.obj
 *.exp
@@ -47,8 +47,8 @@ EndlessMode_uilog.txt
 # Extracted from game files (regenerate: tools/ ... see docs/REVERSE_ENGINEERING.md) or generated
 recon/LineOfSightAwareness.config.json
 tools/roster/enemies.json
-EndlessMode/data/*.config
-EndlessMode/data/*.config.json
+EndlessArena/data/*.config
+EndlessArena/data/*.config.json
 
 # QuantumBreakRenewed is a separate mod (a port of nanodanc's QuantumBreak) kept out of this repository entirely
 QuantumBreakRenewed/
@@ -57,7 +57,13 @@ QuantumBreakRenewed/
 SpidyVR/
 
 # Maintainer-only notes, never published
-EndlessMode/src/SECRET.md
+EndlessArena/src/SECRET.md
 
-# Uncontained: separate city-theme mod, local only (game-derived recon inside; never commit)
+
+# Uncontained: not ready for publishing, local only (game-derived recon inside; never commit). Only mods that are ready for release come out of here.
 Uncontained/
+
+# Manhattan Skies: source, tools and docs are published; its recon/ folder holds game-derived material (extracted assets, catalogs,
+# memory dumps, screenshots): NEVER commit it.
+ManhattanSkies/recon/
+ManhattanSkies/mod/build/

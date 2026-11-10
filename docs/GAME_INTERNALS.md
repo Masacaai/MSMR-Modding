@@ -5,7 +5,7 @@ addresses are `Spider-Man.exe`-relative RVAs (`exe+RVA`; ImageBase `0x140000000`
 
 Confidence tags: **[verified]** tested in game; **[RE]** read from disassembly, not exercised, or only partly; **[?]** unknown
 or a guess. When you extend this file, keep the tags honest. How each thing was found: [REVERSE_ENGINEERING.md](REVERSE_ENGINEERING.md).
-Earlier, more chronological notes: [`recon/M1_natives_4.0630.md`](../recon/M1_natives_4.0630.md), [UI_HUNT.md](UI_HUNT.md), [BUGS.md](BUGS.md).
+Earlier, more chronological notes: [`recon/M1_natives_4.0630.md`](../recon/M1_natives_4.0630.md), [UI_HUNT.md](UI_HUNT.md), [BUGS.md](../EndlessArena/docs/BUGS.md).
 
 Contents: [Loading code into the game](#loading-code-into-the-game) | [The game thread](#the-game-thread) | [Entities, components, handles](#entities-components-and-handles) | [Spawning and despawning](#spawning-and-despawning-actors) | [Assets and models](#assets-and-models) | [Enemy AI and aggro](#enemy-ai-and-aggro) | [Health and damage](#health-and-damage) | [Bosses](#bosses) | [UI (Scaleform)](#ui-scaleform) | [Time, camera, input](#time-camera-and-input) | [Inventory, suit powers, mods](#inventory-suit-powers-and-mods) | [World and arena](#world-and-arena) | [Crash and hang catalogue](#crash-and-hang-catalogue)
 
@@ -83,7 +83,7 @@ attach / activate: EntityInit exe+159db20, EntityAttach exe+159e590, SyncActivat
   `plan::BudgetedPool` adds factions greedily until the budget is spent. Faction sizes: street 7, fisk 12, demons 9, prisoners
   15, sable 9, hammerhead 10, olympus 11, tombstone 8, taskmaster 8 (89 types in all).
 - A history of the "respawn load hang after a long Horde run" (all nine factions, 1000+ assets) fixed by the budget and the
-  post-run release is in [BUGS.md](BUGS.md).
+  post-run release is in [BUGS.md](../EndlessArena/docs/BUGS.md).
 
 ### Archive format notes (from the ALERT wiki)
 
@@ -128,7 +128,7 @@ Don't commit extracted bytes.
 
 ## Bosses
 
-Details and per-boss results: [BUGS.md](BUGS.md) and the roster table in [ENDLESS_MODE.md](ENDLESS_MODE.md).
+Details and per-boss results: [BUGS.md](../EndlessArena/docs/BUGS.md) and the roster table in [ENDLESS_MODE.md](../EndlessArena/docs/ENDLESS_MODE.md).
 
 - **Root cause of the early boss crashes, missing heads and missing movers (2026-10-13):** the spawner waited only for the body asset.
   Heavy actors depend on more assets, notably a separate **head actor** (`HeadActor`, for example `characters/npc/npc_hammerhead/heads/...head.actor`),
@@ -253,7 +253,7 @@ Full chronology, with every recording: [UI_HUNT.md](UI_HUNT.md). Summary of what
 
 ## Things we deliberately don't know yet
 
-See [`docs/issues/`](issues/) for the open questions drafted as issues, and [BUGS.md](BUGS.md) for raw records.
+See [`EndlessArena/docs/issues/`](../EndlessArena/docs/issues/) for the open questions drafted as issues, and [BUGS.md](../EndlessArena/docs/BUGS.md) for raw records.
 
 ## Boss phases (2026-10-19, disassembly; not yet run in game)
 - A boss's health component (`BossHealth`, vtable `exe+3839d38`) splits its health into phases: `+0x100` phase count, `+0x110` current phase,
@@ -265,3 +265,29 @@ See [`docs/issues/`](issues/) for the open questions drafted as issues, and [BUG
   floor (Hammerhead 55%, Taskmaster and Sable 1 HP) and why Kingpin took none at all (`HealthPhaseValues` and `PhaseEndBlockConfig` in his actor).
 - The mod now logs each boss's health components and phases at spawn and, for Kingpin (or every boss with `[secret] phase_all=1`), calls SetPhase to the next phase
   when he is pinned at his floor. Kingpin's component may not be the `BotHealth`/`+0x88` one the others use; `entity::HealthComponent` now prefers a `BossHealth`-vtable component over a name match.
+
+## Lighting, atmospheres and the time of day (2026-11-09; found for Manhattan Skies, details in `ManhattanSkies/docs/RECON.md`)
+
+All `[V]` = verified in game. Addresses are `exe+RVA`.
+
+- **Seven lighting modes** [V]: index 0 Day, 2 Sunset, 5 Night, 1 Night variant, 3 and 6 Overcast, 4 Early Morning (the game's `kBlackout`; the opening mission's dawn).
+  The setter is `exe+1f7f9e0(world+0xe10d0, index)`, the world getter `exe+1f707e0`, the current mode `world+0xe2040`. The game's own Settings option only offers Day,
+  Sunset and Night. Each mode swaps a base **atmosphere** (sky, sun, reflected light, exposure, fog) and a world "levellight". The lit windows and street lamps follow
+  the mode, not the atmosphere: nothing we tried (overlay zones, levellight headers, atmosphere fields, a Day/Night 0/1 switch at `exe+728390c`) changes them alone.
+- **The game sets its remembered mode while a world loads** [V]: the setter is called with the mode field still unset (`-1`), once per load (story missions too, which is why a
+  mode forced there applies to missions). **Never call the setter later during a load**: a call 3 s after the field became readable hung the loading screen for good.
+  Swapping the index inside the game's own load-time call works with no transition.
+- **Atmosphere pool** [V]: manager `exe+60430c0`; `AtmosphereAdjust` `exe+162f020(mgr, slot, delta, mask, min, max)` adds weights (base = 2; the map screen adds 1000);
+  recompute `exe+162ff10(mgr)`; slots are 0x8c0 bytes each. Load any of the **124** atmospheres in the toc with `exe+1626380(manager, id, ...)`, release a slot with
+  `exe+1624e80(manager, slot)`. Slot fields: refcount dword `+4`, asset id `+8`, sun block `+0x2a8..0x2bc`, fog distance `+0x588..0x594`, fog density `+0x598..0x5ac`,
+  fog colour `+0x5b4`, haze `+0x5c0`, exposure `+0x484`, colour filter `+0x668/66c/670`, clouds `+0x81c`. `+0x47c/+0x480` give black or white screens: leave alone.
+  The game's own activation of the next base atmosphere (`caller exe+1a1b59e`, delta > 0) must be swallowed while an override is on.
+- **Rain** [?]: not located. Lighting-mode names (`kOvercastRain`, `kNightRain`) suggest it belongs to the mode; third-party atmosphere mods also change rain, so pairs can't be told apart on a modded install.
+
+## The pause menu and mod tabs in Settings (2026-11-08; `ModMenu/`, `ManhattanSkies/docs/RECON.md` Parts 5-9)
+
+- The Settings tab method is SpidyVR's (see `THIRD_PARTY_NOTICES.md`): `OpenOptions` `exe+7dd9f0`, tab builder `exe+807740`, AddItem `exe+80a220`, callback dispatcher
+  `exe+7dc400`, text lookups `exe+1749970` / `exe+1749ae0`. `ModMenu/` appends one tab per mod after the game's own tabs on the Settings screen (13 hooks, host chosen through a named shared object). A separate MODS entry on the pause menu's first page was built and verified too, then dropped on 2026-11-09 in favour of Settings tabs (`kModsPageItem` in `modmenu.cpp`).
+- The Options movie takes the tab-list banner from `_locStrings.PAUSE_OPTION_SETTINGS` (it stays "SETTINGS") and the in-tab header from the tab's `menu_header`.
+- The pause menu **closes itself on a lighting change** by sending Flash `CloseMenu` from `exe+7dc06b`; swallowing that call for a few seconds keeps the menu open.
+- Scaleform `GfxValue` / ObjectInterface vtable slots: 2 Release, 5 SetMember, 15 PushBack.

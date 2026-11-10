@@ -36,7 +36,7 @@ never extra enemy health), boons never touch Spider-Man's skills, every curse ha
 1. Install [Overstrike](https://www.nexusmods.com/marvelsspidermanremastered/mods/4199) 1.8.1 and enable
    **"Enable .script support"** and **"Add '-scripts' to commandline.txt"** in its settings.
 2. Overstrike's scripts proxy has a known issue where it can start game scanning inside helper processes; see
-   [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md#2-overstrike-and-the-scripts-proxy) for the options.
+   [docs/GETTING_STARTED.md](../docs/GETTING_STARTED.md#2-overstrike-and-the-scripts-proxy) for the options.
 3. Add `EndlessArena.script` (from the Releases page, or built with `build.cmd`) in Overstrike and press **Install mods**.
 4. Launch the game (tested through Steam; the `-scripts` option in `commandline.txt` is what loads script mods), load a save, and go to a Manhattan dock circle. It is developed and tested on the Steam version; the mod itself only checks the exe version, not the store, but other stores' copies are untested.
 
@@ -48,38 +48,42 @@ crashes mid-run it restores on the next launch. Your settings and records live i
 Needs Visual Studio 2022 (Desktop C++) and a copy of the game for testing.
 
 ```
-EndlessMode\build.cmd               -> EndlessMode\build\EndlessArena.dll and EndlessArena.script
-EndlessMode\tests\run_offline.cmd   -> resolves every game function against Spider-Man.exe on disk (game need not be running)
+EndlessArena\build.cmd               -> EndlessArena\build\EndlessArena.dll and EndlessArena.script
+EndlessArena\tests\run_offline.cmd   -> resolves every game function against Spider-Man.exe on disk (game need not be running)
 ```
 
-Full walkthrough: **[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)**.
+Full walkthrough: **[docs/GETTING_STARTED.md](../docs/GETTING_STARTED.md)**.
 
-## Repository map
+## Where things are
+
+This mod lives in `EndlessArena/` of the [MSMR-Modding](../README.md) repository.
 
 | Path | What |
 |---|---|
-| `EndlessMode/src/` | The mod (C++20, about 8,000 lines). Module-by-module tour in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
-| `EndlessMode/tests/` | Offline checks: signature resolution and the wave planner |
-| `EndlessMode/data/` | Source for an optional Overstrike `.stage` (spawner config) |
-| `docs/` | Everything we learned and decided; start at [docs/README.md](docs/README.md) |
-| `recon/` | Reverse-engineering notes and recorded paths (addresses are build-specific) |
-| `tools/sigtools/` | Python/C++ helpers for crash dumps, signatures, vtables, call sites |
-| `tools/roster/` | Mines the game's enemy actor files into the mod's roster |
-| `tools/assets/` | Extracts item/dependency data from the game's archives (run locally; output is never committed) |
-| `tools/toctool/` | Searches the game's asset archive table of contents |
-| `tools/runviewer/` | Browser viewer for the telemetry JSON each run writes |
+| `src/` | The mod (C++20, about 8,000 lines). Module-by-module tour in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| `tests/` | Offline checks: signature resolution and the wave planner |
+| `data/` | Source for an optional Overstrike `.stage` (spawner config) |
+| `docs/` | This mod's design, ledger, bugs and release notes |
+| `../ModMenu/` | The shared code that puts this mod's tab in the game's Settings |
+| [`../docs/`](../docs/README.md) | Shared knowledge: game internals, reverse-engineering method, getting started |
+| `../recon/` | Reverse-engineering notes and recorded paths (addresses are build-specific) |
+| `../tools/sigtools/` | Python/C++ helpers for crash dumps, signatures, vtables, call sites |
+| `../tools/roster/` | Mines the game's enemy actor files into the mod's roster |
+| `../tools/assets/` | Extracts item/dependency data from the game's archives (run locally; output is never committed) |
+| `../tools/toctool/` | Searches the game's asset archive table of contents |
+| `../tools/runviewer/` | Browser viewer for the telemetry JSON each run writes |
 
 ## AI-friendly
 
-This project was built with an AI coding assistant (Claude Code) and is set up for AI-assisted work. [AGENTS.md](AGENTS.md) tells coding agents
+This project was built with an AI coding assistant (Claude Code) and is set up for AI-assisted work. [AGENTS.md](../AGENTS.md) tells coding agents
 how to work here (rules, commands, what they can and can't verify), and the documentation is written so an agent, or a person, can pick it up cold.
 AI-assisted contributions are welcome; say so in the PR, and make sure a human has built and tested the result.
 
 ## Contributing
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md). The whole point of the docs is that you can change things yourself:
+Read [CONTRIBUTING.md](../CONTRIBUTING.md). The whole point of the docs is that you can change things yourself:
 [docs/HOW_TO.md](docs/HOW_TO.md) has recipes ("change the difficulty curve", "add an enemy", "add a dev command"), and
-[docs/REVERSE_ENGINEERING.md](docs/REVERSE_ENGINEERING.md) explains how the addresses here were found, so you can find
+[docs/REVERSE_ENGINEERING.md](../docs/REVERSE_ENGINEERING.md) explains how the addresses here were found, so you can find
 your own. Open issues are drafted in [docs/issues/](docs/issues/).
 
 ## Legal
@@ -88,7 +92,7 @@ your own. Open issues are drafted in [docs/issues/](docs/issues/).
   added. `.gitignore` excludes the extraction outputs; keep it that way.
 - The mod is a script for Overstrike (GPLv3, by Tkachov) and uses MinHook (BSD-2). It does not include code from the MSMR
   Script SDK or from Script Hook; those were read only as references for how the game works (see
-  [docs/REVERSE_ENGINEERING.md](docs/REVERSE_ENGINEERING.md#credit-and-prior-art)).
-- **License: GNU General Public License v3.0 or later** ([LICENSE](LICENSE)). Anyone may use, study, change and share this software, and
+  [docs/REVERSE_ENGINEERING.md](../docs/REVERSE_ENGINEERING.md#credit-and-prior-art)).
+- **License: GNU General Public License v3.0 or later** ([LICENSE](../LICENSE)). Anyone may use, study, change and share this software, and
   changed versions must stay free under the same terms. There is no individual owner: it belongs to everyone who contributes. Notices for
-  the statically linked MinHook library are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+  the statically linked MinHook library are in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).

@@ -99,7 +99,7 @@ stack; some entries are noise). Then:
 3. Is the crash on a null pointer? Which register was null, and where did it come from? That points to the missing precondition.
 4. Check `EndlessMode.log`: what was the mod doing in the last seconds?
 
-Worked examples are in [BUGS.md](BUGS.md): grenadier stack overflow (an infinite virtual-call loop), heavies' null mover (missing dependency
+Worked examples are in [BUGS.md](../EndlessArena/docs/BUGS.md): grenadier stack overflow (an infinite virtual-call loop), heavies' null mover (missing dependency
 assets), crash at death (`exe+319b6a9`, the GFx teardown walking a dangling value, fixed by never freeing registered values).
 
 ## 5. Diagnosing a hang

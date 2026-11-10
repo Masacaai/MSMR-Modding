@@ -6,7 +6,7 @@ labels: bug
 
 **Game build** (right-click `Spider-Man.exe`, Details): 4.0630.0.0 / other:
 **Overstrike version and which scripts proxy** (stock / community fix / own build):
-**Mode** (Campaign / Horde / dock panels / other):
+**Mod** (Endless Arena / Manhattan Skies) **and mode or setting** (Campaign / Horde / dock panels / TIME OF DAY row / other):
 
 **What happened**
 

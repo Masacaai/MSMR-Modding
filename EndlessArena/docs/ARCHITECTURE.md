@@ -1,7 +1,7 @@
-# Architecture: what's what in `EndlessMode/src`
+# Architecture: what's what in `EndlessArena/src`
 
 About 8,000 lines of C++20. One DLL, no engine SDK: everything the mod does to the game goes through functions it finds by
-signature and structures whose layouts were reverse-engineered (documented in [GAME_INTERNALS.md](GAME_INTERNALS.md)).
+signature and structures whose layouts were reverse-engineered (documented in [GAME_INTERNALS.md](../../docs/GAME_INTERNALS.md)).
 
 ## Lifecycle and threads
 

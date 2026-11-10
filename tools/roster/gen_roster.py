@@ -1,4 +1,4 @@
-# gen_roster.py: curated factions/bosses -> EndlessMode/src/roster_data.inc
+# gen_roster.py: curated factions/bosses -> EndlessArena/src/roster_data.inc
 # Names are actor file names; full paths come from enemy_paths.txt so every path is known to exist in the toc.
 import json
 import os
@@ -100,7 +100,7 @@ FACTIONS = [
 
 
 # Bot classes that crash when spawned engaged (null MoverStandard in their behaviours, 2026-10-13: enm_heavy_maggia,
-# Tombstone). They spawn calm and join the fight when they notice the hero. See docs/BUGS.md.
+# Tombstone). They spawn calm and join the fight when they notice the hero. See EndlessArena/docs/BUGS.md.
 CALM_CLASSES = {"SlayerBot", "SlayerRangedBot"}
 
 

@@ -5,17 +5,17 @@ Releases are GitHub Releases with one asset, `EndlessArena.script` (the Overstri
 ## Checklist
 
 1. `git status` is clean and `main` is pushed.
-2. `EndlessMode\build.cmd` prints `BUILD OK`. The `.script` must be built from the commit you tag: check that no file in `src/` is newer than
+2. `EndlessArena\build.cmd` prints `BUILD OK`. The `.script` must be built from the commit you tag: check that no file in `src/` is newer than
    `build\EndlessArena.dll`.
 3. Test the exact `.script` you will upload: install it with Overstrike into the game and play one Campaign and one Horde run.
-4. Update the version in `EndlessMode/pack.ps1` (`info.json` inside the package) if it changed. Keep it plain `x.y.z`; Overstrike compares versions.
-5. Write the notes in `docs/releases/<tag>.md` (what's in it, known issues with issue numbers, what is untested). Leave the line `SHA-256 of ...: __SHA256__` as is.
+4. Update the version in `EndlessArena/pack.ps1` (`info.json` inside the package) if it changed. Keep it plain `x.y.z`; Overstrike compares versions.
+5. Write the notes in `EndlessArena/docs/releases/<tag>.md` (what's in it, known issues with issue numbers, what is untested). Leave the line `SHA-256 of ...: __SHA256__` as is.
 6. Create the release as a **draft** first, review it on GitHub, then publish:
 
 ```
-sha256sum EndlessMode/build/EndlessArena.script
-sed "s/__SHA256__/<hash>/" docs/releases/v0.1.0-alpha.1.md > notes.md        (don't commit notes.md)
-gh release create v0.1.0-alpha.1 EndlessMode/build/EndlessArena.script --draft --prerelease --target main --title "EndlessArena 0.1.0 alpha 1" --notes-file notes.md
+sha256sum EndlessArena/build/EndlessArena.script
+sed "s/__SHA256__/<hash>/" EndlessArena/docs/releases/v0.1.0-alpha.1.md > notes.md        (don't commit notes.md)
+gh release create v0.1.0-alpha.1 EndlessArena/build/EndlessArena.script --draft --prerelease --target main --title "EndlessArena 0.1.0 alpha 1" --notes-file notes.md
 ```
 
 Publishing the draft creates the tag at `main`. To see/edit/publish: the repository's **Releases** page, or `gh release edit <tag> --draft=false`.

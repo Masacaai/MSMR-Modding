@@ -1,4 +1,4 @@
-# Opens every drafted issue in docs/issues/*.md on the current GitHub repository, using the GitHub CLI (gh).
+# Opens every drafted issue in EndlessArena/docs/issues/*.md on the current GitHub repository, using the GitHub CLI (gh).
 #
 # Usage (after the repository exists on GitHub and `gh auth login` has been done):
 #   powershell -File tools\github\create_issues.ps1            # create all

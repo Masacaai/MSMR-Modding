@@ -2,7 +2,7 @@
 
 Overstrike `.script` mod for Marvel's Spider-Man Remastered **4.0630.0.0**: wave survival, prison-break enemy roster.
 
-This file is the original early-development README and its command table is partly out of date. Start at the repository [README](../README.md) and [docs/GETTING_STARTED.md](../docs/GETTING_STARTED.md); the command list there and in `src/main.cpp` is current.
+This file is the original early-development README and its command table is partly out of date. Start at the repository [README](../README.md) and [docs/GETTING_STARTED.md](../../docs/GETTING_STARTED.md); the command list there and in `src/main.cpp` is current.
 
 ## Build
 

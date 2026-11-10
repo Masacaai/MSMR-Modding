@@ -6,7 +6,7 @@ labels: feature
 
 **What would you like to see**
 
-**Why it fits** (read the design rules in `docs/LEDGER.md` first: no health sponges, boons never touch skills, every curse has an upside)
+**Why it fits** (read the design rules in `EndlessArena/docs/LEDGER.md` first: no health sponges, boons never touch skills, every curse has an upside)
 
 **Does the game already have the pieces?** (a UI panel, an item, an actor; link to anything in `docs/GAME_INTERNALS.md` or `docs/UI_HUNT.md`)
 

@@ -88,7 +88,7 @@ Started 2026-10-13.
 - [ ] **Dismissable panels (user, 2026-10-14):** some panels (e.g. run over / results) should stay until the player presses a button, like the hideout's Completed! panel (activity panel, panelType 2, Continue). Needs GFx object building (docs/UI_HUNT.md, hideout recording).
 - [ ] **Next UI step:** build GFx objects and arrays from code, then use the real wave banner (message type 21), the activity panel (preview at the dock circle, in-run side panel, results with Continue) and ShowMissionObjective.
 
-- [ ] **Horde scoring and DMC-style ranks (user, 2026-10-14).** Our own scoring with a live style meter and Spidey-themed ranks (D Puny Parker, C Human Spider, B Wall-Crawler, A Amazing, S Spectacular, SS Sensational, SSS Superior), the live score on the left like Taskmaster challenges, and a results panel with a breakdown that stays until Continue. Design: docs/SCORING.md. Blocked on building GFx objects from code.
+- [ ] **Horde scoring and DMC-style ranks (user, 2026-10-14).** Our own scoring with a live style meter and Spidey-themed ranks (D Puny Parker, C Human Spider, B Wall-Crawler, A Amazing, S Spectacular, SS Sensational, SSS Superior), the live score on the left like Taskmaster challenges, and a results panel with a breakdown that stays until Continue. Design: EndlessArena/docs/SCORING.md. Blocked on building GFx objects from code.
 
 - [ ] **Nice-to-have: show the suit menu's own media during reward picks (user, 2026-10-14).** In the suits menu each suit power has a video, name and description in the right-hand panel, and each suit mod a picture. Showing those for the offered rewards would be the best case. No full-screen or near-full-screen HUD pop-up has been seen yet (not even tutorials), so keep a lookout (pause/Gear.gfx, popups, PopupShell).
 
@@ -213,7 +213,7 @@ Alongside some bugfixing:
 
 ### 2026-10-19 (evening plan)
 - Built, not yet run in game: settings tab with presets, boon/curse/reward customization, damage and wave-heal settings, boss phase stepping (Kingpin), Wwise recorder
-  (`audio`), allegiance experiments (`alleg`). See docs/NEXT_RELEASE_RECON.md section 4.
+  (`audio`), allegiance experiments (`alleg`). See EndlessArena/docs/NEXT_RELEASE_RECON.md section 4.
 - To try first: open Settings, see the ENDLESS ARENA tab; then `audio on` while in a crime/hideout; then `alleg set kBlueTeam` with enemies up.
 
 ### 2026-10-25 - arena locked during story missions; mission-36 gate pending
@@ -238,3 +238,7 @@ Alongside some bugfixing:
 - Pool filtering: cut stealth/scanner/XP items, gate gadget-synergy items on owning a gadget (list in REWARD_DESIGN.md section 3).
 
 Dropped Ryker's spawn point (1252.3, 2.0, -782.6) at the user's request (2026-11-07); 138 points left. Built, installs when the game is closed.
+
+### 2026-11-08 - shared MODS menu (built, not yet run)
+- The ENDLESS ARENA tab moves from the game's Settings into a shared **pause menu > MODS** screen (one tab per script mod), hosted by whichever participating script starts first. Library: `ModMenu/` (GPL-3.0, credit SpidyVR). `src/menu.cpp` is now an adapter that registers the rows of settings.h. Rows, sections and presets are unchanged.
+- Needs a release (beta.2). An old beta.1 next to a new participant keeps its own tab in SETTINGS (the host chains on its hooks).

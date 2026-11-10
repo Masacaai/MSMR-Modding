@@ -11,15 +11,15 @@ more than usual.
 2. **One game build.** Everything targets `Spider-Man.exe` 4.0630.0.0. Addresses are written as `exe+RVA`. If you add one,
    say how you found it (see [docs/REVERSE_ENGINEERING.md](docs/REVERSE_ENGINEERING.md)) and record it in
    [docs/GAME_INTERNALS.md](docs/GAME_INTERNALS.md) or `recon/`.
-3. **Native calls are guarded.** New game functions go in `src/natives.cpp` with a signature *and* an expected RVA; the mod
-   refuses to call anything that doesn't resolve exactly where expected. Reads of game memory go through `memory.h`
+3. **Native calls are guarded.** New game functions go in the mod's `src/natives.cpp` with a signature *and* an expected RVA; the mod
+   refuses to call anything that doesn't resolve exactly where expected. Reads of game memory go through `common/memory.h`
    (an access violation returns false instead of crashing).
 4. **Game state is touched on the game thread.** Use `gamethread::Run`/`Post`; never block the game thread, never call game
    code from your own thread directly.
 5. **Don't invent facts.** The docs mark things as verified in game, built but untested, or unknown. Keep that honesty:
    write "unknown" or "[?]" rather than guessing.
 6. **A report is a record; a pattern is an issue.** One-off oddities (a single hang, a stuck enemy) go in
-   [docs/BUGS.md](docs/BUGS.md) as records. We start fixing something when it keeps happening.
+   [EndlessArena/docs/BUGS.md](EndlessArena/docs/BUGS.md) as records. We start fixing something when it keeps happening.
 
 ## License
 
@@ -38,8 +38,8 @@ diff, built it, and tested what can be tested. Do not paste code you can't licen
    tested and how (the dev command, the steps, what the log showed).
 3. Keep changes focused and match the surrounding code: comment density, naming, idiom. Comments explain *why*, with the
    evidence (a log line, an address, a date) when the reason isn't obvious.
-4. Run `EndlessMode\tests\run_offline.cmd` if you touched `natives.cpp` or `scan.cpp`, and `plan_offline` if you touched
-   `plan.cpp` (see [docs/HOW_TO.md](docs/HOW_TO.md)).
+4. Run `EndlessArena\tests\run_offline.cmd` if you touched a `natives.cpp` or `common/scan.cpp`, and `plan_offline` if you touched
+   `plan.cpp` (see [EndlessArena/docs/HOW_TO.md](EndlessArena/docs/HOW_TO.md)).
 5. Update any docs your change makes wrong. If you learned something about the game, add it to
    `docs/GAME_INTERNALS.md`.
 6. Open the PR using the template.
@@ -54,5 +54,5 @@ diff, built it, and tested what can be tested. Do not paste code you can't licen
 
 ## Where to start
 
-- [docs/issues/](docs/issues/) lists drafted issues with context, including a few good first ones.
-- [docs/LEDGER.md](docs/LEDGER.md) is the backlog and the list of design decisions already made.
+- [EndlessArena/docs/issues/](EndlessArena/docs/issues/) lists drafted issues with context, including a few good first ones.
+- [EndlessArena/docs/LEDGER.md](EndlessArena/docs/LEDGER.md) is the backlog and the list of design decisions already made.

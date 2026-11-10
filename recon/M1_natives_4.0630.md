@@ -100,7 +100,7 @@ Every tick: if fewer than 10 thugs are tracked, spawn `character\enemy\enm_melee
 Tool: `tools/toctool` parses `asset_archive\toc` (zlib → DAT1) and extracts assets from DSAR archives (LZ4 blocks). Hash = ALERT's CRC64 on a lowercase, forward-slash path, verified against the wiki vector and real zones.
 
 - `levels/i20_city/i20_city.level` (17.9 MB) lists every zone/region path (12338 zone strings).
-- The prison is instance **`levels/i20_city/instance/Prison_Interior/`**. Its regions are `Prison_Interior`, `Prison_Raft_Exterior` and `Prison_Raft_HeliCrash` (region #791 of 1843 in the level's region table). It has 21 zones, all present in the toc's zone-key section (`6D921D7B`). The list is in `EndlessMode/src/arena.cpp`, plus the gameplay zones `Raft_Int_Gameplay`, `Raft_Ext_Gameplay` and `GP_A2_PRISON_HeliCrash_Gameplay`.
+- The prison is instance **`levels/i20_city/instance/Prison_Interior/`**. Its regions are `Prison_Interior`, `Prison_Raft_Exterior` and `Prison_Raft_HeliCrash` (region #791 of 1843 in the level's region table). It has 21 zones, all present in the toc's zone-key section (`6D921D7B`). The list is in `EndlessArena/src/arena.cpp`, plus the gameplay zones `Raft_Int_Gameplay`, `Raft_Ext_Gameplay` and `GP_A2_PRISON_HeliCrash_Gameplay`.
 - **Location:** actor records in `Raft_Int_Gameplay.zone` (0x140 stride) sit at x 1350–1395, z −1175…−1243, y = 39 and 45 (two cell-block tiers). Instances sit in far map corners: the Mod Menu's Peter's-apartment teleport is (1311.1, 44.6, 1220.8).
 - **Zone manager** = `exe+621D900` (static object; vtable written at `exe+1c21a3`; 117 code xrefs). It's the same registration pattern as `ActorAssetManager` (`exe+60421e0`). The Mod Menu loads interiors with `LoadAssetByHash(&ZoneManager, hash)`, sleeps 3 s, then calls SetPosition.
 - Mission overlays: `levels/i20_city/overlay/StoryMission/GP_A2_PRISON/GP_A2_PRISON.region`, `GP_A2_PRISON_PRE`, `GP_A2_PRISON_INTRO_TRANSITION`, `GP_A2_PRISON_RYK_EXIT_CIN`.
@@ -184,7 +184,7 @@ Runtime (`ProximitySpawnScriptAction` input handler exe+d357d0; vtable exe+39089
 **Full archive scan (tools/toctool/grepall.cpp, all 214 archives):** only 3 assets mention the system: the system config (B6335BE782F4E591), the default spawner config (A990C09632715DF6), and the **BootConfig** (87F8A35C50556B8B, which preloads the system config). **No mission, zone or conduit in MSMR uses it.** The startup function that registers game systems (around exe+2bc3xx–2bc7ee; 118 entries, e.g. ItemSpawnerSystem object exe+5da0d60, HeroSystem 5d9dd00) does not include ProximitySpawnSystem (exe+722AA80, built by the dynamic initializer exe+128b80 → ctor exe+d399e0). The system is dormant engine code.
 **PINNED 2026-10-12 (user decision):** probably not release-ready in 2018. To revisit: register it with the scheduler the way the list consumer does, or ask MSM2 modders (Chaos City 2 author) how it is enabled there.
 
-Our config: `EndlessMode/data/prox_prison.json` → ALERT json2config → `build/EndlessMode_Spawner.stage` (replaces ProxSpawnConfig_Default). Script command: `prox on|off|stop|reset|tier n|state`.
+Our config: `EndlessArena/data/prox_prison.json` → ALERT json2config → `build/EndlessMode_Spawner.stage` (replaces ProxSpawnConfig_Default). Script command: `prox on|off|stop|reset|tier n|state`.
 
 ## Aggro attempt 3: idle vision widened (failed) → damage-based aggro (in progress)
 
@@ -257,7 +257,7 @@ All hideout sync creations (1575) come from one chain: CreateSyncObject ← exe+
 - **HeroHealth** vtable exe+38a6df0: slot 11 OnDamage = exe+82cf70 (BotHealth/Health use exe+1f15c30). It uses the same damage message (+0x138 attacker, +0x144 amount).
 - **Health:** max at +0x80 (SetHealth clamps to it), current at +0x88. ScaleHealth writes max, then calls SetHealth.
 - **Roster mining:** 287 enemy actors, 221 with a bot component. Boss classes: DocOck, ScorpionBot, TaskmasterBot, RhinoBot, Shocker, HammerheadBot, MechaHammerhead, SilverSable, MrNegativeSwordsman, FiskBot; Tombstone is a SlayerBot with 1000 HP. Mr. Negative also sets a `StayEngaged` BotData flag. See tools/roster/enemies.txt.
-- See docs/ENDLESS_MODE.md for the systems built on top.
+- See EndlessArena/docs/ENDLESS_MODE.md for the systems built on top.
 
 ## Gameplay camera (verified in game 2026-10-13)
 - The camera is an actor in the actor table with 11 components: FollowCamera, CameraPenetrationTest, CameraTargetBlender, FollowCameraMover, CameraCollisionLine, CameraRollEffect, CameraAnimEffect, ...

@@ -1,7 +1,7 @@
 # How-to recipes
 
 Each recipe says which file to edit, what to look for, and how to check it worked. Setup and the build/install loop are in
-[GETTING_STARTED.md](GETTING_STARTED.md). The code is the source of truth: older docs ([ENDLESS_MODE.md](ENDLESS_MODE.md)) still show
+[GETTING_STARTED.md](../../docs/GETTING_STARTED.md). The code is the source of truth: older docs ([ENDLESS_MODE.md](ENDLESS_MODE.md)) still show
 some formulas that have since changed.
 
 ## Contents
@@ -11,7 +11,7 @@ some formulas that have since changed.
 ## Print the difficulty curve offline
 
 ```
-EndlessMode\tests\run_plan.cmd 20 campaign 1        waves, mode (campaign|riot|bossrush|faction:<id>), seed, shuffle 0|1
+EndlessArena\tests\run_plan.cmd 20 campaign 1        waves, mode (campaign|riot|bossrush|faction:<id>), seed, shuffle 0|1
 ```
 
 It builds `plan.cpp` + `roster.cpp` into a small console program and prints, per wave: chapter, faction, kind (skirmish/assault/full
@@ -20,7 +20,7 @@ No game needed. Use it for every balance change before you ever launch.
 
 ## Change wave size, field cap and role mix
 
-All in `EndlessMode/src/plan.cpp`:
+All in `EndlessArena/src/plan.cpp`:
 
 | Want | Edit |
 |---|---|
@@ -56,13 +56,15 @@ The roster is generated: `tools/roster/gen_roster.py` -> `src/roster_data.inc`. 
    ```
    (each script's first lines say what it takes; requires `tools/ALERT`, a clone of Tkachov/ALERT)
 3. **Regenerate dependencies** (weapons, jetpacks, heads the actor creates at runtime), or the new enemy shows white cubes:
-   `python tools\assets\deps.py EndlessMode\src\roster_data.inc EndlessMode\src\preload_deps.inc`
+   `python tools\assets\deps.py EndlessArena\src\roster_data.inc EndlessArena\src\preload_deps.inc`
 4. Test the enemy alone first: `spawn <path>` in the command file; watch the log for the `spawn: [1]..[8]` steps and
    `MoverStandard present at spawn`. Test a boss with `boss <name>`.
 5. Check the memory budget: factions with many unit types eat the per-run type budget (`plan::UnitTypes`).
 6. Special handling lives in `gen_roster.py`: `CALM_CLASSES` (spawn without the engaged flag), `GATE`/`HEALTH_BONUS` for bosses, `MIN_CYCLE`.
 
 ## Tune settings without code (the ini)
+
+The run settings (difficulty, enemy mix, factions, bosses, rewards) are also in the game: **pause menu > SETTINGS > ENDLESS ARENA** (the last tabs). Our mods add their tabs to the game's Settings through `ModMenu/` (Manhattan Skies uses it too); the rows below are the ones the ini holds.
 
 `EndlessMode.ini` is in `Documents\Marvel's Spider-Man Remastered\EndlessMode\` (your Documents folder) and is written with defaults on first launch. It is outside the game folder on purpose: Overstrike wipes `scripts\` on every Install mods.
 
@@ -81,7 +83,7 @@ The roster is generated: `tools/roster/gen_roster.py` -> `src/roster_data.inc`. 
 
 ## Change scoring and ranks
 
-`EndlessMode/src/score.cpp`. The design is in [SCORING.md](SCORING.md): style meter 0..700 (one rank per 100), hits +4, kills by role,
+`EndlessArena/src/score.cpp`. The design is in [SCORING.md](SCORING.md): style meter 0..700 (one rank per 100), hits +4, kills by role,
 getting hit -60, decay after 2 s without hitting; kill points by role times the rank multiplier; combo bonus; survival bonus; final
 rank = time-weighted average. Constants (`kTierScores` in `score.h`, role points, decay) are at the top of the file.
 Campaign's summary is `score::CampaignEnd` (10 per enemy, 100 per wave reached, minus 5 per hit taken).
@@ -94,7 +96,7 @@ Campaign's summary is `score::CampaignEnd` (10 per enemy, 100 per wave reached, 
 - **Results / live score**: `panels.cpp` (`Results`, `LiveScore`), the challenge panel (activity 1). Rows are `{label, value}` pairs.
   The title is cut off at about 30 characters.
 - Panels animate on game time: don't freeze the world until they have faded in (`panels::Tick` waits 3 s).
-- Anything you can show must exist in the game's UI; see [UI_HUNT.md](UI_HUNT.md) for what each panel accepts. Add a quick test
+- Anything you can show must exist in the game's UI; see [UI_HUNT.md](../../docs/UI_HUNT.md) for what each panel accepts. Add a quick test
   command in `main.cpp` (`gfx panel ...`) before wiring a new panel into a mode.
 
 ## Show a message, banner or pop-up
@@ -113,7 +115,7 @@ Use the notification box for general messages, and skip it only where a panel is
 
 ## Add a boon or curse
 
-`EndlessMode/src/boons.cpp`: the pool is built at run start from the game's own inventory categories (suit powers and suit mods, never skills),
+`EndlessArena/src/boons.cpp`: the pool is built at run start from the game's own inventory categories (suit powers and suit mods, never skills),
 plus a few stat boons; names and descriptions come from the game's text (`inventory::Text`), not from us.
 
 - **Stat boons**: look for the `Stat` kind and the multiplier helpers (damage dealt/taken multipliers near line 100).
@@ -140,7 +142,7 @@ Log the result (`LOG`); commands have no other output. Read-only commands are sa
 
 ## Call a new game function
 
-1. Find it ([REVERSE_ENGINEERING.md](REVERSE_ENGINEERING.md)) and make a unique signature.
+1. Find it ([REVERSE_ENGINEERING.md](../../docs/REVERSE_ENGINEERING.md)) and make a unique signature.
 2. Add an enum value in `natives.h`, a table entry in `natives.cpp` (name, pattern, rel32 offset or `kDirect`, **expected RVA**).
 3. `tests\run_offline.cmd`: it must say the new native resolved at the expected RVA with 1 hit.
 4. Wrap the call in a small function with a typed signature, call it only through `gamethread::Run/Post`, and handle failure

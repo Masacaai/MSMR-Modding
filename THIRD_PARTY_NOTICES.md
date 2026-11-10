@@ -5,7 +5,7 @@ binaries; they apply to those libraries only. The rest of this repository is und
 
 ## MinHook (and the bundled HDE disassembler)
 
-Fetched by vcpkg at build time (`EndlessMode/vcpkg.json`). License text as shipped by the vcpkg port:
+Fetched by vcpkg at build time (`EndlessArena/vcpkg.json`). License text as shipped by the vcpkg port:
 
 ```
 MinHook - The Minimalistic API Hooking Library for x64/x86
@@ -99,7 +99,7 @@ Game assets belong to their owners and are not distributed.
 
 ## SpidyVR (reference and method)
 
-The ENDLESS ARENA tab in the game's Settings menu (`EndlessMode/src/menu.cpp`, `settings.cpp`) follows the method that
+The ENDLESS ARENA tab (`EndlessArena/src/menu.cpp`, `settings.cpp`) and the shared code that adds it to the game's Settings (`ModMenu/`: one tab per script mod, the game's own tab and first-page code) follow the method that
 **Ilya Mezerowsky's SpidyVR** (https://github.com/IlyaMez/SpidyVR, GPL-3.0) documents and uses for its SPIDY VR tab: copy a
 tab, a setting and a heading from the game's own menu config, build the tab with the game's own builder, append it to
 the tabs handed to Flash, and answer for the new setting numbers by hooking the game's per-setting functions. The
