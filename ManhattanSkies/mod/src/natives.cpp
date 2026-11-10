@@ -24,6 +24,10 @@ namespace natives {
         { LoadAssetByHash, "LoadAssetByHash",
           "E8 ?? ?? ?? ?? 8B 44 24 78 4C 8B CF 48 8B 54 24 58 4C 8B C3",
           43, 0x1626380 },
+        // Tkachov's SDK signature (also Endless Arena's): the handle -> actor lookup.
+        { GetActor, "GetActor",
+          "44 8B 01 41 8B D0 C1 EA 14 81 E2 FF 07 00 00 74 ?? 41 81 E0 FF FF 0F 00 4B 8D 0C ?? 48 C1 E1 06 48 03 0D ?? ?? ?? ?? 44 3B 05 ?? ?? ?? ?? 73 ?? 0F B7 41 ?? 3B D0 74 ?? 33 C9 48 8B C1",
+          kDirect, 0x15a0560 },
     };
 
     int ResolveAll() {

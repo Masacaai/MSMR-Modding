@@ -21,7 +21,7 @@ namespace {
     const char* const kChoices[] = { "DAY", "EARLY MORNING", "SUNSET", "NIGHT", "NIGHT (VARIANT)", "OVERCAST", "OVERCAST (VARIANT)" };
     const int kModes[] = { 0, 4, 2, 5, 1, 6, 3 };
     constexpr int kChoiceCount = 7, kDefault = 0;
-    enum { kHeadSky = 0, kTimeId, kStyleId, kVariantId, kHeadSun, kDirId, kHeightId, kColorId, kBrightId, kFogId, kFogDistId, kHazeId, kHeadImage, kExposureId, kFilterId, kCloudsId, kFogColorId, kPresetId };
+    enum { kHeadSky = 0, kTimeId, kStyleId, kVariantId, kHeadSun, kDirId, kHeightId, kColorId, kBrightId, kFogId, kFogDistId, kHazeId, kHeadImage, kExposureId, kFilterId, kCloudsId, kFogColorId, kPresetId, kCycleId };
 
     // After applying, the row keeps showing the pick until the game's mode field catches up (a few frames).
     std::atomic<int> g_pending{ -1 };
@@ -64,7 +64,7 @@ namespace {
         int n = 0;
         auto add = [&](int id) { if (n < max) ids[n++] = id; };
         add(kPresetId);
-        add(kHeadSky); add(kTimeId); add(kStyleId);
+        add(kHeadSky); add(kTimeId); add(kCycleId); add(kStyleId);
         if (sky::Get(sky::kStyle) > 0) add(kVariantId);
         add(kHeadSun); add(kDirId); add(kHeightId); add(kColorId); add(kBrightId); add(kFogId); add(kFogDistId); add(kFogColorId); add(kHazeId);
         add(kHeadImage); add(kExposureId); add(kFilterId); add(kCloudsId);
@@ -82,6 +82,10 @@ namespace {
                 out->title = "TIME OF DAY";
                 out->help = "The game's own lighting: sky, sun and the lights in the world. Includes Early Morning and the overcast looks the game's option never offers. The screen fades briefly while it changes.";
                 out->choices = kChoices; out->choice_count = kChoiceCount; break;
+            case kCycleId:
+                out->title = "DYNAMIC CYCLE";
+                out->help = "Plays a full day: Early Morning, Day, Sunset and Night, over and over. The value is how long one full day takes. The sun travels across the sky, and each phase may use a random sky (some days are overcast). The screen does not fade: the colors shift toward the next sky shortly before it arrives. Picking a time of day sets where the cycle continues from. Takes over SUN DIRECTION and SUN HEIGHT while on, and your own SKY STYLE wins over the random skies. Starts about 30 seconds after a world loads.";
+                out->choices = sky::CycleLabels(); out->choice_count = sky::CycleCount(); break;
             case kStyleId:
                 out->title = "SKY STYLE";
                 out->help = "Puts a different sky on top of the time of day: AUTO leaves the game's own. The world lighting stays the time of day's, so you can mix, for example Day lighting under a Sunset sky.";
@@ -152,6 +156,7 @@ namespace {
             case kExposureId: return sky::kExposure;
             case kFilterId: return sky::kFilter;
             case kCloudsId: return sky::kClouds;
+            case kCycleId: return sky::kCycle;
             case kFogColorId: return sky::kFogColor;
             default: return sky::kBright;
         }
@@ -165,7 +170,12 @@ namespace {
     int Default(void*, int) { return kDefault; }
     void Set(void*, int id, int choice) {
         if (id == kPresetId) { if (choice >= 1) { ++g_changes; g_pick_custom = false; presets::Apply(choice); g_rebuild = true; g_was_custom = false; } else { g_pick_custom = true; if (presets::RestoreCustom()) { g_rebuild = true; g_pick_custom = presets::Current() != 0; g_was_custom = presets::Current() == 0; } } return; }
-        if (id == kTimeId) { Choose(choice); NoteCustomness(); return; }
+        if (id == kTimeId) {
+            Choose(choice);
+            if (!sky::CycleSyncMode(kModes[choice])) { sky::Set(sky::kCycle, 0); g_rebuild = true; }   // overcast is not part of the cycle
+            NoteCustomness();
+            return;
+        }
         if (id == kHeadSky || id == kHeadSun || id == kHeadImage) return;
         sky::Set(SettingOf(id), choice);
         NoteCustomness();

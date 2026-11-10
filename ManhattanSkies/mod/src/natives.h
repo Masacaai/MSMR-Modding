@@ -13,6 +13,7 @@ namespace natives {
         LightingSet,        // exe+1f7f9e0 (lighting object, mode index): wrapper that tail-calls the worker exe+1f058e0; 7 callers, the worker has no others
         AtmosphereAdjust,   // exe+162f020 (AtmosphereManager*, slot*, delta, mask, min, max): adds delta to the slot's counters picked by mask, clamps, recomputes (exe+162ff10)
         LoadAssetByHash,    // exe+1626380 (manager*, u64 asset id, 0,0,0,0,0) -> asset*: the generic "load this asset into that manager" call
+        GetActor,           // exe+15a0560 Actor* (uint32_t* handle): used to read Spider-Man's position (the dynamic cycle waits for him to slow down)
         Count
     };
 

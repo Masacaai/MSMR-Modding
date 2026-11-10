@@ -5,6 +5,7 @@
 // S0: passive recorder (lighting-mode changes, atmosphere slot activity).  S1: `sky <index>` sets the lighting mode like the Settings menu.
 // S2: the MANHATTAN SKIES tab in the shared MODS menu (menu.cpp, ModMenu/): a TIME OF DAY row with all seven modes.
 #include "log.h"
+#include "memory.h"
 #include "menu.h"
 
 #include "../../../ModMenu/modmenu.h"
@@ -58,6 +59,37 @@ static void RunCommand(const std::string& line) {
         if (!a || val.empty()) LOG("poke: usage %s <addr|exe+rva> <value>", cmd.c_str());
         else if (cmd == "poke32") recorder::Poke32(a, (uint32_t)strtoul(val.c_str(), nullptr, 16));
         else recorder::PokeF(a, strtof(val.c_str(), nullptr));
+    } else if (cmd == "nofade") {   // nofade <ms>: swallow the lighting transition's fade for that long (then e.g. `sky 2`)
+        unsigned ms = 5000;
+        in >> ms;
+        modmenu::SuppressFade(ms > 60000 ? 60000 : ms);
+        LOG("nofade: lighting transition fade swallowed for %u ms", ms);
+    } else if (cmd == "smoothfade") {   // smoothfade 0|1: the day-night cycle swallows the fade at its dawn/dusk switches
+        int on = 1;
+        in >> on;
+        sky::SetSmoothFade(on != 0);
+    } else if (cmd == "holdf") {   // holdf <ms> <addr|exe+rva> <float> [<addr> <float> ...]: rewrites floats every millisecond (for values the game rebuilds each frame)
+        unsigned ms = 0;
+        in >> ms;
+        std::vector<std::pair<uintptr_t, float>> items;
+        std::string where, val;
+        while (in >> where >> val) {
+            const uintptr_t a = where.rfind("exe+", 0) == 0 ? scan::FromRva(strtoull(where.c_str() + 4, nullptr, 16)) : strtoull(where.c_str(), nullptr, 16);
+            if (a) items.emplace_back(a, strtof(val.c_str(), nullptr));
+        }
+        if (!ms || items.empty()) LOG("holdf: usage holdf <ms> <addr|exe+rva> <float> [...]");
+        else {
+            if (ms > 60000) ms = 60000;
+            LOG("holdf: holding %zu value(s) for %u ms", items.size(), ms);
+            std::thread([ms, items] {
+                const ULONGLONG end = GetTickCount64() + ms;
+                while (GetTickCount64() < end) {
+                    for (const auto& it : items) memory::Write(it.first, it.second);
+                    Sleep(1);
+                }
+                LOG("holdf: done");
+            }).detach();
+        }
     } else if (cmd == "loadtrace") {
         unsigned ms = 4000;
         in >> ms;
@@ -141,7 +173,7 @@ static void RunCommand(const std::string& line) {
         std::getline(in, rest);
         LOG("==== mark:%s ====", rest.c_str());
     } else {
-        LOG("unknown command (ping, sky [index], findq <hex64>, pokef <addr> <f>, poke32 <addr> <hex>, recompute, atmrelease <slot>, skystate, skyreset, look <style> <variant>, sun <dir> <height> <color> <bright> [fog], loadtrace [ms], atmload <id|@name> [mgr], atmlist [name], adj <slot> <delta>, slotaddr <n>, wp set|dump|clear, uitrace [ms], snap <name>, snapdiff <a> <b> [<a2>], menu, atm, peek <addr|exe+rva> [len], mark <text>)");
+        LOG("unknown command (ping, sky [index], findq <hex64>, pokef <addr> <f>, poke32 <addr> <hex>, recompute, atmrelease <slot>, skystate, skyreset, look <style> <variant>, sun <dir> <height> <color> <bright> [fog], loadtrace [ms], atmload <id|@name> [mgr], atmlist [name], adj <slot> <delta>, slotaddr <n>, holdf <ms> <addr> <f> [...], wp set|dump|clear, uitrace [ms], snap <name>, snapdiff <a> <b> [<a2>], menu, atm, peek <addr|exe+rva> [len], mark <text>)");
     }
 }
 
@@ -182,7 +214,7 @@ static void Main() {
         PollCommands();
         recorder::Tick();
         sky::Tick();
-        Sleep(250);
+        Sleep((DWORD)sky::TickMs());
     }
 }
 

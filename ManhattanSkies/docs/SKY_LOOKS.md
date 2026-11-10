@@ -9,7 +9,7 @@ Numbers (sun rotation and elevation in degrees, RGB + intensity, sky texture) co
 | DAY | CLASSIC | `atm_ibl_lgt_day_02.atmosphere` | 100.0 / 31.0 | 1.00,0.84,0.66,6.00 | 8k_Day_Sky_miles_cool2.texture | the open-world day |
 | DAY | PAINTED SKY | `atm_ibl_lgt_day_02_cine.atmosphere` | 117.0 / 61.0 | 1.00,1.00,1.00,6.00 | 8k_day_sky_painted_2.texture | day, used by cutscenes |
 | DAY | BRIGHT HDR | `atm_ibl_lgt_day_spidey_01.atmosphere` | 135.4 / 59.9 | 1.00,1.00,1.00,10.00 | day_skybox_hdr_02.texture | a Spider-Man hero-lighting day (intensity 10) |
-| DAY | OPEN WORLD HDR | `atm_ibl_lgt_vn_scorpion_open_world.atmosphere` | 242.6 / 62.1 | 1.00,1.00,1.00,6.00 | day_skybox_hdr_02.texture | day for the Scorpion (VN_SCORPION) open-world content |
+| DAY | SCORPION GREEN | `atm_ibl_lgt_vn_scorpion_open_world.atmosphere` | 242.6 / 62.1 | 1.00,1.00,1.00,6.00 | day_skybox_hdr_02.texture | day for the Scorpion (VN_SCORPION) open-world content |
 | DAY | CITY HALL | `atm_ibl_lgt_day_cityhall_destroy.atmosphere` | 171.0 / 63.8 | 1.00,1.00,1.00,1.20 | CGSkies_0129_day_4k_cityhall.texture | City Hall destruction scene |
 | DAY | SOFT CLOUDS | `atm_cine_hh_theater_01.atmosphere` | 22.5 / 41.3 | 0.91,0.96,1.00,0.00 | cgskies_0027_4k_skybox_noBias.texture | a Hammerhead (Turf Wars DLC) theater cutscene |
 | DAY | HAZY | `atm_milestease_vmfog.atmosphere` | 170.0 / 16.0 | 1.00,0.95,0.88,2.00 | skybox_ibl_cgskies_00012_free.texture | a Miles teaser with fog |

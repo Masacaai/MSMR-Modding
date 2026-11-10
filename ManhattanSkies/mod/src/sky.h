@@ -10,7 +10,7 @@
 // gives it the base's weight and takes the base's away; the game's own activation of the next base atmosphere is swallowed while the override
 // is on. Sun edits are written into the active slot's copy of the values and the manager re-blends.
 namespace sky {
-    enum Setting { kStyle, kVariant, kDir, kHeight, kColor, kBright, kFog, kFogDist, kHaze, kExposure, kFilter, kClouds, kFogColor, kSettingCount };
+    enum Setting { kStyle, kVariant, kDir, kHeight, kColor, kBright, kFog, kFogDist, kHaze, kExposure, kFilter, kClouds, kFogColor, kCycle, kSettingCount };
 
     void Load();                       // ini -> settings (once, at start-up)
     int Get(Setting s);
@@ -20,6 +20,10 @@ namespace sky {
     const char* LabelAt(Setting s, int i);
     int SavedMode();                   // the time of day (lighting mode) picked in the menu, kept across launches; -1: never picked (the game keeps its own)
     void SaveMode(int mode);
+    int CycleCount();  const char* const* CycleLabels();
+    int TickMs();                      // how long the worker loop should sleep: short while the day-night cycle steers the sun
+    void SetSmoothFade(bool on);       // dev: swallow the lighting transition's fade for cycle-driven changes
+    bool CycleSyncMode(int mode);      // a time of day was picked: the cycle (when on) continues from there; false: that mode is not in the cycle (overcast)
     void ResetAll();                   // every sky setting back to AUTO
 
     // Choice labels for the menu rows. Variant labels depend on the style.
