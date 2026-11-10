@@ -11,7 +11,7 @@ mods for [Overstrike](https://www.nexusmods.com/marvelsspidermanremastered/mods/
 | Mod | What it is | Status |
 |---|---|---|
 | [**Endless Arena**](EndlessArena/README.md) | Waves of enemies, bosses, boons and curses on Ryker's Island, until you go down | Beta released |
-| [**Manhattan Skies**](ManhattanSkies/README.md) | Time of day, sky, sun, fog and image controls from the pause menu: 124 skies, presets, Early Morning | Working, not released |
+| [**Manhattan Skies**](ManhattanSkies/README.md) | Time of day, sky, sun, fog and image controls from the pause menu: 124 skies, presets, Early Morning | Alpha released |
 | [**ModMenu**](ModMenu/README.md) | The shared code that puts the mods' tabs in the game's Settings screen (a library compiled into each mod) | Working |
 
 ## Layout
