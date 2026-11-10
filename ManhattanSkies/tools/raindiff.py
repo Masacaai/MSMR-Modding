@@ -1,6 +1,6 @@
 # raindiff.py <dump dir> : candidates for "the rain level" in the exe's .data, from raincapture.py's dumps.
 # A word qualifies when it is zero in every Day dump, stable inside the Night pair and inside the Overcast pair, and nonzero (float-like) in both.
-# Sunset and Sunrise are reported as extra columns (they may or may not rain).
+# Sunset and Early Morning are reported as extra columns (they may or may not rain).
 import glob
 import os
 import struct

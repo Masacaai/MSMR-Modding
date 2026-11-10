@@ -277,7 +277,7 @@ namespace {
 
     // The sun values wanted for an atmosphere (its own, with the settings applied).
     // ---- dynamic cycle: a pose (lighting mode + sun path) for each moment of one full cycle f in [0,1) ----
-    //   [0.93,0.08) Sunrise   [0.08,0.55) Day (or an overcast day, kOvercastChance)   [0.55,0.68) Sunset   [0.68,0.93) Night
+    //   [0.93,0.08) Early Morning   [0.08,0.55) Day (or an overcast day, kOvercastChance)   [0.55,0.68) Sunset   [0.68,0.93) Night
     // Each phase may use a random sky from the lists below (or the game's own for that lighting mode) instead of the default.
     std::atomic<bool> g_cyc_sun_on{ false };      // the cycle is steering the sun (not at night)
     std::atomic<float> g_cyc_rotd{ 0.f }, g_cyc_elev{ 0.f };
@@ -362,7 +362,7 @@ namespace {
             case 3: return PickFrom(kPickOvercast, sizeof(kPickOvercast) / sizeof(kPickOvercast[0]));
             case 2: return PickFrom(kPickSunset, sizeof(kPickSunset) / sizeof(kPickSunset[0]));
             case 5: return PickFrom(kPickNight, sizeof(kPickNight) / sizeof(kPickNight[0]));
-            default: return 0;   // Sunrise keeps its own sky
+            default: return 0;   // Early Morning keeps its own sky
         }
     }
 

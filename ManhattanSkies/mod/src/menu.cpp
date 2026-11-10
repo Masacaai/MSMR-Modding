@@ -18,7 +18,7 @@ namespace menu {
 namespace {
     // Mode indexes from the S1 sweep (docs/RECON.md Part 4). Index 4 is the game's kBlackout (the opening mission's dawn); which of 1/5 and 3/6
     // is the rainy one is still open.
-    const char* const kChoices[] = { "DAY", "SUNRISE", "SUNSET", "NIGHT", "NIGHT (VARIANT)", "OVERCAST", "OVERCAST (VARIANT)" };
+    const char* const kChoices[] = { "DAY", "EARLY MORNING", "SUNSET", "NIGHT", "NIGHT (VARIANT)", "OVERCAST", "OVERCAST (VARIANT)" };
     const int kModes[] = { 0, 4, 2, 5, 1, 6, 3 };
     constexpr int kChoiceCount = 7, kDefault = 0;
     enum { kHeadSky = 0, kTimeId, kStyleId, kVariantId, kHeadSun, kDirId, kHeightId, kColorId, kBrightId, kFogId, kFogDistId, kHazeId, kHeadImage, kExposureId, kFilterId, kCloudsId, kFogColorId, kPresetId, kCycleId };
@@ -80,11 +80,11 @@ namespace {
             case kHeadSky: out->title = "TIME AND SKY"; out->heading = 1; break;
             case kTimeId:
                 out->title = "TIME OF DAY";
-                out->help = "The game's own lighting: sky, sun and the lights in the world. Includes Sunrise and the overcast looks the game's option never offers. The screen fades briefly while it changes.";
+                out->help = "The game's own lighting: sky, sun and the lights in the world. Includes Early Morning and the overcast looks the game's option never offers. The screen fades briefly while it changes.";
                 out->choices = kChoices; out->choice_count = kChoiceCount; break;
             case kCycleId:
                 out->title = "DYNAMIC CYCLE";
-                out->help = "Plays a full day: Sunrise, Day, Sunset and Night, over and over. The value is how long one full day takes. The sun travels across the sky, and each phase may use a random sky (some days are overcast). The screen does not fade: the colors shift toward the next sky shortly before it arrives. Picking a time of day sets where the cycle continues from. Takes over SUN DIRECTION and SUN HEIGHT while on, and your own SKY STYLE wins over the random skies. Starts about 30 seconds after a world loads.";
+                out->help = "Plays a full day: Early Morning, Day, Sunset and Night, over and over. The value is how long one full day takes. The sun travels across the sky, and each phase may use a random sky (some days are overcast). The screen does not fade: the colors shift toward the next sky shortly before it arrives. Picking a time of day sets where the cycle continues from. Takes over SUN DIRECTION and SUN HEIGHT while on, and your own SKY STYLE wins over the random skies. Starts about 30 seconds after a world loads.";
                 out->choices = sky::CycleLabels(); out->choice_count = sky::CycleCount(); break;
             case kStyleId:
                 out->title = "SKY STYLE";
