@@ -4,7 +4,7 @@
 #include "scan.h"
 
 namespace natives {
-    // All four patterns have exactly one hit in the 4.0630 exe (checked with Uncontained/tools/sigcheck.py; GameThreadTick is Uncontained's).
+    // All four patterns have exactly one hit in the 4.0630 exe (checked with ManhattanStreets/tools/sigcheck.py; GameThreadTick is Manhattan Streets').
     Native table[Count] = {
         { GameThreadTick, "GameThreadTick",
           "48 8B CB E8 ?? ?? ?? ?? 48 8B CB E8 ?? ?? ?? ?? 48 8B CB E8 ?? ?? ?? ?? 48 8D 8B 40 5A 00 00",
@@ -20,7 +20,7 @@ namespace natives {
         { AtmosphereAdjust, "AtmosphereAdjust",
           "48 89 5C 24 08 56 48 83 EC 20 48 63 41 70 41 8B F0 44 8B 54 24 50 48 8B D9 44 8B 5C 24 58 85 C0 0F 88",
           kDirect, 0x162f020 },
-        // Context of a call site; the rel32 at +43 is the call to LoadAssetByHash (same signature Uncontained uses).
+        // Context of a call site; the rel32 at +43 is the call to LoadAssetByHash (same signature Manhattan Streets uses).
         { LoadAssetByHash, "LoadAssetByHash",
           "E8 ?? ?? ?? ?? 8B 44 24 78 4C 8B CF 48 8B 54 24 58 4C 8B C3",
           43, 0x1626380 },

@@ -1,4 +1,4 @@
-// Manhattan Skies: time of day and weather control. A separate mod from Endless Arena and Uncontained.
+// Manhattan Skies: time of day and weather control. A separate mod from Endless Arena and Manhattan Streets.
 // Loaded by Overstrike's scripts proxy (LoadLibrary from scripts\, then script_enable()).
 // Dev control: write commands to scripts\ManhattanSkies.cmd (one per line); results go to scripts\ManhattanSkies.log.
 //

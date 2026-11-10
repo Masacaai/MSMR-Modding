@@ -6,7 +6,7 @@ Tags: [V] verified (disassembly or in game), [I] inferred, [?] unknown. Addresse
 
 # Part 1: starting point (2026-11-08)
 
-Most of this came from Uncontained (`Uncontained/docs/RECON.md` Parts 7, 15-19), where it was found for Act 3 weather. Nothing here has been tested for time of day yet.
+Most of this came from Manhattan Streets, then called Uncontained (`ManhattanStreets/docs/RECON.md` Parts 7, 15-19), where it was found for Act 3 weather. Nothing here has been tested for time of day yet.
 
 ## Lighting modes (weather lives here)
 - Seven modes in the level data: `kDay`, `kSunset`, `kOvercast`, `kOvercastRain`, `kNight`, `kNightRain`, `kBlackout`. [V names from level data]
@@ -16,9 +16,9 @@ Most of this came from Uncontained (`Uncontained/docs/RECON.md` Parts 7, 15-19),
 - `exe+1f7f9e0` gets an object through `exe+1f03570` and tail-calls the worker `exe+1f058e0(obj, index)`. The worker has no other caller; the wrapper has 7 (`exe+735d17`, `bd867d`, `1f7485b`, `1f7490d`, `1f7ea69`, `1faab88`, `1fae8fa`). So hooking the wrapper sees every mode change. [V xrefs]
 - Open [?]: whether rain particles and wet surfaces follow the mode everywhere or only where Act 3 zones listen (`OnLightingModeChangedAction`); whether calling the setter alone is enough or the game also transitions/streams around it (`LightingModeTransition*Event`).
 
-## Atmospheres (looks without a lighting mode: Early Morning, extra environment sets)
+## Atmospheres (looks without a lighting mode: Sunrise, extra environment sets)
 - `AtmosphereManager` (vtable `exe+3cf1f18`): slot count `+0x70`, **pointer** to the slot array at `+0x110` (stride `0x8c0`), pointer to a 4-int counter array at `+0x120` (16 bytes per slot). [V]
-- **Correction to Uncontained Part 7:** `exe+162f020(mgr, slot, delta, mask, min, max)` is not "activate with a blend time". It finds the slot index, adds `delta` to each of the slot's counters 0-2 selected by mask bits 0-2 and to counter 3 when bit 1 of the shifted mask is set, clamps each to `[min, max]`, then calls `exe+162ff10(mgr)` (recompute). `ActivateAtmosphereAction` passes delta 500, min 0, max 0x7fffffff, so it acts like a weighted reference count; removing the look presumably passes a negative delta. 26 callers. [V disassembly, I meaning]
+- **Correction to Manhattan Streets (then Uncontained) Part 7:** `exe+162f020(mgr, slot, delta, mask, min, max)` is not "activate with a blend time". It finds the slot index, adds `delta` to each of the slot's counters 0-2 selected by mask bits 0-2 and to counter 3 when bit 1 of the shifted mask is set, clamps each to `[min, max]`, then calls `exe+162ff10(mgr)` (recompute). `ActivateAtmosphereAction` passes delta 500, min 0, max 0x7fffffff, so it acts like a weighted reference count; removing the look presumably passes a negative delta. 26 callers. [V disassembly, I meaning]
 - Known atmosphere assets: `atmosphere/atm_ibl_lighting/atm_corrupt_truck_chase*.atmosphere`, `atm_nyc_map_2017.atmosphere` (map screen). ALERT parses an `.atmosphere` header with `time_of_day`, sun RGBA/rotation/elevation/radius, ambient RGBA; 133 such assets in MSMR. [V]
 
 ## Settings tab
@@ -45,15 +45,15 @@ Each mod also swaps that slot's sky textures (`material/atmosphere/atm_bsm_sky/{
 So a "look" is essentially **one atmosphere asset (header + baked IBL, about 0.5 to 2.7 MB) that names its own sky texture**, plus the sky texture(s). [V file contents, I "essentially"]
 
 ## Native looks beyond the three slots [V present in toc]
-- **Early Morning:** `atm_ibl_lgt_morning_01_ow.atmosphere` (sky `atmosphere/atm_early_morning/8k_sky_earlymorning_01_ow.texture`), `atm_ibl_lgt_morning_01_fisk.atmosphere`, `atmosphere/peter_apt/atm_peter_apt.atmosphere`. The "BND Early Morning Atmos" `.modular` regrades exactly these (it does not move Early Morning into a slot), which confirms they are the opening mission's look. `_ow` reads as "open world". [I]
+- **Sunrise:** `atm_ibl_lgt_morning_01_ow.atmosphere` (sky `atmosphere/atm_early_morning/8k_sky_earlymorning_01_ow.texture`), `atm_ibl_lgt_morning_01_fisk.atmosphere`, `atmosphere/peter_apt/atm_peter_apt.atmosphere`. The "BND Sunrise Atmos" `.modular` regrades exactly these (it does not move Sunrise into a slot), which confirms they are the opening mission's look. `_ow` reads as "open world". [I]
 - **Night rain:** `atm_ibl_lgt_night_rain_02.atmosphere` (sky `material/atmosphere/atm_bsm_sky/overcast/4k_overcast_hdr_4b_scale.texture`), referenced by a weather-station conduit. There is **no** day-rain atmosphere (`overcast_rain_02`, `rain_02`, `day_rain_02` absent), so kOvercastRain likely = overcast atmosphere + rain effects. [I]
 - No `blackout` atmosphere under the obvious names [?].
 - Mission/cinematic looks also exist (35 referenced paths), e.g. `atm_ibl_lgt_day_spidey_01`, `atm_ibl_lgt_otto`, `atm_night_biotech`, `atm_ibl_overcast_rhinomiles_02`, `atm_ibl_lgt_vn_scorpion_open_world`. Possible extra presets later.
 - Cinematics switch looks with a "Cine Action: <name>.atmosphere" entry, so per-scene atmosphere switching is a normal engine operation. [V strings]
 
 ## Consequences for the design [I]
-- **Early Morning, night rain, overcast and mission looks need no new assets:** they ship in the game. The job is to load one into an `AtmosphereManager` slot and make it win (S0/S2).
-- **More than 3 environment mods:** an `.smpcmod` can only overwrite the slot's asset id, so two Night mods always collide. To keep many, Manhattan Skies must carry each look under **its own new asset path** (e.g. `atmosphere/manhattan_skies/<look>.atmosphere`, with the sky path inside it rewritten to a copied texture), and then load and activate it at runtime like Early Morning. Open [?]: whether Overstrike `.stage` can add assets that are not in the toc (BND's stages replace existing paths only); the format of the in-atmosphere sky reference (string length limits when rewriting); and what the unresolved shared ids (day/sunset material 95E22EB5BAD81B22, extra day textures) are for.
+- **Sunrise, night rain, overcast and mission looks need no new assets:** they ship in the game. The job is to load one into an `AtmosphereManager` slot and make it win (S0/S2).
+- **More than 3 environment mods:** an `.smpcmod` can only overwrite the slot's asset id, so two Night mods always collide. To keep many, Manhattan Skies must carry each look under **its own new asset path** (e.g. `atmosphere/manhattan_skies/<look>.atmosphere`, with the sky path inside it rewritten to a copied texture), and then load and activate it at runtime like Sunrise. Open [?]: whether Overstrike `.stage` can add assets that are not in the toc (BND's stages replace existing paths only); the format of the in-atmosphere sky reference (string length limits when rewriting); and what the unresolved shared ids (day/sunset material 95E22EB5BAD81B22, extra day textures) are for.
 - Redistribution: third-party environment mods are the user's own library; a pack must be built locally from the user's installed mods, not shipped with them.
 
 ---
@@ -77,10 +77,10 @@ Log: `recon/s0_menu_tod_day_sunset_night.log`. 3/3 natives OK, both hooks on, ra
 ## Atmosphere slots are an overlay layer [V log, I meaning]
 - Base time of day does **not** go through `AtmosphereAdjust`: no day_02/sunset_02/night_02 slot appeared. On each change only one local slot was released (-2, caller exe+1a16d8c) and one re-added (+2, exe+1a1b59e): a volume-triggered local atmosphere that has a per-time-of-day variant [I].
 - Slot asset id = qword at `slot+8` (CRC64 path). Slot 0 = `atm_nyc_map_2017.atmosphere` (map screen: +1000 from exe+81c3a0 on open, -1000000 from exe+81a6cd on close). Others seen: a black-background atmosphere (`test/bmullen/black_bg_atmo.texture`, load screen), sunset-sky variants with `atm_ibl_sunset_02_bake`. Slots are **reused** (indexes recycled; first-sight bytes go stale) and `+0x70` is not the slot count.
-- Weights seen: 2 (local volumes), 50 (exe+1669af1, during load), 1000 (map; exe+7140d6 during load). So a full-screen look like the map uses 1000; an Early Morning overlay would likely need a slot with a similar weight [I].
+- Weights seen: 2 (local volumes), 50 (exe+1669af1, during load), 1000 (map; exe+7140d6 during load). So a full-screen look like the map uses 1000; an Sunrise overlay would likely need a slot with a similar weight [I].
 
 ## S1 build (2026-11-08, not yet run)
-`sky <n>` calls the setter on the game thread (lazy GameThreadTick hook, same function Endless Arena hooks: two MinHook copies on one function, worked for Uncontained [?]); `at:`/`atm` now print each slot's asset id; `peek <addr|exe+rva> [len]`.
+`sky <n>` calls the setter on the game thread (lazy GameThreadTick hook, same function Endless Arena hooks: two MinHook copies on one function, worked for Manhattan Streets, then called Uncontained [?]); `at:`/`atm` now print each slot's asset id; `peek <addr|exe+rva> [len]`.
 Plan: `sky 1`, `sky 3`, `sky 4`, `sky 6` one at a time, user describes each (rain? overcast? blackout?), then back to `sky 5`.
 
 ---
@@ -95,20 +95,20 @@ Log: `recon/s1_sky_index_sweep.log`. `sky <n>` ran on the game thread every time
 | 1 | `atm_ibl_lgt_night_02` | same as 5 (sub-second hitch on switch) | kNight or kNightRain |
 | 2 | sunset_02 | Sunset (Settings) | kSunset |
 | 3 | `atm_ibl_lgt_overcast_02` | grey overcast, **rain falling** | kOvercast or kOvercastRain |
-| 4 | **`atm_ibl_lgt_morning_01_ow`** | **the opening mission's dawn** [V user] | Early Morning (a mode, not in the Settings list) |
+| 4 | **`atm_ibl_lgt_morning_01_ow`** | **the opening mission's dawn** [V user] | Sunrise (a mode, not in the Settings list) |
 | 5 | night_02 | Night (Settings) | kNight or kNightRain |
 | 6 | `atm_ibl_lgt_overcast_02` | same as 3 (rain falling), no difference seen | kOvercast or kOvercastRain |
 
 - **Correction to Part 3:** the base time of day **does** go through `AtmosphereAdjust`. The +2/-2 swap in one slot (release exe+1a16d8c, add exe+1a1b59e) is the base atmosphere; Part 3's ids were stale first-sight bytes from reused slots. [V]
-- **Early Morning and rain need no assets and no slot work:** one setter call each. [V]
+- **Sunrise and rain need no assets and no slot work:** one setter call each. [V]
 - Pairs 1/5 and 3/6 share an atmosphere; the difference must be outside it (rain/wetness/audio). Both rain mods the user runs replace the shared atmosphere plus two rain-only textures (8995A4D493702331, 89D5F9DA0876FDB1), so the rain seen in both 3 and 6 may come from the mods. A vanilla pass (those two mods off) settles which index of each pair is the rainy one. [?]
-- No blackout mode among 0-6: the level data's 7 names map onto these 7 indexes with Early Morning taking a slot, so either `kBlackout` is index 1 or 6 (with the night/overcast atmosphere) or the name list is not the index order. [?]
+- No blackout mode among 0-6: the level data's 7 names map onto these 7 indexes with Sunrise taking a slot, so either `kBlackout` is index 1 or 6 (with the night/overcast atmosphere) or the name list is not the index order. [?]
 
 ---
 
 # Part 5: S2 Settings tab (built 2026-11-08, not yet run)
 
-`mod/src/menu.cpp`: a trimmed copy of Endless Arena's tab injection (SpidyVR's method). Tab id 94, setting numbers 0x400+, one heading and one TIME OF DAY row: DAY 0, EARLY MORNING 4, SUNSET 2, NIGHT 5, NIGHT (VARIANT) 1, OVERCAST 6, OVERCAST (VARIANT) 3. The row's value is read from the live mode field (so it follows the game's own option); a pick is applied by calling the setter inside the Settings callback (game thread, as the game's own option does) and shown as pending for up to 3 s until the mode field catches up. No ini: nothing to persist yet (the save keeps the mode).
+`mod/src/menu.cpp`: a trimmed copy of Endless Arena's tab injection (SpidyVR's method). Tab id 94, setting numbers 0x400+, one heading and one TIME OF DAY row: DAY 0, SUNRISE 4, SUNSET 2, NIGHT 5, NIGHT (VARIANT) 1, OVERCAST 6, OVERCAST (VARIANT) 3. The row's value is read from the live mode field (so it follows the game's own option); a pick is applied by calling the setter inside the Settings callback (game thread, as the game's own option does) and shown as pending for up to 3 s until the mode field catches up. No ini: nothing to persist yet (the save keeps the mode).
 Coexistence: Endless Arena hooks the same 10 functions about 1.7 s after start and refuses a target that already starts with a jmp. So when `EndlessArena.dll` is loaded, Manhattan Skies waits (up to 30 s) until all 10 targets carry a jmp, then hooks on top; each layer answers only for its own setting numbers and passes the rest down. Y (RESET ALL) does nothing on our tab (the game ignores tab ids above 10). [I, to test]
 Risks: the chained hooks (two MinHook copies, ours over Endless Arena's), and changing the mode while a story mission controls lighting.
 
@@ -140,7 +140,7 @@ Logs and the exit-crash dump: `recon/s2_first_run/`.
 # Part 8: the MODS menu in game (2026-11-08)
 
 - With the `ObjectNumber` fix (hooks answer for the MODS item number 0x3ff): the MODS entry appears under SETTINGS (first page: 11 AddItem calls per build, 1 SETTINGS item found, 0 faults); A on it sends `Select 1023`, the options screen opens with exactly the two mod tabs (MANHATTAN SKIES, ENDLESS ARENA), 0 faults. [V user + log]
-- TIME OF DAY row shows the live mode (Early Morning at the time) and picking SUNSET applied mode 2 at once from inside the callback (game thread). [V]
+- TIME OF DAY row shows the live mode (Sunrise at the time) and picking SUNSET applied mode 2 at once from inside the callback (game thread). [V]
 - **The game closes the pause menu on any lighting-mode change**, however it is triggered: a `sky 3` from the command file while the MODS screen was open did the same. So this is the engine, not the menu code. The new sky is in place when the player is back in the world. [V user]
 - Not yet tested: the ENDLESS ARENA tab's rows/sections/presets under MODS, backing out of MODS and opening the game's own SETTINGS (should show only the game's tabs), and a clean game exit (the previous exit crashed with a half-built value, fixed by the same item-number change [I]).
 
@@ -169,7 +169,7 @@ Logs and the exit-crash dump: `recon/s2_first_run/`.
 `recon/atmosphere_catalog.txt` (124 atmospheres: path, sun rotation/elevation/RGBA(intensity), radius, ambient, sky texture; tools `atmpaths_all.py` + `atmcatalog.py`; ids in `mod/src/atm_ids.inc`). They are referenced by zones, cutscenes and missions; families by sky texture: day (painted_2, day_sky_miles_cool2, day_skybox_hdr_02, cityhall, cgskies_0027), sunset (MainSunsetSky, sunset_4k nick, Grand Central, Norman penthouse), morning (EarlyMorning OW/Fisk/Peter's apartment), night (NightSky1, nightcloudy, Sky_Night_3, moon/no moon), overcast (overcast_skybox_hdr_04, 4k_overcast_hdr_4b), strange (Scorpion hallucination blue/yellow/green, 1700s sunset, black backgrounds).
 
 ## The lighting setup [V asset]
-The global Open_World zone's contents (`98BAD9118100AE64`) names **5 base atmospheres** (day_02, overcast_02, sunset_02, night_02, morning_01_ow) and 5 world "levellights" (day, overcast, sunset, night, **blackout**) plus the sun-flare effect. So mode index 4 = `kBlackout` = morning atmosphere + blackout levellight (Early Morning); the rain modes reuse the night and overcast atmospheres; the levellight (baked world lighting) is a second asset a mode swaps. Atmosphere (sky, IBL, sun) and mode (levellight, rain) are independent layers: Day lighting with the Sunset atmosphere (made with the tools below) was visibly different from real Sunset (yellower, daylight-like streets). [V user]
+The global Open_World zone's contents (`98BAD9118100AE64`) names **5 base atmospheres** (day_02, overcast_02, sunset_02, night_02, morning_01_ow) and 5 world "levellights" (day, overcast, sunset, night, **blackout**) plus the sun-flare effect. So mode index 4 = `kBlackout` = morning atmosphere + blackout levellight (Sunrise); the rain modes reuse the night and overcast atmospheres; the levellight (baked world lighting) is a second asset a mode swaps. Atmosphere (sky, IBL, sun) and mode (levellight, rain) are independent layers: Day lighting with the Sunset atmosphere (made with the tools below) was visibly different from real Sunset (yellower, daylight-like streets). [V user]
 
 ## Live slot edits [V in game]
 The slot keeps a copy of the asset's values: sun RGB at `slot+0x2a8`, intensity `+0x2b4`, rotation `+0x2b8`, elevation `+0x2bc`, ambient `+0x300`, time_of_day float `+0x74`. After writing them, `recompute` (`exe+162ff10(manager)`) makes the renderer use them. Tested: rotation/elevation change sky, shadows and building light; sun RGB red lit everything red; **ambient `+0x300` had no visible effect**; weight 2 on the map atmosphere (slot 0) over Day made no visible change. A color edit left a red patch in cached lighting until the time of day was cycled (reload refreshes).
@@ -254,7 +254,7 @@ Replaces 5 assets: the night atmosphere (`atm_ibl_lgt_night_02`, identical size,
 
 ## Part 15. Rain experiment (2026-11-09): dropped
 - The three rain mods (NYC Rainy Day, Brand New Day Rainy Night, A Dark Rainy Night) replace only atmosphere and texture assets. Diffing their atmospheres against vanilla (`tools/atmdiff.py`, against `toc.BAK`) shows only look values (sun, fog, ambient, IBL); a non-rain mod (NYC Warm Night) changes almost the same fields. So no rain value lives in the atmosphere asset; with the mods off the game already rains in Night and Overcast and not in Day, so rain follows the lighting mode.
-- `.data` dumps in Day, Overcast, Night, Sunset and Early Morning (`tools/raincapture.py`, `tools/raindiff.py`): 7 words are 0 in Day and nonzero in Night and Overcast. Two clusters look like rain levels (`exe+7a2e8ec/8f0/8f8` and `exe+5d6a94c/950`: Overcast 0.8 / Night 0.4, Day, Sunset and Early Morning 0).
+- `.data` dumps in Day, Overcast, Night, Sunset and Sunrise (`tools/raincapture.py`, `tools/raindiff.py`): 7 words are 0 in Day and nonzero in Night and Overcast. Two clusters look like rain levels (`exe+7a2e8ec/8f0/8f8` and `exe+5d6a94c/950`: Overcast 0.8 / Night 0.4, Day, Sunset and Sunrise 0).
 - A hardware write watch on `exe+7a2e8ec` shows the block is cleared every frame by the game's memset (`exe+363e6e9`, from `exe+18968a7`) and refilled by a copy (`exe+363e27e`, from `exe+1886f23`, `1bbe951`, `18963bd`), so a single write is overwritten within a frame. Holding all five values from a 1 ms thread for 15 s in Day (`holdf` command) made no rain or wet surfaces appear (only a texture flicker). Conclusion: they are outputs, not the controls. Not pursued further: rain in Day would look wrong without clouds anyway.
 - Image-controls probe (`tools/imgprobe.py`, 2026-11-09 night): vignette, saturation, contrast, highlight and sharpness metrics over slot `+0x2d0..+0x6a8`. Writing 1.0 into the zero floats around `+0x320..+0x330` left the image distorted (every later test showed the same shifts) and the game crashed a few writes later. Abandoned: the graphics settings already offer exposure and similar controls, so the maintainer did not want more image rows.
 

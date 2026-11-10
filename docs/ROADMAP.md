@@ -32,15 +32,15 @@ Things to settle (raised by Claude, not decided):
 ## 2. One repository for all the mods (idea 2026-11-08; folders and docs restructured 2026-11-09, local, not committed)
 
 Done:
-- Layout: `EndlessArena/` (renamed from `EndlessMode/`), `ManhattanSkies/`, `Uncontained/`, `ModMenu/`, shared `docs/`, `recon/`, `tools/`. A new root `README.md` introduces the mods.
+- Layout: `EndlessArena/` (renamed from `EndlessMode/`), `ManhattanSkies/`, `ManhattanStreets/` (renamed from `Uncontained/`, 2026-11-09: the street-level companion to Manhattan Skies), `ModMenu/`, shared `docs/`, `recon/`, `tools/`. A new root `README.md` introduces the mods.
 - Endless Arena's design, ledger, bugs, scoring and release notes moved to `EndlessArena/docs/`; shared knowledge (getting started, game internals, reverse-engineering method, UI notes, releasing, this roadmap) stays in `docs/`. Relative links were rewritten and checked.
-- `ManhattanSkies/` is no longer ignored as a whole: only its `recon/` and `mod/build/` folders (game-derived material, build output) are. `Uncontained/` stays fully ignored until it is ready for release; only release-ready mods leave the ignore list.
+- `ManhattanSkies/` is no longer ignored as a whole: only its `recon/` and `mod/build/` folders (game-derived material, build output) are. `ManhattanStreets/` stays fully ignored until it is ready for release; only release-ready mods leave the ignore list.
 - Runtime names kept on purpose so existing installs and records keep working: `EndlessMode.log/.ini/.cmd`, `EndlessMode_runs`, and the Documents data folder named EndlessMode.
 
 Also done 2026-11-09:
 - **Shared `common/` layer**: `log`, `memory`, `scan`, `gamethread`, `watchpoint` live once in `common/`; each mod's `build.cmd` compiles it and adds its own `src/` to the include path (`gamethread.cpp` needs the mod's `natives.h`). All mods rebuilt.
 - **Docs pass**: root README, `AGENTS.md`, `CONTRIBUTING.md`, the bug-report template and `GETTING_STARTED.md` now speak for all mods; the shared lighting, atmosphere and pause-menu knowledge from Manhattan Skies is summarized in `docs/GAME_INTERNALS.md`.
-- **Uncontained stays fully git-ignored** until it is ready for release; only release-ready mods leave the ignore list.
+- **Manhattan Streets (formerly Uncontained) stays fully git-ignored** until it is ready for release; only release-ready mods leave the ignore list.
 
 Still open:
 - ~~Renaming the GitHub repository~~ done 2026-11-09: `Masacaai/MSMR-Modding` (GitHub redirects the old `Spider-Man-Endless-Mode` URLs). Still to do by hand: the Nexus page and any pinned links elsewhere.

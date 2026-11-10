@@ -270,7 +270,7 @@ See [`EndlessArena/docs/issues/`](../EndlessArena/docs/issues/) for the open que
 
 All `[V]` = verified in game. Addresses are `exe+RVA`.
 
-- **Seven lighting modes** [V]: index 0 Day, 2 Sunset, 5 Night, 1 Night variant, 3 and 6 Overcast, 4 Early Morning (the game's `kBlackout`; the opening mission's dawn).
+- **Seven lighting modes** [V]: index 0 Day, 2 Sunset, 5 Night, 1 Night variant, 3 and 6 Overcast, 4 Sunrise (the game's `kBlackout`; the opening mission's dawn).
   The setter is `exe+1f7f9e0(world+0xe10d0, index)`, the world getter `exe+1f707e0`, the current mode `world+0xe2040`. The game's own Settings option only offers Day,
   Sunset and Night. Each mode swaps a base **atmosphere** (sky, sun, reflected light, exposure, fog) and a world "levellight". The lit windows and street lamps follow
   the mode, not the atmosphere: nothing we tried (overlay zones, levellight headers, atmosphere fields, a Day/Night 0/1 switch at `exe+728390c`) changes them alone.

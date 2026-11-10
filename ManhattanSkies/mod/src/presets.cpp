@@ -94,7 +94,7 @@ namespace {
         SaveCustomFile();
     }
     int TimeIndex(const std::string& want) {
-        for (int i = 0; i < g_hooks.time_count; ++i) if (Upper(g_hooks.time_labels[i]) == want) return i;
+        for (int i = 0; i < g_hooks.time_count; ++i) if (Upper(g_hooks.time_labels[i]) == want || (want == "EARLY MORNING" && Upper(g_hooks.time_labels[i]) == "SUNRISE")) return i;   // "Early Morning" was this mode's name in the first alpha
         return -1;
     }
 }
