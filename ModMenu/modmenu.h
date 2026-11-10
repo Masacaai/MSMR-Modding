@@ -52,6 +52,10 @@ namespace modmenu {
     // fades out and in. Call this right before changing the mode from a mod's menu callback.
     void KeepMenuOpen(unsigned ms);
 
+    // For `ms` milliseconds the lighting transition's screen fade (the Flash calls FadeOut and FadeIn) is swallowed, so a lighting change made in that
+    // window happens without the fade to black. Call right before changing the mode. Experimental: it is not known whether the game waits for the fade.
+    void SuppressFade(unsigned ms);
+
     // Dev tool: for `ms` milliseconds log every UI call the game makes (name and the code that made it) to the log function given at Register.
     void TraceUi(unsigned ms);
 

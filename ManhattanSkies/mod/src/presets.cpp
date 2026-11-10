@@ -142,9 +142,9 @@ namespace {
             bool ok = true;
             for (int s = 0; s < sky::kSettingCount && ok; ++s) {
                 const auto it = kv.find(Upper(sky::Key((sky::Setting)s)));
-                const std::string want = it == kv.end() ? "AUTO" : it->second;
                 if (s == sky::kVariant && sky::Get(sky::kStyle) == 0) continue;   // no variant under AUTO style
-                ok = Upper(sky::LabelAt((sky::Setting)s, sky::Get((sky::Setting)s))) == want;
+                if (it == kv.end()) ok = sky::Get((sky::Setting)s) == 0;   // a key the preset does not name is the first choice (AUTO, or OFF for the cycle)
+                else ok = Upper(sky::LabelAt((sky::Setting)s, sky::Get((sky::Setting)s))) == it->second;
             }
             const auto t = kv.find("TIME");
             if (ok && t != kv.end() && g_hooks.get_time) ok = Upper(g_hooks.time_labels[g_hooks.get_time()]) == t->second;

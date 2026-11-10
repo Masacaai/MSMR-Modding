@@ -60,6 +60,7 @@ namespace {
         void (*log_status)();
         void (*trace_ui)(unsigned ms);   // added later in protocol 1; check size
         void (*keep_open)(unsigned ms);  // likewise
+        void (*suppress_fade)(unsigned ms);   // likewise
     };
     struct Shared { HostApi* api; };
 
@@ -102,7 +103,8 @@ namespace {
     // The last fault caught around a call into the game's UI code: the exception code, where it happened (image offset if in Spider-Man.exe), the address it touched.
     volatile unsigned long g_fault_code = 0;
     volatile uintptr_t g_fault_rip = 0, g_fault_addr = 0;
-    std::atomic<ULONGLONG> g_trace_until{ 0 }, g_keep_until{ 0 };
+    std::atomic<ULONGLONG> g_trace_until{ 0 }, g_keep_until{ 0 }, g_nofade_until{ 0 };
+    std::atomic<uint64_t> g_fades_blocked{ 0 };
     std::atomic<uint64_t> g_closes_blocked{ 0 };
     std::atomic<bool> g_page_off{ false };   // after one fault adding MODS to the first page, never again (a half-built Scaleform value is left behind)
     int CaptureFault(EXCEPTION_POINTERS* ep) {
@@ -327,6 +329,11 @@ namespace {
                 used += (size_t)snprintf(where + used, sizeof(where) - used, " %llx", (unsigned long long)(f >= g_base && f < g_base + 0x8000000 ? f - g_base : 0));
             }
             Log("modmenu: ui '%.40s' (%u args) from%s", name, count, where);
+        }
+        // A mod asked for a lighting change without the fade: swallow the transition's Flash FadeOut / FadeIn for a few seconds.
+        if (name && GetTickCount64() < g_nofade_until && (std::strcmp(name, "FadeOut") == 0 || std::strcmp(name, "FadeIn") == 0)) {
+            if (g_fades_blocked++ < 8) Log("modmenu: %s swallowed (%u args, first arg type %u data %llx)", name, count, args && count ? (unsigned)args[0].type : 0u, args && count ? (unsigned long long)args[0].data : 0ull);
+            return true;
         }
         // The pause menu closes itself when the world goes into a lighting transition: swallow that one request while a mod's menu change is under way.
         if (name && g_mods_screen && GetTickCount64() < g_keep_until && _ReturnAddress() == reinterpret_cast<void*>(g_base + kPauseCloseReturn) &&
@@ -578,6 +585,7 @@ namespace {
     }
     void HostTraceUi(unsigned ms) { g_trace_until = GetTickCount64() + ms; Log("modmenu: tracing UI calls for %u ms", ms); }
     void HostKeepOpen(unsigned ms) { g_keep_until = GetTickCount64() + ms; }
+    void HostSuppressFade(unsigned ms) { g_nofade_until = GetTickCount64() + ms; }
     void HostLogStatus() {
         Log("modmenu: host, %d mods, hooked=%d templates=%d mods-screen=%d openings=%llu tabs=%llu pages=%llu changes=%llu | first page: calls=%llu settings-items=%llu fail=%llu selects=%llu | closes swallowed=%llu",
             g_count.load(), (int)g_hooked, g_tpl.load(), (int)g_mods_screen, (unsigned long long)g_open_count, (unsigned long long)g_tabs_built,
@@ -601,7 +609,7 @@ namespace {
         // The handle and view stay open for the life of the process.
         if (!existed) {
             g_is_host = true;
-            g_api = { kProtocol, sizeof(HostApi), &HostRegister, &HostLogStatus, &HostTraceUi, &HostKeepOpen };
+            g_api = { kProtocol, sizeof(HostApi), &HostRegister, &HostLogStatus, &HostTraceUi, &HostKeepOpen, &HostSuppressFade };
             InterlockedExchangePointer(reinterpret_cast<void* volatile*>(&shared->api), &g_api);
             g_elect_code = InstallHooks();
             return;
@@ -626,6 +634,11 @@ namespace {
     void KeepMenuOpen(unsigned ms) {
         if (g_is_host) HostKeepOpen(ms);
         else if (g_remote && g_remote->size >= sizeof(HostApi)) g_remote->keep_open(ms);
+    }
+
+    void SuppressFade(unsigned ms) {
+        if (g_is_host) HostSuppressFade(ms);
+        else if (g_remote && g_remote->size >= sizeof(HostApi)) g_remote->suppress_fade(ms);
     }
 
     void TraceUi(unsigned ms) {
