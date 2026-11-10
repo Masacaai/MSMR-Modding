@@ -44,7 +44,8 @@ Also done 2026-11-09:
 
 Still open:
 - ~~Renaming the GitHub repository~~ done 2026-11-09: `Masacaai/MSMR-Modding` (GitHub redirects the old `Spider-Man-Endless-Mode` URLs). Still to do by hand: the Nexus page and any pinned links elsewhere.
-- **Releases.** Endless Arena's beta.1 is out; the ModMenu refactor needs a beta.2 whatever else happens.
+- **Releases.** Manhattan Skies 0.1.0 alpha 1 is out (tag `manhattan-skies-v0.1.0-alpha.1`, 2026-11-10). Endless Arena's beta.1 is out; the ModMenu refactor needs a beta.2 whatever else happens.
+- **Manhattan Skies, after the alpha:** the preset save button with a legend glyph (stretch goal); the lighting transition's momentum stop (the cycle only waits for a calm moment, the cause inside the game's transition is not found); the sky style MORNING and the Settings banner naming are unchanged.
 - `docs/GETTING_STARTED.md` and `docs/GAME_INTERNALS.md` are still mostly Endless Arena material in their older sections; trim or split them as the other mods grow.
 
 ## 3. Smaller open items

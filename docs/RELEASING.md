@@ -1,6 +1,6 @@
 # Releasing
 
-Releases are GitHub Releases with one asset, `EndlessArena.script` (the Overstrike package built by `pack.ps1`). Alphas are marked **pre-release**.
+Releases are GitHub Releases with one asset per mod: `EndlessArena.script` or `ManhattanSkies.script` (the Overstrike package built by the mod's `pack.ps1`). Alphas and betas are marked **pre-release**. The commands below use Endless Arena; Manhattan Skies is the same with its own paths (`ManhattanSkies/mod/build.cmd`, `ManhattanSkies/mod/pack.ps1`, `ManhattanSkies/docs/releases/`).
 
 ## Checklist
 
@@ -22,5 +22,5 @@ Publishing the draft creates the tag at `main`. To see/edit/publish: the reposit
 
 ## Tag names
 
-`v<major>.<minor>.<patch>[-alpha.N | -beta.N]`. The game build the release targets is stated in the notes; if a future release supports another build, say
+Endless Arena (the first mod here): `v<major>.<minor>.<patch>[-alpha.N | -beta.N]`, for example `v0.2.0-beta.1`. **Every other mod is prefixed with its name**: `manhattan-skies-v0.1.0-alpha.1`. (The unprefixed `v0.1.0-alpha.1` already belongs to Endless Arena; reusing a tag would collide, which nearly happened with Manhattan Skies' first alpha.) The game build the release targets is stated in the notes; if a future release supports another build, say
 so in the title.
