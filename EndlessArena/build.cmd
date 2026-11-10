@@ -13,8 +13,8 @@ set INC=%ROOT%vcpkg_installed\x64-windows-static\include
 set LIB_DIR=%ROOT%vcpkg_installed\x64-windows-static\lib
 if not exist "%ROOT%build" mkdir "%ROOT%build"
 
-cl /nologo /LD /O2 /MT /EHa /std:c++20 /W3 /Zi /DNDEBUG /DNOMINMAX /DWIN32_LEAN_AND_MEAN /I"%INC%" /Fo"%ROOT%build\\" /Fd"%ROOT%build\\" ^
-   "%ROOT%src\*.cpp" /Fe"%ROOT%build\EndlessArena.dll" ^
+cl /nologo /LD /O2 /MT /EHa /std:c++20 /W3 /Zi /DNDEBUG /DNOMINMAX /DWIN32_LEAN_AND_MEAN /I"%INC%" /I"%ROOT%..\common" /I"%ROOT%src" /Fo"%ROOT%build\\" /Fd"%ROOT%build\\" ^
+   "%ROOT%src\*.cpp" "%ROOT%..\common\*.cpp" "%ROOT%..\ModMenu\*.cpp" /Fe"%ROOT%build\EndlessArena.dll" ^
    /link /LIBPATH:"%LIB_DIR%" minhook.x64.lib user32.lib shell32.lib hid.lib setupapi.lib /DEBUG /MAP /OPT:REF /OPT:ICF || exit /b 1
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%pack.ps1" || exit /b 1

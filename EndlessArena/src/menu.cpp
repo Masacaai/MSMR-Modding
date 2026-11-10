@@ -1,385 +1,72 @@
 #include "menu.h"
 
-#include "gamethread.h"
 #include "log.h"
-#include "scan.h"
 #include "settings.h"
 
-#include <MinHook.h>
-#include <Windows.h>
-#include <algorithm>
-#include <array>
-#include <atomic>
-#include <cmath>
-#include <cstring>
-#include <string_view>
+#include "../../ModMenu/modmenu.h"
 
-// All addresses are image offsets in Spider-Man.exe 4.0630.0.0 and are checked against the bytes the functions start with
-// before anything is hooked (a mismatch leaves the Settings untouched). See docs/NEXT_RELEASE_RECON.md, section 3.
+#include <atomic>
+#include <vector>
+
+// The ENDLESS ARENA tab lives in the shared MODS menu (ModMenu/modmenu.cpp): pause menu > MODS > ENDLESS ARENA. This file only hands the
+// rows of settings.h and their callbacks to it. The tab-building code that used to be here (SpidyVR's method) moved into ModMenu, so other
+// scripts (Manhattan Skies) can share one menu and one set of hooks.
 namespace menu {
 namespace {
-    // The settings system (static); +0x20 its config, whose tabs are at +0x168 (0x40 bytes each), +0x170 counts them.
-    constexpr uintptr_t kSystem = 0x5d96dd0;
-    constexpr uintptr_t kOpenOptions = 0x7dd9f0;     // pause menu: builds every tab, calls Flash OpenOptions(tabs, flag)
-    constexpr uintptr_t kBuildTab = 0x807740;        // (out value, movie, tab) -> a tab's Flash object, rows and all
-    constexpr uintptr_t kMovie = 0x1d29690;          // the UI movie Flash objects are made in
-    constexpr uintptr_t kOpenOptionsName = 0x389f4c0, kResetAllHash = 0x6d8ed88;
-    constexpr uintptr_t kSettingType = 0x3a7d6e8, kHeadingType = 0x3a7d838;   // option-type vtables
-    constexpr uint32_t kTabId = 93;                  // the game's tabs are 2-10; its RESET ALL ignores anything above
-    constexpr int kFirstSetting = 0x200;   // the game's settings are 0-122
-    constexpr size_t kTabBytes = 0x40, kItemBytes = 0x88, kChoiceBytes = 0x50;
-    constexpr size_t kRows = settings::kMaxRows, kChoices = settings::kMaxChoices;
+    std::vector<std::vector<const char*>> g_choices;   // per row, pointers into settings::Rows() (fixed after Load)
+    std::atomic<uint32_t> g_status{ 1 };                // 1 not registered yet
+    std::atomic<uint64_t> g_changes{ 0 };
 
-    // A Scaleform GFx::Value as the game lays it out: 16 bytes of 0xff, the object interface, the type, the data.
-    struct ObjectInterface { void** vtable; };
-    struct GfxValue {
-        unsigned char head[16];
-        ObjectInterface* objects;
-        uint32_t type, reserved;
-        uint64_t data, extra;
-    };
-    static_assert(sizeof(GfxValue) == 0x30);
-    constexpr uint32_t kTypeMask = 0x8f, kManaged = 0x40, kInt = 3, kArray = 9;
-
-    void ReleaseValue(GfxValue& v) {
-        if ((v.type & kManaged) && v.objects)
-            reinterpret_cast<void(__fastcall*)(ObjectInterface*, GfxValue*, uint64_t)>(v.objects->vtable[2])(v.objects, &v, v.data);
-    }
-    bool PushBack(const GfxValue& array, const GfxValue& v) {
-        return reinterpret_cast<bool(__fastcall*)(ObjectInterface*, uint64_t, const GfxValue*)>(array.objects->vtable[15])(
-            array.objects, array.data, &v);
-    }
-
-    using InvokeFn = bool(__fastcall*)(void*, const char*, GfxValue*, uint32_t, uint64_t, float, uint32_t, uint64_t);
-    using CallbackFn = void(__fastcall*)(void*, uint32_t, GfxValue*, uint32_t);
-    using TypeFn = int(__fastcall*)(void*, int);
-    using ValueFn = float(__fastcall*)(void*, int);
-    using ActiveFn = bool(__fastcall*)(void*, int);
-    using SetFn = void(__fastcall*)(void*, int, float, bool, bool);
-    using ResetFn = void(__fastcall*)(void*, int, bool);
-    using TextFn = const char*(__fastcall*)(uint32_t, const char*);
-    using HasTextFn = bool(__fastcall*)(uint32_t);
-    InvokeFn g_invoke{};
-    CallbackFn g_callback{};
-    TypeFn g_type{}, g_default_choice{};
-    ValueFn g_value{}, g_default{};
-    ActiveFn g_active{};
-    SetFn g_set{};
-    ResetFn g_reset{};
-    TextFn g_text{};
-    HasTextFn g_has_text{};
-
-    uintptr_t g_base{};
-    std::atomic<ULONGLONG> g_open_at{ 0 };
-    std::atomic<uint64_t> g_open_count{ 0 };   // OpenOptions calls seen (a callback that made the game send the list again)
-    std::atomic<uint64_t> g_tabs_built{}, g_changes{};
-    std::atomic<uint32_t> g_failure{};
-    std::atomic<bool> g_hooked{};
-    std::atomic<int> g_built{};   // the tab's items: 0 not yet, 1 ready, 2 cannot be built
-    thread_local bool t_building = false;
-
-    alignas(16) unsigned char g_tab[kTabBytes];
-    alignas(16) unsigned char g_items[kRows][kItemBytes];
-    alignas(16) unsigned char g_tab_items[kRows][kItemBytes];   // the items on screen: the SHOWING row and the current section's rows (copies of g_items)
-    alignas(16) unsigned char g_choice[kRows][kChoices][kChoiceBytes];
-
-    // Texts by the hash the game looks them up with: CRC-32 of a tag of our own. They answer only while our tab is being
-    // built, so a game text sharing a hash is never replaced.
-    struct Text { char tag[24]; uint32_t hash; const char* text; };
-    std::array<Text, 8 + kRows * (2 + kChoices)> g_texts{};
-    std::array<uint16_t, 8 + kRows * (2 + kChoices)> g_by_hash{};
-    size_t g_text_count = 0;
-    const Text *g_tab_name{}, *g_tab_heading{};
-    const Text *g_titles[kRows]{}, *g_helps[kRows]{};
-    const Text* g_choice_texts[kRows][kChoices]{};
-
-    uint32_t Crc32(std::string_view s) {
-        uint32_t c = 0xffffffff;
-        for (unsigned char ch : s) {
-            c ^= ch;
-            for (int k = 0; k < 8; ++k) c = (c >> 1) ^ (0xedb88320 & (0u - (c & 1)));
-        }
-        return ~c;
-    }
-    const Text* AddText(const char* tag, const char* text) {
-        Text& t = g_texts[g_text_count];
-        strncpy_s(t.tag, tag, _TRUNCATE);
-        t.hash = Crc32(t.tag);
-        t.text = text;
-        g_by_hash[g_text_count] = (uint16_t)g_text_count;
-        ++g_text_count;
-        return &t;
-    }
-    void AddTexts() {
-        if (g_text_count) return;
-        const auto& rows = settings::Rows();
-        g_tab_name = AddText("EA_TAB", "ENDLESS ARENA");
-        g_tab_heading = AddText("EA_HEAD", "ENDLESS ARENA SETTINGS");
-        char tag[24];
-        for (size_t r = 0; r < rows.size(); ++r) {
-            snprintf(tag, sizeof(tag), "EA_%zu", r);
-            g_titles[r] = AddText(tag, rows[r].title.c_str());
-            if (!rows[r].help.empty()) {
-                snprintf(tag, sizeof(tag), "EA_%zu_H", r);
-                g_helps[r] = AddText(tag, rows[r].help.c_str());
-            }
-            for (size_t k = 0; k < rows[r].choices.size() && k < kChoices; ++k) {
-                snprintf(tag, sizeof(tag), "EA_%zu_%zu", r, k);
-                g_choice_texts[r][k] = AddText(tag, rows[r].choices[k].c_str());
-            }
-        }
-        std::sort(g_by_hash.begin(), g_by_hash.begin() + (std::ptrdiff_t)g_text_count,
-                  [](uint16_t a, uint16_t b) { return g_texts[a].hash < g_texts[b].hash; });
-    }
-    const char* TextFor(uint32_t hash) {
-        const auto end = g_by_hash.begin() + (std::ptrdiff_t)g_text_count;
-        const auto at = std::lower_bound(g_by_hash.begin(), end, hash, [](uint16_t i, uint32_t h) { return g_texts[i].hash < h; });
-        return at != end && g_texts[*at].hash == hash ? g_texts[*at].text : nullptr;
-    }
-
-    template <class T> void Put(unsigned char* at, size_t offset, T value) { std::memcpy(at + offset, &value, sizeof(T)); }
-    template <class T> T Get(uintptr_t at) { T v; std::memcpy(&v, reinterpret_cast<const void*>(at), sizeof(T)); return v; }
-    // A tag the game keeps beside its hash (+0 pointer, +8 length, +0xc hash).
-    void PutTag(unsigned char* at, size_t offset, const Text* t) {
-        Put<uint64_t>(at, offset, t ? (uint64_t)t->tag : 0);
-        Put<uint32_t>(at, offset + 8, t ? (uint32_t)std::strlen(t->tag) : 0);
-        Put<uint32_t>(at, offset + 0xc, t ? t->hash : 0);
-    }
-
-    // Copies a tab, a setting and a heading out of the game's config and builds our items from them. Game thread.
-    uint32_t BuildItems() {
-        __try {
-            const auto config = Get<uintptr_t>(g_base + kSystem + 0x20);
-            if (!config) return 9501;
-            const auto tabs = Get<uintptr_t>(config + 0x168);
-            const auto tab_count = Get<uint32_t>(config + 0x170);
-            if (!tabs || !tab_count || tab_count > 64) return 9501;
-            uintptr_t menu_tab{}, setting{}, heading{};
-            for (uint32_t t = 0; t < tab_count; ++t) {
-                const uintptr_t at = tabs + t * kTabBytes;
-                const auto list = Get<uintptr_t>(at + 0x30);
-                const auto count = Get<uint32_t>(at + 0x38);
-                if (!list || !count || count > 256) continue;
-                if (!menu_tab || Get<uint32_t>(at + 8) == 4) menu_tab = at;   // the GAME tab, else the first with items
-                for (uint32_t i = 0; i < count; ++i) {
-                    const uintptr_t item = list + i * kItemBytes;
-                    const auto option = Get<uintptr_t>(item + 0x48);
-                    const auto type = option ? Get<uintptr_t>(option) - g_base : 0;
-                    if (!setting && type == kSettingType && Get<uintptr_t>(item + 0x70) && Get<uint32_t>(item + 0x78)) setting = item;
-                    if (!heading && type == kHeadingType) heading = item;
-                }
-            }
-            if (!menu_tab || !setting || !heading) return 9502;
-            const auto choice_template = Get<uintptr_t>(setting + 0x70);
-            const auto& rows = settings::Rows();
-            for (size_t r = 0; r < rows.size(); ++r) {
-                unsigned char* item = g_items[r];
-                std::memcpy(item, reinterpret_cast<const void*>(rows[r].heading() ? heading : setting), kItemBytes);
-                Put<uint64_t>(item, 8, (uint64_t)(kFirstSetting + r));
-                PutTag(item, 0x10, g_titles[r]);
-                PutTag(item, 0x20, g_helps[r]);
-                const auto count = (uint32_t)std::min(rows[r].choices.size(), kChoices);   // none: the game's own OFF and ON
-                Put<uint64_t>(item, 0x70, count ? (uint64_t)g_choice[r] : 0);
-                Put<uint32_t>(item, 0x78, count);
-                Put<uint32_t>(item, 0x7c, count);
-                for (uint32_t k = 0; k < count; ++k) {
-                    unsigned char* c = g_choice[r][k];
-                    std::memcpy(c, reinterpret_cast<const void*>(choice_template), kChoiceBytes);
-                    Put<uint64_t>(c, 8, (uint64_t)g_choice_texts[r][k]->tag);
-                    Put<uint32_t>(c, 0x10, (uint32_t)std::strlen(g_choice_texts[r][k]->tag));
-                    Put<uint32_t>(c, 0x14, g_choice_texts[r][k]->hash);
-                    Put<uint64_t>(c, 0x18, 0);   // no help or preview image of its own (the row's help shows)
-                    Put<uint64_t>(c, 0x20, 0);
-                    Put<uint64_t>(c, 0x28, 0);   // no preview image (its tag is 16 bytes: leaving the rest asks Flash to load an image on first use?)
-                    Put<uint64_t>(c, 0x30, 0);
-                }
-            }
-            std::memcpy(g_tab, reinterpret_cast<const void*>(menu_tab), kTabBytes);
-            Put<uint32_t>(g_tab, 8, kTabId);
-            PutTag(g_tab, 0x10, g_tab_name);
-            PutTag(g_tab, 0x20, g_tab_heading);
-            Put<uint64_t>(g_tab, 0x30, (uint64_t)g_tab_items);
-            return 0;
-        } __except (EXCEPTION_EXECUTE_HANDLER) {
-            return 9501;
-        }
-    }
-    bool Ready() {
-        if (!g_built) {
-            const auto code = BuildItems();
-            g_failure = code;
-            g_built = !code ? 1 : code == 9501 ? 0 : 2;   // a config not loaded yet is looked for again at the next opening
-        }
-        return g_built == 1;
-    }
-
-    // Adds our tab, built by the game's own code, to the tabs the pause menu hands to Flash.
-    void AddTab(GfxValue& tabs) {
-        if (!Ready()) return;
-        LARGE_INTEGER t0, t1, freq;
-        QueryPerformanceCounter(&t0);
-        // Only the SHOWING row and the rows of the section it is on go to the screen.
+    int Rows(void*, int* ids, int max) {
         const auto& rows = settings::Rows();
         const int section = settings::CurrentSection();
-        uint32_t n = 0;
-        for (size_t r = 0; r < rows.size(); ++r)
-            if (rows[r].tab == -1 || rows[r].tab == section) std::memcpy(g_tab_items[n++], g_items[r], kItemBytes);
-        Put<uint32_t>(g_tab, 0x38, n);
-        Put<uint32_t>(g_tab, 0x3c, n);
-        __try {
-            void* movie = reinterpret_cast<void*(__fastcall*)()>(g_base + kMovie)();
-            if (!movie) return;
-            GfxValue value{};
-            std::memset(value.head, 0xff, sizeof(value.head));
-            t_building = true;
-            const bool made = reinterpret_cast<bool(__fastcall*)(GfxValue*, void*, const void*)>(g_base + kBuildTab)(&value, movie, g_tab);
-            t_building = false;
-            if (made && PushBack(tabs, value)) ++g_tabs_built;
-            ReleaseValue(value);
-        } __except (EXCEPTION_EXECUTE_HANDLER) {
-            t_building = false;   // not again this session; the game's own tabs go on
-            g_failure = 9503;
-            g_built = 2;
-        }
-        QueryPerformanceCounter(&t1);
-        QueryPerformanceFrequency(&freq);
-        static int logged = 0;
-        if (logged++ < 3) LOG("menu: built the tab (section %d, %u rows) in %.1f ms", section, n, 1000.0 * (double)(t1.QuadPart - t0.QuadPart) / (double)freq.QuadPart);
+        int n = 0;
+        for (size_t r = 0; r < rows.size() && n < max; ++r)
+            if (rows[r].tab == -1 || rows[r].tab == section) ids[n++] = (int)r;
+        return n;
     }
-
-    int RowOf(int setting) {
-        const int r = setting - kFirstSetting;
-        return r >= 0 && r < (int)settings::Rows().size() && g_built == 1 ? r : -1;
+    void Row(void*, int id, modmenu::Row* out) {
+        const auto& r = settings::Rows()[(size_t)id];
+        out->title = r.title.c_str();
+        out->help = r.help.c_str();
+        out->choices = g_choices[(size_t)id].empty() ? nullptr : g_choices[(size_t)id].data();
+        out->choice_count = (int)g_choices[(size_t)id].size();
+        out->heading = r.heading() ? 1 : 0;
     }
-
-    // ---- hooks ----
-    bool __fastcall InvokeHook(void* ui, const char* name, GfxValue* args, uint32_t count, uint64_t a, float b, uint32_t c, uint64_t d) {
-        if (name == reinterpret_cast<const char*>(g_base + kOpenOptionsName) && args && count >= 1 &&
-            (args[0].type & kTypeMask) == kArray && args[0].objects) {
-            g_open_at = GetTickCount64();
-            ++g_open_count;
-            AddTab(args[0]);
-        }
-        const bool r = g_invoke(ui, name, args, count, a, b, c, d);
-        return r;
-    }
-    void __fastcall CallbackHook(void* ui, uint32_t hash, GfxValue* args, uint32_t count) {
-        // Y RESET ALL on our tab: the game's RESET ALL takes only its own tabs.
-        if (g_built == 1 && args && count >= 1 && (args[0].type & kTypeMask) == kInt && (uint32_t)args[0].data == kTabId &&
-            hash == Get<uint32_t>(g_base + kResetAllHash)) {
-            settings::ResetAll();
-            ++g_changes;
-            reinterpret_cast<void(__fastcall*)(void*)>(g_base + kOpenOptions)(ui);   // every tab shows its values again
-            return;
-        }
-        // (Tried 2026-10-19: taking UpdateOption ourselves to skip the game's full re-send of the list. The row then showed a stale value - the screen
-        // waits for that re-send - so the game's own handler stays.)
-        const uint64_t built_before = g_open_count;
-        g_callback(ui, hash, args, count);
-        // A preset or a new section changed which rows are on screen: build the tabs again (unless the game just did, as it does after a change).
-        if (g_built == 1 && settings::TakeRebuild() && g_open_count == built_before)
-            reinterpret_cast<void(__fastcall*)(void*)>(g_base + kOpenOptions)(ui);
-    }
-    int __fastcall TypeHook(void* sys, int setting) {   // 0 a list, 5 a heading
-        const int r = RowOf(setting);
-        if (r < 0) return g_type(sys, setting);
-        return settings::Rows()[(size_t)r].heading() ? 5 : 0;
-    }
-    float __fastcall ValueHook(void* sys, int setting) {
-        const int r = RowOf(setting);
-        return r < 0 ? g_value(sys, setting) : (float)settings::Index((size_t)r);
-    }
-    bool __fastcall ActiveHook(void* sys, int setting) {
-        const int r = RowOf(setting);
-        return r < 0 ? g_active(sys, setting) : true;
-    }
-    float __fastcall DefaultHook(void* sys, int setting) {
-        const int r = RowOf(setting);
-        return r < 0 ? g_default(sys, setting) : (float)settings::Rows()[(size_t)r].def;
-    }
-    int __fastcall DefaultChoiceHook(void* sys, int setting) {
-        const int r = RowOf(setting);
-        return r < 0 ? g_default_choice(sys, setting) : settings::Rows()[(size_t)r].def;
-    }
-    void __fastcall SetHook(void* sys, int setting, float value, bool apply, bool force) {
-        const int r = RowOf(setting);
-        if (r < 0) return g_set(sys, setting, value, apply, force);
-        if (std::isfinite(value) && std::fabs(value) < 64) {
-            settings::SetIndex((size_t)r, (int)std::lround(value));
-            ++g_changes;
-        }
-    }
-    void __fastcall ResetHook(void* sys, int setting, bool apply) {
-        const int r = RowOf(setting);
-        if (r < 0) return g_reset(sys, setting, apply);
-        settings::ResetRow((size_t)r);
-        ++g_changes;
-    }
-    const char* __fastcall TextHook(uint32_t hash, const char* fallback) {
-        if (t_building)
-            if (const char* text = TextFor(hash)) return text;
-        return g_text(hash, fallback);
-    }
-    bool __fastcall HasTextHook(uint32_t hash) {
-        return (t_building && TextFor(hash)) || g_has_text(hash);
-    }
-
-    struct Hook {
-        uintptr_t rva;
-        void* detour;
-        void** original;
-        unsigned char bytes[10];   // the function's first bytes in the supported game
-        size_t count;
-    };
-    const Hook kHooks[] = {
-        { 0x1d1cf30, (void*)&InvokeHook, (void**)&g_invoke, { 0x80, 0xb9, 0xb0, 0x00, 0x00, 0x00, 0x00, 0x75, 0x03 }, 9 },
-        { 0x7dc400, (void*)&CallbackHook, (void**)&g_callback, { 0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10 }, 10 },
-        { 0x72d640, (void*)&TypeHook, (void**)&g_type, { 0x48, 0x63, 0xc2, 0x48, 0x8d, 0x14, 0x80, 0x8b, 0x84, 0xd1 }, 10 },
-        { 0x72d650, (void*)&ValueHook, (void**)&g_value, { 0x48, 0x89, 0x5c, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18 }, 10 },
-        { 0x72e1d0, (void*)&ActiveHook, (void**)&g_active, { 0x48, 0x63, 0xc2, 0x48, 0x8d, 0x14, 0x80, 0x0f, 0xb6, 0x84 }, 10 },
-        { 0x72d5f0, (void*)&DefaultHook, (void**)&g_default, { 0x48, 0x63, 0xc2, 0x48, 0x8d, 0x14, 0x80, 0xf3, 0x0f, 0x10 }, 10 },
-        { 0x72d610, (void*)&DefaultChoiceHook, (void**)&g_default_choice, { 0x48, 0x83, 0xec, 0x28, 0x48, 0x63, 0xc2, 0x0f, 0x57, 0xc9 }, 10 },
-        { 0x730ee0, (void*)&SetHook, (void**)&g_set, { 0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10 }, 10 },
-        { 0x730ae0, (void*)&ResetHook, (void**)&g_reset, { 0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10 }, 10 },
-        { 0x1749970, (void*)&TextHook, (void**)&g_text, { 0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10 }, 10 },
-        { 0x1749ae0, (void*)&HasTextHook, (void**)&g_has_text, { 0x48, 0x83, 0xec, 0x28, 0x8b, 0xd1, 0x48, 0x8b, 0x0d }, 9 },
-    };
-
-    bool BytesMatch(uintptr_t at, const unsigned char* bytes, size_t count) {
-        __try { return std::memcmp(reinterpret_cast<const void*>(at), bytes, count) == 0; }
-        __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
-    }
+    int Value(void*, int id) { return settings::Index((size_t)id); }
+    int Default(void*, int id) { return settings::Rows()[(size_t)id].def; }
+    void Set(void*, int id, int choice) { settings::SetIndex((size_t)id, choice); ++g_changes; }
+    void Reset(void*, int id) { settings::ResetRow((size_t)id); ++g_changes; }
+    void ResetAll(void*) { settings::ResetAll(); ++g_changes; }
+    int TakeRebuild(void*) { return settings::TakeRebuild() ? 1 : 0; }
+    void LogLine(const char* line) { LOG("%s", line); }
 }
 
     uint32_t Install() {
-        if (g_hooked) return 0;
-        g_base = scan::Game().base;
         settings::Load();
-        for (size_t i = 0; i < std::size(kHooks); ++i)
-            if (!BytesMatch(g_base + kHooks[i].rva, kHooks[i].bytes, kHooks[i].count)) {
-                LOG("menu: code at exe+%llx is not this game's (hook %zu), settings tab off", (unsigned long long)kHooks[i].rva, i);
-                return 9301 + (uint32_t)i;
-            }
-        AddTexts();
-        auto st = MH_Initialize();
-        if (st != MH_OK && st != MH_ERROR_ALREADY_INITIALIZED) return 9400 + st;
-        for (size_t i = 0; i < std::size(kHooks); ++i)
-            if ((st = MH_CreateHook((void*)(g_base + kHooks[i].rva), kHooks[i].detour, kHooks[i].original)) != MH_OK) {
-                while (i--) MH_RemoveHook((void*)(g_base + kHooks[i].rva));
-                LOG("menu: MH_CreateHook failed (%d)", st);
-                return 9420 + st;
-            }
-        // All at once: the tab never reaches the game before the answers about its rows.
-        for (const auto& h : kHooks)
-            if ((st = MH_QueueEnableHook((void*)(g_base + h.rva))) != MH_OK) return 9440 + st;
-        if ((st = MH_ApplyQueued()) != MH_OK) return 9460 + st;
-        g_hooked = true;
-        LOG("menu: settings tab hooked (%zu rows)", settings::Rows().size());
-        return 0;
+        const auto& rows = settings::Rows();
+        g_choices.assign(rows.size(), {});
+        for (size_t r = 0; r < rows.size(); ++r)
+            for (const auto& c : rows[r].choices) g_choices[r].push_back(c.c_str());
+        modmenu::Mod mod{};
+        mod.size = sizeof(mod);
+        mod.name = "ENDLESS ARENA";
+        mod.rows = &Rows;
+        mod.row = &Row;
+        mod.value = &Value;
+        mod.default_choice = &Default;
+        mod.set = &Set;
+        mod.reset = &Reset;
+        mod.reset_all = &ResetAll;
+        mod.take_rebuild = &TakeRebuild;
+        const uint32_t code = modmenu::Register(mod, &LogLine);
+        g_status = code;
+        if (!code) LOG("menu: ENDLESS ARENA tab registered with the MODS menu (%zu rows)", rows.size());
+        return code;
     }
 
     void LogStatus() {
-        LOG("menu: hooked=%d built=%d status=%u tabs=%llu changes=%llu", (int)g_hooked, (int)g_built, g_failure.load(),
-            (unsigned long long)g_tabs_built, (unsigned long long)g_changes);
+        LOG("menu: registered=%d status=%u changes=%llu", g_status == 0 ? 1 : 0, g_status.load(), (unsigned long long)g_changes);
+        modmenu::LogStatus();
     }
 }
