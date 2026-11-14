@@ -327,6 +327,7 @@ namespace {
     float g_last_timers[3] = { 0.f, 0.f, 0.f };
     ULONGLONG g_still_since = 0;
     bool g_was_paused = false, g_was_busy = false;
+    ULONGLONG g_last_switch_at = 0, g_frozen_ms = 0;   // for the log: when the lighting last changed, and how much cycle time stood still since (paused or busy)
     double g_phase = 0.2;
     bool g_cyc_started = false;
     ULONGLONG g_cyc_last = 0, g_cyc_switch_at = 0, g_world_up_at = 0, g_ready_since = 0, g_phase_saved_at = 0;
@@ -542,6 +543,7 @@ namespace {
         const bool busy = modmenu::PlayerBusy();
         if (busy != g_was_busy) { LOG("sky: cycle %s", busy ? "frozen: the player is in a crime, hideout, mission or fight" : "running again: the activity is over"); g_was_busy = busy; }
         const ULONGLONG dtms = paused || busy ? 0 : now - g_cyc_last;
+        if (paused || busy) g_frozen_ms += now - g_cyc_last;
         g_cyc_last = now;
         g_prev_phase = g_phase;
         g_phase += (double)(dtms > 1000 ? 1000 : dtms) * ts / (minutes * 60000.0);
@@ -612,7 +614,13 @@ namespace {
             for (int i = 0; i < 4; ++i) g_var[i] = g_next_var[i];
             ++g_cyc_step;
             g_pick_nm = -1;
-            LOG("sky: cycle phase %.3f: lighting mode %d -> %d, sky %016llX", g_phase, mode, p.mode, (unsigned long long)g_next_look);
+            {   // how late the switch is: the day's clock never restarts at a switch, so a delay (waiting for a calm moment, a freeze) shortens the phase that follows
+                const double start = p.mode == 4 ? 0.93 : (p.mode == 2 ? 0.55 : ((p.mode == 5) ? 0.68 : 0.08));
+                const double late = (std::fmod(g_phase - start + 1.0, 1.0)) * minutes * 60.0;
+                LOG("sky: cycle phase %.3f: lighting mode %d -> %d, sky %016llX; %.0f s after its nominal start, previous look lasted %.0f s (%.0f s of cycle time stood still)", g_phase, mode, p.mode,
+                    (unsigned long long)g_next_look, late, g_last_switch_at ? (double)(now - g_last_switch_at) / 1000.0 : 0.0, (double)g_frozen_ms / 1000.0);
+                g_last_switch_at = now; g_frozen_ms = 0;
+            }
             modmenu::KeepMenuOpen(6000);
             if (g_smooth_fade) modmenu::SuppressFade(5000);
             recorder::SetMode(p.mode);
