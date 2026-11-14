@@ -44,14 +44,18 @@ namespace {
     constexpr size_t kTabBytes = 0x40, kItemBytes = 0x88, kChoiceBytes = 0x50;
 
     LogFn g_log{};
+    // The last 96 lines this module logged, so a crash handler (below) can say what the menu was doing in the seconds before.
+    char g_ring[96][160];
+    std::atomic<unsigned> g_ring_next{ 0 };
     void Log(const char* fmt, ...) {
-        if (!g_log) return;
         char buf[512];
         va_list a;
         va_start(a, fmt);
         vsnprintf(buf, sizeof(buf), fmt, a);
         va_end(a);
-        g_log(buf);
+        const unsigned i = g_ring_next++ % 96;
+        _snprintf_s(g_ring[i], sizeof(g_ring[i]), _TRUNCATE, "%llu %s", (unsigned long long)(GetTickCount64() % 1000000), buf);
+        if (g_log) g_log(buf);
     }
 
     // ---- the shared object: the host publishes its entry points here ----
@@ -606,8 +610,48 @@ namespace {
         Log("modmenu: an older Endless Arena (own tab) is loaded; %s", all ? "its hooks are in, chaining on top" : "its hooks did not appear in 30 s, hooking anyway");
     }
 
+    // ---- crash forensics ----
+    // Three crashes (Nov 11, 13, 14) ended in Scaleform's array code (exe+31e9582) reading a freed Flash object, seconds after the Settings screen closed.
+    // A minidump has no heap, so this handler writes what it can into the log: the registers, the memory behind the objects in them, the class of the
+    // object (the vtable's address), and the menu's own last log lines. It only reads, then lets the crash go on.
+    bool ReadMem(uintptr_t a, void* out, size_t n) {
+        __try { std::memcpy(out, reinterpret_cast<const void*>(a), n); return true; } __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+    }
+    void DumpObject(const char* what, uintptr_t a) {
+        unsigned char b[0x60];
+        if (!a || a < 0x10000 || !ReadMem(a, b, sizeof(b))) { Log("modmenu: crash: %s = %llx (unreadable)", what, (unsigned long long)a); return; }
+        Log("modmenu: crash: %s = %llx: %016llx %016llx %016llx %016llx %016llx %016llx", what, (unsigned long long)a, *(unsigned long long*)(b), *(unsigned long long*)(b + 8),
+            *(unsigned long long*)(b + 16), *(unsigned long long*)(b + 24), *(unsigned long long*)(b + 32), *(unsigned long long*)(b + 40));
+    }
+    LONG CALLBACK CrashNote(EXCEPTION_POINTERS* ep) {
+        static std::atomic<bool> done{ false };
+        if (ep->ExceptionRecord->ExceptionCode != EXCEPTION_ACCESS_VIOLATION || !g_base) return EXCEPTION_CONTINUE_SEARCH;
+        const uintptr_t rip = (uintptr_t)ep->ExceptionRecord->ExceptionAddress;
+        if (rip < g_base + 0x3190000 || rip > g_base + 0x3500000 || done.exchange(true)) return EXCEPTION_CONTINUE_SEARCH;   // Scaleform's code only
+        const CONTEXT* c = ep->ContextRecord;
+        Log("modmenu: CRASH in Scaleform at exe+%llx touching %llx; open screens %llu, tabs built %llu, mods-screen %d", (unsigned long long)(rip - g_base),
+            (unsigned long long)ep->ExceptionRecord->ExceptionInformation[1], (unsigned long long)g_open_count, (unsigned long long)g_tabs_built, (int)g_mods_screen);
+        DumpObject("rcx", c->Rcx); DumpObject("rdx", c->Rdx); DumpObject("rsi", c->Rsi); DumpObject("rdi", c->Rdi); DumpObject("rbx", c->Rbx);
+        DumpObject("rcx page", c->Rcx & ~(uintptr_t)0xfff);
+        char frames[400] = {};
+        size_t used = 0;
+        for (int i = 0; i < 0x200 && used + 12 < sizeof(frames); ++i) {
+            uintptr_t v = 0;
+            if (!ReadMem(c->Rsp + 8ull * i, &v, 8)) break;
+            if (v >= g_base && v < g_base + 0x8000000) used += (size_t)snprintf(frames + used, sizeof(frames) - used, " %llx", (unsigned long long)(v - g_base));
+        }
+        Log("modmenu: crash: stack (exe offsets):%s", frames);
+        unsigned start = g_ring_next.load();
+        for (unsigned k = 0; k < 96; ++k) {   // oldest first, straight to the log function (not through the ring)
+            const char* line = g_ring[(start + k) % 96];
+            if (*line && g_log) { char buf[200]; _snprintf_s(buf, sizeof(buf), _TRUNCATE, "modmenu: crash: history %s", line); g_log(buf); }
+        }
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+
     uint32_t InstallHooks() {
         g_base = (uintptr_t)GetModuleHandleW(nullptr);
+        AddVectoredExceptionHandler(1, &CrashNote);
         WaitForOlderScripts();
         int chained = 0;
         for (size_t i = 0; i < std::size(kHooks); ++i) {
