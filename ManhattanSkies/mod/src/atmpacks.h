@@ -14,6 +14,7 @@ namespace atmpacks {
     void Start();                          // once, from the worker thread after the world has settled; the scan runs on its own thread
     bool Ready();
     bool IsMod(uint64_t atmosphere_id);    // the id is one of the mods' atmospheres
+    bool Blocked();                        // mods are in the Atmospheres folder but no Overstrike archive exists to borrow (the menu says what to do)
     bool AnyMods();                        // at least one atmosphere mod is loaded
     bool Prepare(uint64_t atmosphere_id);   // unpack that mod's textures into the cache (first use; under a second); true when ready or not a mod's id
     int SlotOfMode(int lighting_mode);     // lighting mode (0 day, 4 early morning, 2 sunset, 5/1 night, 3/6 overcast) -> slot, or -1

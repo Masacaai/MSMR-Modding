@@ -18,6 +18,5 @@ namespace toc {
     void RestoreCarriers();
     bool AddAsset(uint64_t id, uint32_t use_archive, const wchar_t* path, uint32_t size = 0);   // size 0: read it from the file now; else the file may appear later   // a genuinely new asset in span 255; ids must ascend
     int PickRawArchive();   // an archive index (a raw Overstrike mod archive that exists) the new assets can borrow, or -1
-    int PreparePlaceholder();   // experiment: turn a language archive entry the install does not have into a raw archive of ours; its index, or -1
     void FindPointers();   // research: where the game keeps pointers to the toc sections
 }

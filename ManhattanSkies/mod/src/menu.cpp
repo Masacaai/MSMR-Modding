@@ -68,7 +68,7 @@ namespace {
         int n = 0;
         auto add = [&](int id) { if (n < max) ids[n++] = id; };
         add(kPresetId);
-        add(kHeadSky); add(kTimeId); if (atmpacks::LabelCount(VersionSlot()) > 1) add(kVersionId); add(kCycleId); if (sky::Get(sky::kCycle) > 0 && atmpacks::AnyMods()) add(kCycleAtmId); add(kStyleId);
+        add(kHeadSky); add(kTimeId); if (atmpacks::LabelCount(VersionSlot()) > 1 || atmpacks::Blocked()) add(kVersionId); add(kCycleId); if (sky::Get(sky::kCycle) > 0 && atmpacks::AnyMods()) add(kCycleAtmId); add(kStyleId);
         if (sky::Get(sky::kStyle) > 0) add(kVariantId);
         add(kHeadSun); add(kDirId); add(kHeightId); add(kColorId); add(kBrightId); add(kFogId); add(kFogDistId); add(kFogColorId); add(kHazeId);
         add(kHeadImage); add(kExposureId); add(kFilterId); add(kCloudsId);
@@ -87,6 +87,13 @@ namespace {
                 out->help = "The game's own lighting: sky, sun and the lights in the world. Includes Early Morning and the overcast looks the game's option never offers. The screen fades briefly while it changes.";
                 out->choices = kChoices; out->choice_count = kChoiceCount; break;
             case kVersionId:
+                if (atmpacks::Blocked()) {   // mods are in the folder, but there is no Overstrike archive to borrow
+                    static const char* const kNeeds[] = { "NEEDS AN OVERSTRIKE MOD" };
+                    out->title = "ATMOSPHERE";
+                    out->help = "Atmosphere mods were found in your Atmospheres folder, but they can only be used when at least one mod that replaces game files (a .smpcmod, for example) is installed with Overstrike. Install any such mod, press Install mods, and start the game again.";
+                    out->choices = kNeeds; out->choice_count = 1;
+                    break;
+                }
                 out->title = "ATMOSPHERE";
                 out->help = "Which version of this time of day to use: the game's own, or an atmosphere mod you put in the Atmospheres folder (Documents, Marvel's Spider-Man Remastered, ManhattanSkies). It changes the sky and its lighting together with the time of day above. One choice is kept for each time of day, and the dynamic cycle uses it too.";
                 out->choices = atmpacks::Labels(VersionSlot()); out->choice_count = atmpacks::LabelCount(VersionSlot()); break;

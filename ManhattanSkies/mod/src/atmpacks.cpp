@@ -45,7 +45,7 @@ namespace {
     std::vector<Pack> g_packs;
     std::vector<std::string> g_label_store[kSlots];
     std::vector<const char*> g_labels[kSlots];
-    std::atomic<bool> g_started{ false }, g_ready{ false };
+    std::atomic<bool> g_started{ false }, g_ready{ false }, g_blocked{ false };   // blocked: mods were found but there is no archive to borrow
 
     // ---- libdeflate.dll, which the game ships (raw deflate, the zip's method 8) ----
     using AllocFn = void* (__cdecl*)();
@@ -313,14 +313,13 @@ namespace {
         bool located = false;
         for (int i = 0; i < 90 && !located; ++i) { located = toc::Locate(true); if (!located) Sleep(2000); }
         if (!located) { LOG("atmpacks: the game's asset table was not found; no atmosphere mods this session"); return; }
-        int arch = toc::PickRawArchive();
-        const bool force = std::filesystem::exists(data / L"force_placeholder.txt", ec);   // test switch for the placeholder experiment
-        if (arch < 0 || force) {
-            if (force) LOG("atmpacks: force_placeholder.txt exists: using the placeholder archive even though a mod archive %s", arch >= 0 ? "exists" : "does not exist");
-            else LOG("atmpacks: no raw mod archive from Overstrike; trying a placeholder archive");
-            arch = toc::PreparePlaceholder();
+        const int arch = toc::PickRawArchive();
+        if (arch < 0) {
+            g_blocked = true;
+            g_ready = true;
+            LOG("atmpacks: no raw mod archive to borrow: install any .smpcmod mod with Overstrike (and press Install mods); no atmosphere mods this session");
+            return;
         }
-        if (arch < 0) { LOG("atmpacks: no archive to borrow (install any mod with Overstrike); no atmosphere mods this session"); return; }
         size_t added = 0;
         for (const auto& a : assets) {
             if (!toc::AddAsset(a.id, (uint32_t)arch, a.path.c_str(), a.size)) { LOG("atmpacks: adding assets failed after %zu; stopping", added); return; }
@@ -348,6 +347,7 @@ namespace {
     }
     bool Ready() { return g_ready; }
     bool IsMod(uint64_t id) { if (!g_ready) return false; std::lock_guard<std::mutex> lk(g_mu); for (const auto& p : g_packs) if (p.id == id) return true; return false; }
+    bool Blocked() { return g_blocked; }
     bool AnyMods() { if (!g_ready) return false; std::lock_guard<std::mutex> lk(g_mu); return !g_packs.empty(); }
 
     // Unpacks a mod's textures into the cache the first time it is needed (a second or less); the game reads them through the redirect in toc.cpp.

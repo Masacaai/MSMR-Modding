@@ -501,47 +501,7 @@ namespace {
             ok ? "" : " (WRITE FAILED)");
         return ok;
     }
-    // EXPERIMENT (RECON Part 17e): a placeholder archive for players with no Overstrike asset mod. Overstrike's raw archives (mods\modN) are the only raw
-    // archives the game has; the vanilla ones are compressed (DSAR) and described by a chunk map. The toc also lists language archives (a00s035.fr ...) whose
-    // files this install does not have. Make one of those entries describe a small file of ours instead: a raw archive (chunk map 0, bucket 0, like the mod
-    // archives) named mods\ManhattanSkies.arc. Whether the game opens an archive's file lazily by the name in this entry (then it works) or opened them all at
-    // start-up (then reads fail and the log says so) is not known; it is only used when no mod archive exists, or when the file
-    // the file force_placeholder.txt in the mod's Documents folder exists (a test switch).
-    int PreparePlaceholder() {
-        if (!Locate()) return -1;
-        wchar_t exe[MAX_PATH] = {};
-        GetModuleFileNameW(nullptr, exe, MAX_PATH);
-        std::wstring dir(exe);
-        dir = dir.substr(0, dir.find_last_of(L'\\') + 1) + L"asset_archive\\";
-        int pick = -1;
-        for (size_t i = 0; i < g_tab.archive_count; ++i) {
-            const std::string n = ArchiveName((uint32_t)i);
-            if (n.size() < 9 || _strnicmp(n.c_str(), "a00s", 4) != 0 || n.find('.') == std::string::npos) continue;   // a language archive
-            const std::wstring w(n.begin(), n.end());
-            if (GetFileAttributesW((dir + w).c_str()) == INVALID_FILE_ATTRIBUTES) pick = (int)i;   // this install does not have its file: the game never reads it
-        }
-        if (pick < 0) { LOG("toc: placeholder: every language archive exists on disk; no placeholder possible"); return -1; }
-        const std::wstring file = dir + L"mods\\ManhattanSkies.arc";
-        CreateDirectoryW((dir + L"mods").c_str(), nullptr);
-        HANDLE f = CreateFileW(file.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-        if (f == INVALID_HANDLE_VALUE) { LOG("toc: placeholder: cannot create the file (error %lu)", GetLastError()); return -1; }
-        static const char zeros[4096] = {};
-        DWORD w = 0;
-        WriteFile(f, zeros, sizeof(zeros), &w, nullptr);
-        CloseHandle(f);
-        const uintptr_t entry = g_tab.archives + 72ull * (uint32_t)pick;
-        uint8_t before[72] = {}, after[72] = {};
-        ReadBytes(entry, before, 72);
-        char name[64] = "mods\\ManhattanSkies.arc";
-        bool ok = memory::Write(entry, (uint64_t)0);   // install bucket 0, chunk map 0: a raw archive, like the mod archives
-        for (int i = 0; i < 64; i += 8) ok = ok && memory::Write(entry + 8 + i, *reinterpret_cast<const uint64_t*>(name + i));
-        ReadBytes(entry, after, 72);
-        LOG("toc: placeholder: archive %d was '%.40s' (bucket %08x chunkmap %08x), now '%.40s' (bucket %08x chunkmap %08x)%s", pick, reinterpret_cast<const char*>(before + 8),
-            *reinterpret_cast<const uint32_t*>(before), *reinterpret_cast<const uint32_t*>(before + 4), reinterpret_cast<const char*>(after + 8),
-            *reinterpret_cast<const uint32_t*>(after), *reinterpret_cast<const uint32_t*>(after + 4), ok ? "" : " (WRITE FAILED)");
-        return ok ? pick : -1;
-    }
-    // An archive index the new assets can borrow: a raw (uncompressed) mod archive that Overstrike wrote (mods\modN) and that exists on disk. -1: none.
+    // An archive index the new assets can borrow: a raw (chunk map 0) mod archive that Overstrike wrote (mods\modN) and that exists on disk. -1: none.
     int PickRawArchive() {
         if (!Locate()) return -1;
         wchar_t exe[MAX_PATH] = {};
@@ -552,6 +512,8 @@ namespace {
         for (size_t i = 0; i < g_tab.archive_count; ++i) {
             const std::string n = ArchiveName((uint32_t)i);
             if (_strnicmp(n.c_str(), "mods\\mod", 8) != 0) continue;
+            uint32_t chunkmap = 1;   // the archive entry's chunk map: 0 for a raw archive, nonzero for one the game reads through a chunk map (compressed)
+            if (!ReadBytes(g_tab.archives + 72ull * i + 4, &chunkmap, 4) || chunkmap != 0) continue;
             const std::wstring w(n.begin(), n.end());
             if (GetFileAttributesW((dir + w).c_str()) != INVALID_FILE_ATTRIBUTES) best = (int)i;   // keep the last one that exists
         }
