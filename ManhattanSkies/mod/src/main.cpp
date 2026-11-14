@@ -9,7 +9,9 @@
 #include "menu.h"
 
 #include "../../../ModMenu/modmenu.h"
+#include "gamethread.h"
 #include "natives.h"
+#include "presets.h"
 #include "recorder.h"
 #include "scan.h"
 #include "sky.h"
@@ -201,6 +203,17 @@ static void RunCommand(const std::string& line) {
         std::string a, b, a2;
         in >> a >> b >> a2;
         recorder::SnapDiff(a, b, a2);
+    } else if (cmd == "presets") {   // presets [rescan]: the folder's presets with their numbers
+        std::string what;
+        in >> what;
+        if (what == "rescan") presets::Rescan();
+        for (int i = 0; i <= presets::Count(); ++i) LOG("preset %d: %s%s", i, presets::Names()[i], i == presets::Current() ? "  (matches the live settings)" : "");
+    } else if (cmd == "preset") {    // preset <number from `presets`>: applies it like picking it on the PRESET row
+        int i = -1;
+        in >> i;
+        if (i >= 1 && i <= presets::Count()) {
+            gamethread::Run([=] { presets::Apply(i); LOG("preset %d applied: %s (now matches: %s)", i, presets::Names()[i], presets::Names()[presets::Current()]); });
+        } else LOG("preset: give a number from `presets` (1..%d)", presets::Count());
     } else if (cmd == "menu") {
         menu::LogStatus();
     } else if (cmd == "atm") {
