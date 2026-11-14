@@ -280,6 +280,7 @@ namespace {
                     if (g_load_tries >= 3) { g_failed_id = want; LOG("sky: look %016llX would not load after 3 tries (the atmosphere pool is probably full); giving up on it", (unsigned long long)want); return; }
                     ++g_load_tries;
                     atmpacks::Prepare(want);   // an atmosphere mod's textures are unpacked on first use
+                    atmpacks::Select(want);    // and the files it ships besides its atmosphere replace the game's while it is on
                     recorder::LoadAtmosphere(want);
                     g_load_req_at = now;
                     LOG("sky: loading look %016llX (try %d)", (unsigned long long)want, g_load_tries);
@@ -297,6 +298,7 @@ namespace {
             return;
         }
         // back to AUTO: the look off, the game's own base atmosphere for the current mode on again
+        atmpacks::Deselect();
         const uint64_t old_look = g_look_id; const int old_idx = g_look_idx;
         Activate(g_look_idx, false);
         int base = BaseSlot();
@@ -904,6 +906,7 @@ namespace {
         if (mode < 0 || !recorder::Manager()) { g_world_up = false; return; }
         if (!g_world_up) {   // a (re)load: every slot we knew is gone
             g_world_up = true;
+            atmpacks::Deselect();   // a (re)load puts the game's own atmosphere back: so the game's own files too
             g_look_id = 0; g_look_idx = -1; g_edit_idx = -1; g_edit_asset = 0; g_edit_touched = false; g_load_req_at = 0; g_held.clear(); g_failed_id = 0; g_load_tries = 0;
             for (int s = 0; s < kSettingCount; ++s) g_edit_seen[s] = -1;
             g_hold_until = now + 3000;

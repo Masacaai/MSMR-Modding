@@ -119,7 +119,7 @@ namespace {
         }
         if (GetTickCount64() < g_io_until.load(std::memory_order_relaxed) && g_io_budget.load(std::memory_order_relaxed) > 0) {
             const std::string p = PathOf(h);
-            if (p.find("asset_archive") != std::string::npos && p.find("\mods\\") == std::string::npos) g_io_other.fetch_add(1);   // the game's own archives stream constantly: count only
+            if (p.find("asset_archive") != std::string::npos && p.find("\\mods\\") == std::string::npos) g_io_other.fetch_add(1);   // the game's own archives stream constantly: count only
             else if (p.find("asset_archive") != std::string::npos) {
                 g_io_budget.fetch_sub(1);
                 const size_t slash = p.find_last_of('\\');
@@ -192,7 +192,7 @@ namespace {
         LOG("iotrace: %lu reads of the game's own archives since the last window (not logged)", g_io_other.exchange(0));
         g_io_budget = 400;
         g_io_until = GetTickCount64() + ms;
-        LOG("iotrace: logging reads of asset_archive\mods (up to 400) for %u ms; other archive reads are only counted", ms);
+        LOG("iotrace: logging reads of asset_archive mods folder (up to 400) for %u ms; other archive reads are only counted", ms);
     }
     // Finds the toc's DAT1 buffer in the game's memory: a big private region holding a DAT1 header whose sections include the id, offsets and sizes tables.
     bool Locate(bool quiet) {
@@ -500,6 +500,56 @@ namespace {
         LOG("toc: new asset %016llX = toc index %zu, %u bytes from %ls (as archive %u %s offset 0x%x)%s", (unsigned long long)id, index, c.size, path, use_archive, aname.c_str(), offset,
             ok ? "" : " (WRITE FAILED)");
         return ok;
+    }
+    struct Swap { uint64_t id; size_t pos; uint64_t old_offs; uint32_t old_size; };
+    std::vector<Swap> g_swaps;
+    bool SwapAsset(uint64_t id, uint32_t use_archive, const wchar_t* path, uint32_t size) {
+        if (!g_grow.ready || !size) return false;
+        const std::string aname = ArchiveName(use_archive);
+        if (aname.empty()) return false;
+        size_t pos = (size_t)-1;
+        for (size_t i = 0; i < g_grow.base_count; ++i) if (g_grow.ids[i] == id) { pos = i; break; }
+        if (pos == (size_t)-1) { LOG("toc: swap: %016llX is not in the toc", (unsigned long long)id); return false; }
+        Carrier c;
+        c.id = id; c.index = pos; c.archive_name = aname; c.path = path; c.size = size; c.offset = g_next_sentinel.fetch_add(0x10000u);
+        {
+            std::lock_guard<std::mutex> lk(g_car_mu);
+            g_cars.push_back(c);
+        }
+        g_cars_active = true;
+        MH_Initialize();
+        if (!g_io_hooked.exchange(true)) {
+            if (MH_CreateHook(reinterpret_cast<void*>(&ReadFile), reinterpret_cast<void*>(&ReadFileDetour), reinterpret_cast<void**>(&g_read_orig)) != MH_OK ||
+                MH_EnableHook(reinterpret_cast<void*>(&ReadFile)) != MH_OK) { LOG("toc: could not hook ReadFile"); g_io_hooked = false; return false; }
+        }
+        size_t where[2] = { pos, (size_t)-1 };
+        if (pos >= g_grow.copy_first && pos < g_grow.copy_first + g_grow.span_count) where[1] = g_grow.base_count + (pos - g_grow.copy_first);   // span 0 is looked up in its copy
+        for (size_t w : where) {
+            if (w == (size_t)-1) continue;
+            Swap sw{ id, w, 0, 0 };
+            std::memcpy(&sw.old_offs, g_grow.offs + 8 * w, 8);
+            std::memcpy(&sw.old_size, g_grow.sizes + 12 * w + 4, 4);
+            g_swaps.push_back(sw);
+            std::memcpy(g_grow.sizes + 12 * w + 4, &size, 4);                       // size first, then the (archive, offset) pair in one 8-byte store
+            const uint64_t pair = (uint64_t)use_archive | ((uint64_t)c.offset << 32);
+            std::memcpy(g_grow.offs + 8 * w, &pair, 8);
+        }
+        LOG("toc: swapped %016llX (toc index %zu) to %u bytes from %ls", (unsigned long long)id, pos, size, path);
+        return true;
+    }
+    void UnswapAll() {
+        if (g_swaps.empty()) return;
+        for (auto it = g_swaps.rbegin(); it != g_swaps.rend(); ++it) {
+            std::memcpy(g_grow.offs + 8 * it->pos, &it->old_offs, 8);
+            std::memcpy(g_grow.sizes + 12 * it->pos + 4, &it->old_size, 4);
+        }
+        {
+            std::lock_guard<std::mutex> lk(g_car_mu);
+            for (const auto& sw : g_swaps)
+                for (size_t i = 0; i < g_cars.size(); ++i) if (g_cars[i].id == sw.id && g_cars[i].index == (sw.pos >= g_grow.base_count ? sw.pos - g_grow.base_count + g_grow.copy_first : sw.pos)) { if (g_cars[i].file != INVALID_HANDLE_VALUE) CloseHandle(g_cars[i].file); g_cars.erase(g_cars.begin() + (long)i); break; }
+        }
+        LOG("toc: %zu swapped entries restored", g_swaps.size());
+        g_swaps.clear();
     }
     // An archive index the new assets can borrow: a raw (chunk map 0) mod archive that Overstrike wrote (mods\modN) and that exists on disk. -1: none.
     int PickRawArchive() {

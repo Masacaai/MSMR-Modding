@@ -16,6 +16,8 @@ namespace atmpacks {
     bool IsMod(uint64_t atmosphere_id);    // the id is one of the mods' atmospheres
     bool Blocked();                        // mods are in the Atmospheres folder but no Overstrike archive exists to borrow (the menu says what to do)
     bool AnyMods();                        // at least one atmosphere mod is loaded
+    void Select(uint64_t atmosphere_id);   // the mod's atmosphere is about to load: swap its extra files into the game's table (after Prepare)
+    void Deselect();                       // the game's own atmosphere is on: put back the game's files a mod's atmosphere had swapped in
     bool Prepare(uint64_t atmosphere_id);   // unpack that mod's textures into the cache (first use; under a second); true when ready or not a mod's id
     int SlotOfMode(int lighting_mode);     // lighting mode (0 day, 4 early morning, 2 sunset, 5/1 night, 3/6 overcast) -> slot, or -1
     int LabelCount(int slot);              // 1 (the default) + the mods for that slot

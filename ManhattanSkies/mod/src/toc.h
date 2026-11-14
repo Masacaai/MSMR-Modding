@@ -17,6 +17,10 @@ namespace toc {
     bool AddCarrier(uint64_t carrier_id, uint32_t use_archive, const wchar_t* path);
     void RestoreCarriers();
     bool AddAsset(uint64_t id, uint32_t use_archive, const wchar_t* path, uint32_t size = 0);   // size 0: read it from the file now; else the file may appear later   // a genuinely new asset in span 255; ids must ascend
+    // While an atmosphere mod is on, the files it ships that its atmosphere does not reference (a color-grading lookup, the sun flare ...) replace the game's own:
+    // the toc entry of the existing asset is pointed at our file, and restored afterwards. The game must load the asset after the swap to see it.
+    bool SwapAsset(uint64_t id, uint32_t use_archive, const wchar_t* path, uint32_t size);
+    void UnswapAll();
     int PickRawArchive();   // an archive index (a raw Overstrike mod archive that exists) the new assets can borrow, or -1
     void FindPointers();   // research: where the game keeps pointers to the toc sections
 }
