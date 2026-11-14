@@ -408,14 +408,18 @@ namespace {
     constexpr int kVarBright[] = { 0, 2, 3, 4, 5 };            // AUTO, 50%, 75%, 150%, 200%
     constexpr int kVarFog[] = { 0, 1, 2, 3, 4, 5 };            // AUTO, NONE, 25%, 50%, 150%, 300%
     constexpr int kVarFogDist[] = { 0, 2, 3, 4 };              // AUTO, 50%, 150%, 300%
-    constexpr int kVarHaze[] = { 0, 1, 2, 3, 4 };              // AUTO, NONE, LIGHT, MEDIUM, HEAVY
-    void RollVar(int out[4]) {
+    // HAZE is an absolute veil, not a multiplier: HEAVY (0.5) takes the far city to a white-out (RECON Part 12), which at night looked like a blinding white light
+    // (2026-11-14). The random pools stop at MEDIUM by day and at LIGHT at night and in overcast.
+    constexpr int kVarHazeDay[] = { 0, 1, 2, 3 };              // AUTO, NONE, LIGHT, MEDIUM
+    constexpr int kVarHazeDark[] = { 0, 1, 2 };                // AUTO, NONE, LIGHT
+    void RollVar(int out[4], int mode) {
         static std::mt19937 rng((unsigned)GetTickCount64() ^ 0x9e3779b9u);
         auto pick = [&](const int* a, size_t n) { return a[std::uniform_int_distribution<size_t>(0, n - 1)(rng)]; };
         out[0] = pick(kVarBright, sizeof(kVarBright) / sizeof(int));
         out[1] = pick(kVarFog, sizeof(kVarFog) / sizeof(int));
         out[2] = pick(kVarFogDist, sizeof(kVarFogDist) / sizeof(int));
-        out[3] = pick(kVarHaze, sizeof(kVarHaze) / sizeof(int));
+        const bool dark = mode == 5 || mode == 1 || mode == 3 || mode == 6;   // night and overcast
+        out[3] = dark ? pick(kVarHazeDark, sizeof(kVarHazeDark) / sizeof(int)) : pick(kVarHazeDay, sizeof(kVarHazeDay) / sizeof(int));
     }
     uint64_t g_next_look = 0;                     // the sky picked for the coming phase (0: the game's own for its lighting mode)
     int g_pick_nm = -1;                           // the lighting mode the pick was made for (-1: none yet)
@@ -532,7 +536,7 @@ namespace {
             g_phase = PhaseOfMode(mode); g_cyc_overcast = mode == 3 || mode == 6;
             if (g_saved_phase >= 0.0 && ModeMatches(mode, PoseAt(g_saved_phase, g_saved_overcast).mode)) { g_phase = g_saved_phase; g_cyc_overcast = g_saved_overcast; LOG("sky: cycle resumes at phase %.3f", g_phase); }   // where it stopped last session
             g_prev_phase = g_phase; g_cyc_last = now; g_cyc_started = true; g_hold = false;
-            RollVar(g_var); ++g_cyc_step;   // the first phase gets random variations too
+            RollVar(g_var, mode); ++g_cyc_step;   // the first phase gets random variations too
         }
         // Follow the game's own clock: the world time scale (the pause menu and prompts freeze it), so a paused game pauses the cycle.
         float ts = 1.f;
@@ -590,7 +594,7 @@ namespace {
             const double dsec = dph * minutes * 60.0;
             const double lead = std::min(10.0, minutes * 60.0 * 0.06);
             if (dsec <= lead + 5.0 && g_pick_nm != nm) {
-                g_pick_nm = nm; g_next_look = PickLook(nm); RollVar(g_next_var);
+                g_pick_nm = nm; g_next_look = PickLook(nm); RollVar(g_next_var, nm);
                 LOG("sky: cycle: next phase (mode %d) sky %016llX%s", nm, (unsigned long long)g_next_look, g_next_look ? "" : " (the game's own)");
                 if (g_next_look && atmpacks::IsMod(g_next_look)) atmpacks::Prepare(g_next_look);
             } else if (dsec > lead + 5.0) g_pick_nm = -1;
@@ -606,7 +610,7 @@ namespace {
                 return;
             }
             g_cyc_switch_at = now;
-            if (g_pick_nm != p.mode) { g_pick_nm = p.mode; g_next_look = PickLook(p.mode); RollVar(g_next_var); }   // no preparation happened (a late start): pick now
+            if (g_pick_nm != p.mode) { g_pick_nm = p.mode; g_next_look = PickLook(p.mode); RollVar(g_next_var, p.mode); }   // no preparation happened (a late start): pick now
             g_cyc_look = g_next_look;                     // the chosen sky goes on with the switch (0: the game's own)
             for (int i = 0; i < 4; ++i) g_var[i] = g_next_var[i];
             ++g_cyc_step;
