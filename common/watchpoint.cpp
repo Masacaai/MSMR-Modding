@@ -18,6 +18,7 @@ namespace watchpoint {
     static Hit g_hits[kMaxHits];
     static std::atomic<int> g_count = 0;
     static std::atomic<uintptr_t> g_addr = 0;
+    static std::atomic<bool> g_rw = false;   // watch reads as well as writes (DR7 RW0 = 3)
     static PVOID g_veh = nullptr;
 
     static bool InText(uintptr_t v) {
@@ -64,7 +65,7 @@ namespace watchpoint {
                 if (GetThreadContext(t, &c)) {
                     c.Dr0 = addr;
                     // DR7: L0 enable (bit 0), RW0 = 01 write (bits 16-17), LEN0 = 10 eight bytes (bits 18-19).
-                    c.Dr7 = addr ? ((c.Dr7 & ~0xF0003ull) | 1ull | (1ull << 16) | (2ull << 18)) : (c.Dr7 & ~0xF0003ull);
+                    c.Dr7 = addr ? ((c.Dr7 & ~0xF0003ull) | 1ull | ((g_rw ? 3ull : 1ull) << 16) | (2ull << 18)) : (c.Dr7 & ~0xF0003ull);
                     if (SetThreadContext(t, &c)) n++;
                 }
                 ResumeThread(t);
@@ -75,12 +76,22 @@ namespace watchpoint {
         return n;
     }
 
-    void Set(uintptr_t addr) {
+    static void Arm(uintptr_t addr) {
         if (!g_veh) g_veh = AddVectoredExceptionHandler(1, Handler);
         g_count = 0;
         g_addr = addr;
         int n = ApplyToThreads(addr);
-        LOG("wp: write watch on %llx armed on %d threads", (unsigned long long)addr, n);
+        LOG("wp: %s watch on %llx armed on %d threads", g_rw ? "read/write" : "write", (unsigned long long)addr, n);
+    }
+
+    void Set(uintptr_t addr) {
+        g_rw = false;
+        Arm(addr);
+    }
+
+    void SetReadWrite(uintptr_t addr) {
+        g_rw = true;
+        Arm(addr);
     }
 
     void Clear() {

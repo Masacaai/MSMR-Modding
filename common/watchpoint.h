@@ -10,6 +10,7 @@
 //   wp clear                disarm on all threads
 namespace watchpoint {
     void Set(uintptr_t addr);
+    void SetReadWrite(uintptr_t addr);   // also hits on reads (`wp setr`): finds the code that reads a field
     void Clear();
     void Dump();
 }
