@@ -9,6 +9,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
+#include <deque>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -61,6 +62,7 @@ namespace {
         void (*trace_ui)(unsigned ms);   // added later in protocol 1; check size
         void (*keep_open)(unsigned ms);  // likewise
         void (*suppress_fade)(unsigned ms);   // likewise
+        bool (*player_busy)();                // likewise
     };
     struct Shared { HostApi* api; };
 
@@ -83,6 +85,10 @@ namespace {
         alignas(16) unsigned char tab[kTabBytes]{};
         std::vector<Text> texts;
         std::vector<std::string> strings;   // titles/helps/choices copied from the mod for this build
+        // Earlier builds are kept alive for a while instead of freed at the next build: the game may still hold pointers into the strings and item memory
+        // it was handed (the Nov 11 and Nov 13 crashes were Flash code touching a freed UI object seconds after the Settings screen closed).
+        std::deque<std::vector<Text>> old_texts;
+        std::deque<std::unique_ptr<unsigned char[]>> old_bufs;
     };
     std::array<Entry, kMaxMods> g_mods;
     std::atomic<int> g_count{ 0 };
@@ -104,7 +110,7 @@ namespace {
     volatile unsigned long g_fault_code = 0;
     volatile uintptr_t g_fault_rip = 0, g_fault_addr = 0;
     std::atomic<ULONGLONG> g_trace_until{ 0 }, g_keep_until{ 0 }, g_nofade_until{ 0 };
-    std::atomic<uint64_t> g_fades_blocked{ 0 };
+    std::atomic<uint64_t> g_fades_blocked{ 0 }, g_cb_logged{ 0 };
     std::atomic<uint64_t> g_closes_blocked{ 0 };
     std::atomic<bool> g_page_off{ false };   // after one fault adding MODS to the first page, never again (a half-built Scaleform value is left behind)
     int CaptureFault(EXCEPTION_POINTERS* ep) {
@@ -236,7 +242,14 @@ namespace {
         int n = mod.rows(mod.ctx, ids, kMaxVisible);
         if (n < 0) n = 0;
         if (n > kMaxVisible) n = kMaxVisible;
-        e.texts.clear();
+        if (!e.texts.empty()) { e.old_texts.push_back(std::move(e.texts)); e.texts = std::vector<Text>(); while (e.old_texts.size() > 64) e.old_texts.pop_front(); }
+        if (e.items) {   // fresh item and choice memory for every build; the last builds' memory stays valid
+            e.old_bufs.push_back(std::move(e.items));
+            e.old_bufs.push_back(std::move(e.choices));
+            while (e.old_bufs.size() > 32) e.old_bufs.pop_front();
+        }
+        e.items.reset(new unsigned char[(size_t)(n > 0 ? n : 1) * kItemBytes]());
+        e.choices.reset(new unsigned char[(size_t)(n > 0 ? n : 1) * kMaxChoices * kChoiceBytes]());
         e.texts.reserve((size_t)n * (2 + kMaxChoices) + 2);
         std::unordered_map<uint32_t, const char*> lookup;
         auto add = [&](std::string tag, const char* text) -> const Text* {
@@ -343,6 +356,7 @@ namespace {
         }
         if (name == reinterpret_cast<const char*>(g_base + kOpenOptionsName) && args && count >= 1 && (args[0].type & kTypeMask) == kArray && args[0].objects) {
             ++g_open_count;
+            Log("modmenu: options screen opening (#%llu, %d mod tab(s))", (unsigned long long)g_open_count, g_count.load());
             // Settings screen: the mods' tabs go after the game's own (the pause menu's Flash/options screen is the game's).
             if (g_count.load() && Templates()) {
                 g_mods_screen = true;   // an options screen with our tabs is open
@@ -403,6 +417,8 @@ namespace {
     void __fastcall CallbackHook(void* ui, uint32_t hash, GfxValue* args, uint32_t count) {
         uint32_t arg = 0;
         const bool has_int = IntArg(args, count, arg);
+        // Forensics (a crash inside the Settings screen's Flash code left no trace of what the player was doing): every callback the open screen sends.
+        if (g_mods_screen && g_cb_logged++ < 6000) Log("modmenu: cb %08x%s%d (%u args)", hash, has_int ? " arg " : " ", has_int ? (int)arg : 0, count);
         if (hash == Get<uint32_t>(g_base + kSelectHash) && has_int) {
             if (g_selects++ < 20) Log("modmenu: Select %u", arg);
             if (arg == kModsItem) {   // A on MODS: the options screen with only the mods' tabs
@@ -492,6 +508,57 @@ namespace {
         return TextFor(hash) != nullptr || g_has_text(hash);
     }
 
+    // ---- is the player in a crime, a hideout, a mission objective or a fight? Read from the HUD calls the game makes (docs/UI_HUNT.md): the crime pop-up,
+    // the wave counter, the objective line, the progress bar and the combo counter. Method names are compared exactly; no game state is touched. ----
+    std::atomic<bool> g_in_activity{ false };
+    std::atomic<ULONGLONG> g_activity_seen{ 0 }, g_busy_until{ 0 };
+    using HudInvokeFn = uint64_t(__fastcall*)(void*, void*, const char*, void*, void*, uint64_t, uint64_t, uint64_t);
+    HudInvokeFn g_hud_invoke{};
+    // The Sable APC mission (2026-11-14): the objective and progress bar were hidden while the truck stopped, 13 s after the crime began and well before it was
+    // over, and the cycle switched a second later and ended it. After any end call the state therefore lingers for a minute and a half unless a new start call arrives.
+    constexpr ULONGLONG kLingerMs = 90000;
+    std::atomic<int> g_hud_logged{ 0 };
+    void NoteHudCall(const char* name) {
+        if (!name) return;
+        const ULONGLONG now = GetTickCount64();
+        if ((name[0] == 'S' || name[0] == 'H' || name[0] == 'A' || name[0] == 'D' || name[0] == 'U') && g_hud_logged < 400) {
+            static const char* const kNames[] = { "ShowCrimeScanner", "ShowCounter", "ShowMissionObjective", "ActivateProgressBar", "UpdateProgressBar", "UpdateItemCount",
+                                                  "HideCounter", "HideMission", "HideActivity", "DeactivateProgressBar", "SetComboCounter" };
+            for (const char* k : kNames) if (!std::strcmp(name, k)) { ++g_hud_logged; Log("modmenu: hud %s", name); break; }   // forensics: what a crime or hideout sends, in order
+        }
+        switch (name[0]) {
+            case 'S':
+                if (!std::strcmp(name, "ShowCrimeScanner") || !std::strcmp(name, "ShowCounter") || !std::strcmp(name, "ShowMissionObjective")) { g_in_activity = true; g_activity_seen = now; }
+                else if (!std::strcmp(name, "SetComboCounter")) g_busy_until = now + 12000;   // a fight: the combo counter
+                break;
+            case 'A':
+                if (!std::strcmp(name, "ActivateProgressBar")) { g_in_activity = true; g_activity_seen = now; }
+                break;
+            case 'U':
+                if (!std::strcmp(name, "UpdateProgressBar") || !std::strcmp(name, "UpdateItemCount")) g_activity_seen = now;
+                break;
+            case 'H':
+                if (!std::strcmp(name, "HideCounter") || !std::strcmp(name, "HideMission") || !std::strcmp(name, "HideActivity")) { g_in_activity = false; g_busy_until = now + kLingerMs; }
+                break;
+            case 'D':
+                if (!std::strcmp(name, "DeactivateProgressBar")) { g_in_activity = false; g_busy_until = now + kLingerMs; }
+                break;
+            default: break;
+        }
+    }
+    bool HostPlayerBusy() {
+        const ULONGLONG now = GetTickCount64();
+        if (g_in_activity && now - g_activity_seen < 15 * 60 * 1000) return true;   // 15 minutes without a sign of life: the end call was missed
+        return now < g_busy_until;
+    }
+    int NoteHudCallSafe(const char* name) {
+        __try { NoteHudCall(name); return 1; } __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+    }
+    uint64_t __fastcall HudInvokeHook(void* a, void* b, const char* name, void* d, void* e, uint64_t f, uint64_t g, uint64_t h) {
+        NoteHudCallSafe(name);
+        return g_hud_invoke(a, b, name, d, e, f, g, h);
+    }
+
     struct Hook {
         uintptr_t rva;
         void* detour;
@@ -513,6 +580,7 @@ namespace {
         { 0x1749ae0, (void*)&HasTextHook, (void**)&g_has_text, { 0x48, 0x83, 0xec, 0x28, 0x8b, 0xd1, 0x48, 0x8b, 0x0d }, 9 },
         { 0x807740, (void*)&BuildTabHook, (void**)&g_build_tab, { 0x48, 0x89, 0x5c, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18 }, 10 },
         { 0x80a220, (void*)&AddItemHook, (void**)&g_add_item, { 0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10 }, 10 },
+        { 0x1d1cee0, (void*)&HudInvokeHook, (void**)&g_hud_invoke, { 0x40, 0x53, 0x48, 0x83, 0xec, 0x40, 0x8b, 0x42, 0x18, 0x49 }, 10 },   // the HUD's per-element method call
     };
 
     // 1: the game's bytes; 2: a jmp another script's hook put there (we chain on top); 0: something else.
@@ -609,7 +677,7 @@ namespace {
         // The handle and view stay open for the life of the process.
         if (!existed) {
             g_is_host = true;
-            g_api = { kProtocol, sizeof(HostApi), &HostRegister, &HostLogStatus, &HostTraceUi, &HostKeepOpen, &HostSuppressFade };
+            g_api = { kProtocol, sizeof(HostApi), &HostRegister, &HostLogStatus, &HostTraceUi, &HostKeepOpen, &HostSuppressFade, &HostPlayerBusy };
             InterlockedExchangePointer(reinterpret_cast<void* volatile*>(&shared->api), &g_api);
             g_elect_code = InstallHooks();
             return;
@@ -639,6 +707,12 @@ namespace {
     void SuppressFade(unsigned ms) {
         if (g_is_host) HostSuppressFade(ms);
         else if (g_remote && g_remote->size >= sizeof(HostApi)) g_remote->suppress_fade(ms);
+    }
+
+    bool PlayerBusy() {
+        if (g_is_host) return HostPlayerBusy();
+        if (g_remote && g_remote->size >= sizeof(HostApi)) return g_remote->player_busy();
+        return false;   // an older host cannot say: not busy
     }
 
     void TraceUi(unsigned ms) {

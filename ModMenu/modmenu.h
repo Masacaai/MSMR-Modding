@@ -56,6 +56,10 @@ namespace modmenu {
     // window happens without the fade to black. Call right before changing the mode. Experimental: it is not known whether the game waits for the fade.
     void SuppressFade(unsigned ms);
 
+    // True while the player seems to be in a crime, a hideout, a mission objective or a fight (read from the HUD calls the game makes: the crime pop-up, the wave
+    // counter, the objective line, the progress bar, the combo counter). Mods that change the world's lighting should wait while it is true.
+    bool PlayerBusy();
+
     // Dev tool: for `ms` milliseconds log every UI call the game makes (name and the code that made it) to the log function given at Register.
     void TraceUi(unsigned ms);
 
