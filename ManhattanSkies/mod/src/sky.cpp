@@ -570,6 +570,12 @@ namespace {
                 g_blend_nm = nm;
                 if (g_pick_nm != nm) { g_pick_nm = nm; g_next_look = PickLook(nm); RollVar(g_next_var); LOG("sky: cycle: next phase (mode %d) sky %016llX%s", nm, (unsigned long long)g_next_look, g_next_look ? "" : " (the game's own)"); }
                 const uint64_t id = g_next_look ? g_next_look : ModeBaseAtmosphere(nm);
+                // An atmosphere mod is not loaded ahead (2026-11-14, twice a black sky): a load made at weight 0 sometimes requests the skybox textures and sometimes
+                // not, and loading it again at the switch did not make it reliable. It is loaded once, at the switch, the way a menu pick is (that always worked).
+                // Only its textures are unpacked ahead, and there is no color blend toward it.
+                const bool modsky = id && atmpacks::IsMod(id);
+                if (modsky) { atmpacks::Prepare(id); if (g_tgt_asset) { g_tgt_asset = 0; g_tgt_valid = false; } }
+                else {
                 if (id && id != g_tgt_asset) { g_tgt_asset = id; g_tgt_valid = false; g_tgt_req_at = 0; }
                 if (id && !g_tgt_valid) {
                     const int slot = recorder::FindSlot(id);
@@ -581,6 +587,7 @@ namespace {
                             if (std::find(g_cyc_hold.begin(), g_cyc_hold.end(), id) == g_cyc_hold.end()) g_cyc_hold.push_back(id);
                         }
                     } else if (ReadAtm(slot, g_tgt)) g_tgt_valid = true;
+                }
                 }
                 if (g_tgt_valid && dsec <= lead) {
                     const double u = std::max(0.0, std::min(1.0, 1.0 - dsec / lead));
