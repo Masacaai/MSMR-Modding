@@ -11,6 +11,9 @@ Adds **atmosphere mods from a folder**: drop `.smpcmod` and `.modular` atmospher
 - **CYCLE ATMOSPHERES** under DYNAMIC CYCLE: when on, the cycle also picks among the atmosphere mods for each time of day, each as the mod ships it. An ATMOSPHERE you picked yourself still wins over the random pick.
 - **The cycle stands still during crimes, hideouts, mission objectives and fights**, and never switches the lighting then (a switch is a mini-load that ended a crime in testing). It reads the game's own HUD calls (the crime pop-up, wave counter, objective line, progress bar, combo counter).
 - **The cycle varies more:** each phase also gets a random SUN BRIGHTNESS, FOG DENSITY, FOG DISTANCE and HAZE (a value you set in that row wins), blended in with the colors before the switch.
+- **SUN COLOR AMOUNT and FOG COLOR AMOUNT:** how much of the color you picked replaces the sky's own (AUTO is all of it, down to 10% for a faint tint).
+- **23 more presets** that ship with the mod (night, overcast, dawn, day and sunset looks built from the game's own skies).
+- **Every cycle phase runs its full length** from when it actually starts: a switch that waits for a calm moment no longer shortens the next phase.
 - **SUN BRIGHTNESS can be OFF** (last choice of the row): no direct sunlight at all.
 - **Transitions no longer touch the sun.** Only fog, haze, exposure, filter and fog color blend toward the next phase; each phase brings its own sun.
 - **No black fade** when you change TIME OF DAY from the menu, like the cycle.
