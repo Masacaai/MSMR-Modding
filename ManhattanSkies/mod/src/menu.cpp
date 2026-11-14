@@ -103,7 +103,7 @@ namespace {
                 out->choices = sky::CycleLabels(); out->choice_count = sky::CycleCount(); break;
             case kCycleAtmId:
                 out->title = "CYCLE ATMOSPHERES";
-                out->help = "ON: the dynamic cycle also picks among the atmosphere mods in your Atmospheres folder for each time of day, next to the game's own looks, each as the mod ships it. An ATMOSPHERE you pick yourself for a time of day still wins over the random pick.";
+                out->help = "ON: the dynamic cycle also picks among the atmosphere mods in your Atmospheres folder for each time of day, next to the game's own looks, each as the mod ships it: an atmosphere mod keeps all of its author's values (the cycle does not steer its sun or vary its fog, haze or sun strength), while rows you set yourself still apply. An ATMOSPHERE you pick yourself for a time of day still wins over the random pick.";
                 { static const char* const kOffOn[] = { "OFF", "ON" }; out->choices = kOffOn; out->choice_count = 2; }
                 break;
             case kStyleId:

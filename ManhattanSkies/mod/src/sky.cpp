@@ -398,9 +398,11 @@ namespace {
     // Random variations the dynamic cycle adds for each phase: SUN BRIGHTNESS, FOG DENSITY, FOG DISTANCE and HAZE (indices into their tables; 0 = the sky's own).
     // A value the player set in that row wins. The next phase's roll is made with its sky, so fog and haze blend toward it with the colors.
     int g_var[4] = {}, g_next_var[4] = {};
+    bool g_cur_mod = false;   // the sky on now is an atmosphere mod's: it keeps its author's values (no cycle variations, no steered sun); only the rows the player set apply
     int VarIdx(Setting s) { switch (s) { case kBright: return 0; case kFog: return 1; case kFogDist: return 2; case kHaze: return 3; default: return -1; } }
     int EffSel(Setting s, bool next = false) {
         if (g_set[s]) return g_set[s];
+        if (g_cur_mod) return 0;
         const int v = VarIdx(s);
         if (v < 0 || g_set[kCycle] <= 0) return 0;
         return next ? g_next_var[v] : g_var[v];
@@ -635,7 +637,7 @@ namespace {
         if (height > 0 && height <= (int)(sizeof(kHeights) / sizeof(kHeights[0]))) w.elev = (float)kHeights[height - 1];
         if (color > 0 && color < (int)(sizeof(kColors) / sizeof(kColors[0]))) for (int i = 0; i < 3; ++i) w.rgb[i] = Mix(o.rgb[i], kColors[color].rgb[i], AmountOf(g_set[kColorAmt]));
         if (bright > 0 && bright < (int)(sizeof(kBrights) / sizeof(kBrights[0]))) w.w = o.w * kBrights[bright].mul;
-        if (g_cyc_sun_on) {   // the day-night cycle steers the sun
+        if (g_cyc_sun_on && !g_cur_mod) {   // the day-night cycle steers the sun (not an atmosphere mod's)
             w.rot = o.rot + g_cyc_rotd; w.elev = g_cyc_elev;
             if (recorder::CurrentMode() == 4 && !color && !g_set[kBright]) {   // dawn: an orange sun rising from below the horizon, faint at first, easing to the sky's own color and strength
                 static const float kOrange[3] = { 1.0f, 0.6f, 0.3f };
@@ -653,8 +655,11 @@ namespace {
         uint64_t asset; int weight;
         if (idx < 0 || !recorder::SlotInfo(idx, asset, weight) || !asset || weight <= 0) return;
         if (g_look_id ? now - g_look_at < 500 : now - g_base_seen_at.load() < 900) return;   // let a fresh slot finish loading
+        g_cur_mod = atmpacks::IsMod(asset);
+        // what the player set by hand always applies; what the cycle adds (the steered sun, the random variations) only to the game's own skies
         bool any = false;
-        for (int s = kDir; s < kSettingCount; ++s) any = any || g_set[s];
+        for (int s = kDir; s < kSettingCount; ++s) if (s != kCycle && s != kCycleAtm) any = any || g_set[s];
+        any = any || (g_set[kCycle] > 0 && !g_cur_mod);
         bool changed = idx != g_edit_idx || asset != g_edit_asset || g_cyc_seen != g_cyc_step;
         for (int s = kDir; s < kSettingCount; ++s) if (g_edit_seen[s] != g_set[s]) changed = true;
         if (!changed) return;
