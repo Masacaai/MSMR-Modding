@@ -22,7 +22,7 @@ namespace {
     const char* const kChoices[] = { "DAY", "EARLY MORNING", "SUNSET", "NIGHT", "NIGHT (VARIANT)", "OVERCAST", "OVERCAST (VARIANT)" };
     const int kModes[] = { 0, 4, 2, 5, 1, 6, 3 };
     constexpr int kChoiceCount = 7, kDefault = 0;
-    enum { kHeadSky = 0, kTimeId, kStyleId, kVariantId, kHeadSun, kDirId, kHeightId, kColorId, kBrightId, kFogId, kFogDistId, kHazeId, kHeadImage, kExposureId, kFilterId, kCloudsId, kFogColorId, kPresetId, kCycleId, kVersionId, kCycleAtmId };
+    enum { kHeadSky = 0, kTimeId, kStyleId, kVariantId, kHeadSun, kDirId, kHeightId, kColorId, kBrightId, kFogId, kFogDistId, kHazeId, kHeadImage, kExposureId, kFilterId, kCloudsId, kFogColorId, kPresetId, kCycleId, kVersionId, kCycleAtmId, kColorAmtId, kFogColorAmtId };
 
     // After applying, the row keeps showing the pick until the game's mode field catches up (a few frames).
     std::atomic<int> g_pending{ -1 };
@@ -70,7 +70,7 @@ namespace {
         add(kPresetId);
         add(kHeadSky); add(kTimeId); if (atmpacks::LabelCount(VersionSlot()) > 1 || atmpacks::Blocked()) add(kVersionId); add(kCycleId); if (sky::Get(sky::kCycle) > 0 && atmpacks::AnyMods()) add(kCycleAtmId); add(kStyleId);
         if (sky::Get(sky::kStyle) > 0) add(kVariantId);
-        add(kHeadSun); add(kDirId); add(kHeightId); add(kColorId); add(kBrightId); add(kFogId); add(kFogDistId); add(kFogColorId); add(kHazeId);
+        add(kHeadSun); add(kDirId); add(kHeightId); add(kColorId); add(kColorAmtId); add(kBrightId); add(kFogId); add(kFogDistId); add(kFogColorId); add(kFogColorAmtId); add(kHazeId);
         add(kHeadImage); add(kExposureId); add(kFilterId); add(kCloudsId);
         return n;
     }
@@ -127,6 +127,14 @@ namespace {
                 out->title = "SUN COLOR";
                 out->help = "Tints the sunlight. Parts of the city keep the old color until the lighting reloads (change the time of day to refresh).";
                 out->choices = sky::ColorLabels(); out->choice_count = sky::ColorCount(); break;
+            case kColorAmtId:
+                out->title = "SUN COLOR AMOUNT";
+                out->help = "How much of the SUN COLOR you picked replaces the sky's own sunlight color: AUTO is all of it, 10% is a faint tint. Has no effect while SUN COLOR is AUTO.";
+                out->choices = sky::AmountLabels(); out->choice_count = sky::AmountCount(); break;
+            case kFogColorAmtId:
+                out->title = "FOG COLOR AMOUNT";
+                out->help = "How much of the FOG COLOR you picked replaces the fog's own color: AUTO is all of it, 10% is a faint tint. Has no effect while FOG COLOR is AUTO.";
+                out->choices = sky::AmountLabels(); out->choice_count = sky::AmountCount(); break;
             case kBrightId:
                 out->title = "SUN BRIGHTNESS";
                 out->help = "Scales the strength of the sun relative to the sky's own. OFF turns the sunlight off completely (no direct sun, no sun shadows).";
@@ -179,6 +187,8 @@ namespace {
             case kCycleId: return sky::kCycle;
             case kCycleAtmId: return sky::kCycleAtm;
             case kFogColorId: return sky::kFogColor;
+            case kColorAmtId: return sky::kColorAmt;
+            case kFogColorAmtId: return sky::kFogColorAmt;
             default: return sky::kBright;
         }
     }

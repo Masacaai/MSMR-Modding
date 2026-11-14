@@ -108,7 +108,7 @@ namespace {
                 }
                 if (ours == INVALID_HANDLE_VALUE) {
                     static std::atomic<int> missed{ 0 };
-                    if (missed++ < 12) LOG("carrier: read of %lu bytes at made-up offset 0x%x on '%s' matched no added asset (handle %p)", (unsigned long)n, off, p.c_str(), h);
+                    if (p.find("\\mods\\") != std::string::npos && missed++ < 12) LOG("carrier: read of %lu bytes at made-up offset 0x%x on '%s' matched no added asset (handle %p)", (unsigned long)n, off, p.c_str(), h);
                 }
                 if (ours != INVALID_HANDLE_VALUE) {
                     ov->Offset = 0; ov->OffsetHigh = 0;   // our own file holds exactly the asset's bytes

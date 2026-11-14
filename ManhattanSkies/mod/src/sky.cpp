@@ -111,6 +111,10 @@ namespace {
         { "BLUE", { 0.3f, 0.5f, 1.0f } }, { "TEAL", { 0.2f, 0.8f, 0.8f } }, { "GREEN", { 0.35f, 1.0f, 0.35f } }, { "DARK", { 0.05f, 0.05f, 0.06f } },
     };
     std::vector<const char*> g_fogcolor_labels;
+    struct AmountPreset { const char* label; float t; };   // how much of a chosen color replaces the sky's own (AUTO: all of it)
+    const AmountPreset kAmounts[] = { { "AUTO", 1.0f }, { "75%", 0.75f }, { "50%", 0.5f }, { "25%", 0.25f }, { "10%", 0.10f } };
+    std::vector<const char*> g_amount_labels;
+    float AmountOf(int sel) { return sel > 0 && sel < (int)(sizeof(kAmounts) / sizeof(kAmounts[0])) ? kAmounts[sel].t : 1.0f; }
     struct CyclePreset { const char* label; int minutes; };   // how long one full day and night takes
     const CyclePreset kCycles[] = { { "OFF", 0 }, { "2 MIN", 2 }, { "5 MIN", 5 }, { "10 MIN", 10 }, { "20 MIN", 20 }, { "30 MIN", 30 }, { "60 MIN", 60 } };
     std::vector<const char*> g_cycle_labels;
@@ -143,6 +147,7 @@ namespace {
         for (const auto& b : kBrights) g_bright_labels.push_back(b.label);
         for (const auto& f : kFogs) g_fog_labels.push_back(f.label);
         for (const auto& f : kFogColors) g_fogcolor_labels.push_back(f.label);
+        for (const auto& f : kAmounts) g_amount_labels.push_back(f.label);
         for (const auto& f : kFogDists) g_fogdist_labels.push_back(f.label);
         for (const auto& f : kHazes) g_haze_labels.push_back(f.label);
         for (const auto& f : kExposures) g_exposure_labels.push_back(f.label);
@@ -162,7 +167,7 @@ namespace {
         return ec ? "" : dir + "\\ManhattanSkies.ini";
     }
     const char* const kVerKeys[5] = { "day", "earlymorning", "sunset", "night", "overcast" };
-    const char* const kKeys[kSettingCount] = { "style", "variant", "dir", "height", "color", "bright", "fog", "fogdist", "haze", "exposure", "filter", "clouds", "fogcolor", "cycle", "cycleatm" };
+    const char* const kKeys[kSettingCount] = { "style", "variant", "dir", "height", "color", "bright", "fog", "fogdist", "haze", "exposure", "filter", "clouds", "fogcolor", "cycle", "cycleatm", "coloramt", "fogcoloramt" };
 
     // ---- runtime state (worker thread, except where noted) ----
     constexpr float kNoValue = -12345.f;
@@ -645,7 +650,7 @@ namespace {
         const int dir = g_set[kDir], height = g_set[kHeight], color = g_set[kColor], bright = EffSel(kBright);
         if (dir > 0 && dir <= kDirSteps) w.rot = (float)((dir - 1) * 15);
         if (height > 0 && height <= (int)(sizeof(kHeights) / sizeof(kHeights[0]))) w.elev = (float)kHeights[height - 1];
-        if (color > 0 && color < (int)(sizeof(kColors) / sizeof(kColors[0]))) for (int i = 0; i < 3; ++i) w.rgb[i] = kColors[color].rgb[i];
+        if (color > 0 && color < (int)(sizeof(kColors) / sizeof(kColors[0]))) for (int i = 0; i < 3; ++i) w.rgb[i] = Mix(o.rgb[i], kColors[color].rgb[i], AmountOf(g_set[kColorAmt]));
         if (bright > 0 && bright < (int)(sizeof(kBrights) / sizeof(kBrights[0]))) w.w = o.w * kBrights[bright].mul;
         if (g_cyc_sun_on) {   // the day-night cycle steers the sun
             w.rot = o.rot + g_cyc_rotd; w.elev = g_cyc_elev;
@@ -751,7 +756,7 @@ namespace {
             recorder::SlotFloats(idx, kOffClouds, &clouds, 1, true);
             const int gsel = pick(g_set[kFogColor], (int)(sizeof(kFogColors) / sizeof(kFogColors[0])));
             float fogc[3];
-            for (int i = 0; i < 3; ++i) fogc[i] = gsel ? kFogColors[gsel].rgb[i] : o.fogcolor[i];
+            for (int i = 0; i < 3; ++i) fogc[i] = gsel ? Mix(o.fogcolor[i], kFogColors[gsel].rgb[i], AmountOf(g_set[kFogColorAmt])) : o.fogcolor[i];
             recorder::SlotFloats(idx, kOffFogColor, fogc, 3, true);
         }
         recorder::Recompute();
@@ -800,6 +805,8 @@ namespace {
         if (g_set[kFogColor] < 0 || g_set[kFogColor] >= (int)(sizeof(kFogColors) / sizeof(kFogColors[0]))) g_set[kFogColor] = 0;
         if (g_set[kCycle] < 0 || g_set[kCycle] >= (int)(sizeof(kCycles) / sizeof(kCycles[0]))) g_set[kCycle] = 0;
         if (g_set[kCycleAtm] < 0 || g_set[kCycleAtm] > 1) g_set[kCycleAtm] = 0;
+        if (g_set[kColorAmt] < 0 || g_set[kColorAmt] >= (int)(sizeof(kAmounts) / sizeof(kAmounts[0]))) g_set[kColorAmt] = 0;
+        if (g_set[kFogColorAmt] < 0 || g_set[kFogColorAmt] >= (int)(sizeof(kAmounts) / sizeof(kAmounts[0]))) g_set[kFogColorAmt] = 0;
         if (g_set[kClouds] < 0 || g_set[kClouds] >= (int)(sizeof(kCloudsChoices) / sizeof(kCloudsChoices[0]))) g_set[kClouds] = 0;
         LOG("sky: settings style %d variant %d dir %d height %d color %d bright %d fog %d", g_set[kStyle].load(), g_set[kVariant].load(), g_set[kDir].load(), g_set[kHeight].load(), g_set[kColor].load(), g_set[kBright].load(), g_set[kFog].load());
     }
@@ -845,6 +852,7 @@ namespace {
             case kClouds: return CloudsCount();
             case kCycle: return CycleCount();
             case kCycleAtm: return 2;
+            case kColorAmt: case kFogColorAmt: return AmountCount();
             default: return FogColorCount();
         }
     }
@@ -865,6 +873,7 @@ namespace {
             case kClouds: l = CloudsLabels(); break;
             case kCycle: l = CycleLabels(); break;
             case kCycleAtm: { static const char* const kOffOn[] = { "OFF", "ON" }; l = kOffOn; break; }
+            case kColorAmt: case kFogColorAmt: l = AmountLabels(); break;
             default: l = FogColorLabels(); break;
         }
         return l && i >= 0 && i < LabelCount(s) ? l[i] : "";
@@ -894,6 +903,7 @@ namespace {
         g_phase = PhaseOfMode(mode); g_prev_phase = g_phase; g_cyc_started = true; g_cyc_last = GetTickCount64(); g_hold = false;
         return true;
     }
+    int AmountCount() { EnsureInit(); return (int)g_amount_labels.size(); }     const char* const* AmountLabels() { EnsureInit(); return g_amount_labels.data(); }
     int FogColorCount() { EnsureInit(); return (int)g_fogcolor_labels.size(); } const char* const* FogColorLabels() { EnsureInit(); return g_fogcolor_labels.data(); }
     int CloudsCount() { EnsureInit(); return (int)g_clouds_labels.size(); }     const char* const* CloudsLabels() { EnsureInit(); return g_clouds_labels.data(); }
 

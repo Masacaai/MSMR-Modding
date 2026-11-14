@@ -11,7 +11,7 @@
 // gives it the base's weight and takes the base's away; the game's own activation of the next base atmosphere is swallowed while the override
 // is on. Sun edits are written into the active slot's copy of the values and the manager re-blends.
 namespace sky {
-    enum Setting { kStyle, kVariant, kDir, kHeight, kColor, kBright, kFog, kFogDist, kHaze, kExposure, kFilter, kClouds, kFogColor, kCycle, kCycleAtm, kSettingCount };   // kCycleAtm: 1 = the dynamic cycle also picks among the atmosphere mods
+    enum Setting { kStyle, kVariant, kDir, kHeight, kColor, kBright, kFog, kFogDist, kHaze, kExposure, kFilter, kClouds, kFogColor, kCycle, kCycleAtm, kColorAmt, kFogColorAmt, kSettingCount };   // kCycleAtm: 1 = the dynamic cycle also picks among the atmosphere mods
 
     void Load();                       // ini -> settings (once, at start-up)
     int Get(Setting s);
@@ -48,6 +48,7 @@ namespace sky {
     int FilterCount();   const char* const* FilterLabels();
     int CloudsCount();   const char* const* CloudsLabels();
     int FogColorCount(); const char* const* FogColorLabels();
+    int AmountCount();   const char* const* AmountLabels();   // SUN COLOR AMOUNT and FOG COLOR AMOUNT: how much of the chosen color replaces the sky's own
 
     void Tick();                       // worker thread, every 250 ms: applies what the settings ask for when the world is ready
     bool Filter(uintptr_t caller_rva, int slot_idx, uint64_t asset, int delta);   // recorder::AdjustFilter
