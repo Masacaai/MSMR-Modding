@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 
 // The sky settings of Manhattan Skies: which atmosphere is on top of the time of day (SKY STYLE / SKY VARIANT) and edits to its sun
 // (direction, height, color, brightness). All settings are indices into the tables in sky.cpp; 0 is AUTO (the game's own value).
@@ -10,7 +11,7 @@
 // gives it the base's weight and takes the base's away; the game's own activation of the next base atmosphere is swallowed while the override
 // is on. Sun edits are written into the active slot's copy of the values and the manager re-blends.
 namespace sky {
-    enum Setting { kStyle, kVariant, kDir, kHeight, kColor, kBright, kFog, kFogDist, kHaze, kExposure, kFilter, kClouds, kFogColor, kCycle, kSettingCount };
+    enum Setting { kStyle, kVariant, kDir, kHeight, kColor, kBright, kFog, kFogDist, kHaze, kExposure, kFilter, kClouds, kFogColor, kCycle, kCycleAtm, kSettingCount };   // kCycleAtm: 1 = the dynamic cycle also picks among the atmosphere mods
 
     void Load();                       // ini -> settings (once, at start-up)
     int Get(Setting s);
@@ -22,8 +23,13 @@ namespace sky {
     void SaveMode(int mode);
     int CycleCount();  const char* const* CycleLabels();
     int TickMs();                      // how long the worker loop should sleep: short while the day-night cycle steers the sun
-    void SetSmoothFade(bool on);       // dev: swallow the lighting transition's fade for cycle-driven changes
+    bool SmoothFade();                 // the lighting transition's fade is swallowed (the cycle and the TIME OF DAY row)
+    void SetSmoothFade(bool on);      // dev: swallow the lighting transition's fade for cycle-driven changes
     bool CycleSyncMode(int mode);      // a time of day was picked: the cycle (when on) continues from there; false: that mode is not in the cycle (overcast)
+    // The atmosphere version chosen for each time of day (slot 0 day, 1 early morning, 2 sunset, 3 night, 4 overcast): "" is the game's own, otherwise the
+    // name of an atmosphere mod found by atmpacks. Saved in the ini; used by the dynamic cycle too.
+    std::string Version(int slot);
+    void SetVersion(int slot, const std::string& name);
     void ResetAll();                   // every sky setting back to AUTO
 
     // Choice labels for the menu rows. Variant labels depend on the style.

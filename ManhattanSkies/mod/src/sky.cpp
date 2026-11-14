@@ -5,6 +5,7 @@
 #include "natives.h"
 #include <algorithm>
 #include "scan.h"
+#include "atmpacks.h"
 #include "memory.h"
 #include <random>
 #include "../../../ModMenu/modmenu.h"
@@ -84,7 +85,7 @@ namespace {
     };
     std::vector<const char*> g_color_labels;
     struct BrightPreset { const char* label; float mul; };
-    const BrightPreset kBrights[] = { { "AUTO", 1 }, { "25%", 0.25f }, { "50%", 0.5f }, { "75%", 0.75f }, { "150%", 1.5f }, { "200%", 2 }, { "300%", 3 }, { "500%", 5 } };
+    const BrightPreset kBrights[] = { { "AUTO", 1 }, { "25%", 0.25f }, { "50%", 0.5f }, { "75%", 0.75f }, { "150%", 1.5f }, { "200%", 2 }, { "300%", 3 }, { "500%", 5 }, { "OFF", 0 } };   // OFF last so the saved indices of earlier versions and the presets stay valid
     std::vector<const char*> g_bright_labels;
     struct FogPreset { const char* label; float mul; };
     const FogPreset kFogs[] = { { "AUTO", 1 }, { "NONE", 0 }, { "25%", 0.25f }, { "50%", 0.5f }, { "150%", 1.5f }, { "300%", 3 }, { "600%", 6 } };
@@ -160,7 +161,8 @@ namespace {
         std::filesystem::create_directories(dir, ec);
         return ec ? "" : dir + "\\ManhattanSkies.ini";
     }
-    const char* const kKeys[kSettingCount] = { "style", "variant", "dir", "height", "color", "bright", "fog", "fogdist", "haze", "exposure", "filter", "clouds", "fogcolor", "cycle" };
+    const char* const kVerKeys[5] = { "day", "earlymorning", "sunset", "night", "overcast" };
+    const char* const kKeys[kSettingCount] = { "style", "variant", "dir", "height", "color", "bright", "fog", "fogdist", "haze", "exposure", "filter", "clouds", "fogcolor", "cycle", "cycleatm" };
 
     // ---- runtime state (worker thread, except where noted) ----
     constexpr float kNoValue = -12345.f;
@@ -176,6 +178,7 @@ namespace {
     std::atomic<uint64_t> g_base_asset{ 0 };
     std::atomic<ULONGLONG> g_base_seen_at{ 0 };
     std::set<uint64_t> g_held;                    // atmospheres this module loaded and still holds a reference on (released when its look goes off)
+    std::vector<uint64_t> g_cyc_hold;             // atmospheres the cycle loaded quietly ahead of a switch: released once they are idle
     uint64_t g_failed_id = 0;                     // a look that would not load (pool full?): not retried until the setting changes
     int g_load_tries = 0;
     uint64_t g_look_id = 0;                       // the override atmosphere that is active (0: none)
@@ -186,6 +189,16 @@ namespace {
     int g_edit_seen[kSettingCount] = {};          // the sun settings as last written
     bool g_edit_touched = false;                  // we have written to g_edit_idx (so AUTO must restore the original)
 
+    std::mutex g_ver_mu;
+    std::string g_ver[5];                         // chosen atmosphere version per time-of-day slot ("" = the game's own)
+    // The new asset id of the atmosphere mod chosen for this lighting mode, or 0.
+    uint64_t VersionLook(int mode) {
+        const int slot = atmpacks::SlotOfMode(mode);
+        if (slot < 0) return 0;
+        std::string name;
+        { std::lock_guard<std::mutex> lk(g_ver_mu); name = g_ver[slot]; }
+        return name.empty() ? 0 : atmpacks::IdFor(slot, name);
+    }
     std::atomic<uint64_t> g_cyc_look{ 0 };        // the sky the dynamic cycle chose for the current phase (0: none; the user's own SKY STYLE wins)
 
     uint64_t ModeBaseAtmosphere(int mode) {
@@ -201,6 +214,7 @@ namespace {
     uint64_t DesiredLook() {
         const int style = g_set[kStyle], variant = g_set[kVariant];
         if (style <= 0 && g_cyc_look) return g_cyc_look;   // the dynamic cycle's pick, while no SKY STYLE is chosen
+        if (style <= 0) { const uint64_t v = VersionLook(recorder::CurrentMode()); if (v) return v; }   // the atmosphere mod chosen for this time of day
         if (style <= 0 || style >= kStyleCount) return 0;
         const auto& v = g_variant_look[style];
         if (variant < 0 || variant >= (int)v.size()) return 0;
@@ -228,17 +242,39 @@ namespace {
         if (idx >= 0 && recorder::SlotInfo(idx, a, w) && a == id && w <= 0 && recorder::ReleaseSlot(idx)) g_held.erase(id);
     }
 
+    // A pick made in the menu waits until it has rested for 350 ms before the sky is loaded: scrolling through the variants used to load and release
+    // several skies a second (a Settings-screen crash followed such a session). The dynamic cycle's own picks are not delayed (they must land with the switch).
+    uint64_t g_want_pending = 0;
+    ULONGLONG g_want_since = 0;
     void ApplyLook() {
         const uint64_t want = DesiredLook();
-        if (want == g_look_id) return;
         const ULONGLONG now = GetTickCount64();
+        if (want == g_look_id) { g_want_pending = want; return; }
+        if (g_set[kStyle] > 0) {
+            if (want != g_want_pending) { g_want_pending = want; g_want_since = now; }
+            if (now - g_want_since < 350) return;
+        }
         if (want) {
-            const int idx = recorder::FindSlot(want);
+            int idx = recorder::FindSlot(want);
             if (want == g_failed_id) return;
+            // An atmosphere mod the cycle loaded quietly (weight 0) ahead of the switch never gets its textures requested when it is switched on later (the game
+            // asks for them when the atmosphere finishes loading with a weight, 2026-11-13: black sky, lit city). Drop that load and load it again the way a menu
+            // pick does, so it is switched on as it arrives.
+            if (idx >= 0 && atmpacks::IsMod(want)) {
+                const auto hit = std::find(g_cyc_hold.begin(), g_cyc_hold.end(), want);
+                uint64_t a; int w;
+                if (hit != g_cyc_hold.end() && recorder::SlotInfo(idx, a, w) && w <= 0 && recorder::ReleaseSlot(idx)) {
+                    g_cyc_hold.erase(hit);
+                    g_load_req_at = 0;
+                    LOG("sky: look %016llX was loaded quietly: loading it again so its textures are requested", (unsigned long long)want);
+                    return;
+                }
+            }
             if (idx < 0) {   // not in the pool yet: ask for it and try again on the next ticks
                 if (!g_load_req_at || now - g_load_req_at > 6000) {
                     if (g_load_tries >= 3) { g_failed_id = want; LOG("sky: look %016llX would not load after 3 tries (the atmosphere pool is probably full); giving up on it", (unsigned long long)want); return; }
                     ++g_load_tries;
+                    atmpacks::Prepare(want);   // an atmosphere mod's textures are unpacked on first use
                     recorder::LoadAtmosphere(want);
                     g_load_req_at = now;
                     LOG("sky: loading look %016llX (try %d)", (unsigned long long)want, g_load_tries);
@@ -290,10 +326,21 @@ namespace {
     const uintptr_t kWorldTimers[3] = { 0x5d6a028, 0x5d6a168, 0x5d6a2a8 };   // exe RVAs of world-update timers (freeze while the game is paused)
     float g_last_timers[3] = { 0.f, 0.f, 0.f };
     ULONGLONG g_still_since = 0;
-    bool g_was_paused = false;
+    bool g_was_paused = false, g_was_busy = false;
     double g_phase = 0.2;
     bool g_cyc_started = false;
-    ULONGLONG g_cyc_last = 0, g_cyc_switch_at = 0, g_world_up_at = 0;
+    ULONGLONG g_cyc_last = 0, g_cyc_switch_at = 0, g_world_up_at = 0, g_ready_since = 0, g_phase_saved_at = 0;
+    double g_saved_phase = -1.0;                  // where the cycle stood when the game was last closed (-1: unknown), and that day's weather
+    bool g_saved_overcast = false;
+    // The cycle's place in its day, kept in the ini every few seconds so the next launch continues from it.
+    void SavePhase(double phase, bool overcast) {
+        const std::string p = IniPath();
+        if (p.empty()) return;
+        char b[32];
+        snprintf(b, sizeof(b), "%.4f", phase);
+        WritePrivateProfileStringA("cycle", "phase", b, p.c_str());
+        WritePrivateProfileStringA("cycle", "overcast", overcast ? "1" : "0", p.c_str());
+    }
     // Softening the switch: shortly before a mode change the next sky is loaded quietly (weight 0) and its sun color, fog, haze, exposure and
     // filter are blended into the current one, so at the instant of the switch (the fade is swallowed) only the sky texture and the lights jump.
     struct Target { Sun sun; Fog fog; Image im; };
@@ -301,8 +348,8 @@ namespace {
     bool g_tgt_valid = false;
     uint64_t g_tgt_asset = 0;
     ULONGLONG g_tgt_req_at = 0;
-    std::vector<uint64_t> g_cyc_hold;             // atmospheres the cycle loaded: released once they are idle
     std::atomic<float> g_cyc_blend{ 0.f };
+    std::atomic<int> g_blend_nm{ -1 };            // the lighting mode the colors are being blended toward (-1: none)
     float g_blend_prev = 0.f;
     // Spider-Man's speed (m/s, smoothed; -1 unknown), sampled on the game thread from the hero's transform. The lighting switch is a mini load that
     // stops him in mid-air (confirmed for every mode change), so the cycle waits for a calm moment.
@@ -338,6 +385,28 @@ namespace {
             g_hero_job_busy = false;
         });
     }
+    // Random variations the dynamic cycle adds for each phase: SUN BRIGHTNESS, FOG DENSITY, FOG DISTANCE and HAZE (indices into their tables; 0 = the sky's own).
+    // A value the player set in that row wins. The next phase's roll is made with its sky, so fog and haze blend toward it with the colors.
+    int g_var[4] = {}, g_next_var[4] = {};
+    int VarIdx(Setting s) { switch (s) { case kBright: return 0; case kFog: return 1; case kFogDist: return 2; case kHaze: return 3; default: return -1; } }
+    int EffSel(Setting s, bool next = false) {
+        if (g_set[s]) return g_set[s];
+        const int v = VarIdx(s);
+        if (v < 0 || g_set[kCycle] <= 0) return 0;
+        return next ? g_next_var[v] : g_var[v];
+    }
+    constexpr int kVarBright[] = { 0, 2, 3, 4, 5 };            // AUTO, 50%, 75%, 150%, 200%
+    constexpr int kVarFog[] = { 0, 1, 2, 3, 4, 5 };            // AUTO, NONE, 25%, 50%, 150%, 300%
+    constexpr int kVarFogDist[] = { 0, 2, 3, 4 };              // AUTO, 50%, 150%, 300%
+    constexpr int kVarHaze[] = { 0, 1, 2, 3, 4 };              // AUTO, NONE, LIGHT, MEDIUM, HEAVY
+    void RollVar(int out[4]) {
+        static std::mt19937 rng((unsigned)GetTickCount64() ^ 0x9e3779b9u);
+        auto pick = [&](const int* a, size_t n) { return a[std::uniform_int_distribution<size_t>(0, n - 1)(rng)]; };
+        out[0] = pick(kVarBright, sizeof(kVarBright) / sizeof(int));
+        out[1] = pick(kVarFog, sizeof(kVarFog) / sizeof(int));
+        out[2] = pick(kVarFogDist, sizeof(kVarFogDist) / sizeof(int));
+        out[3] = pick(kVarHaze, sizeof(kVarHaze) / sizeof(int));
+    }
     uint64_t g_next_look = 0;                     // the sky picked for the coming phase (0: the game's own for its lighting mode)
     int g_pick_nm = -1;                           // the lighting mode the pick was made for (-1: none yet)
 
@@ -351,18 +420,29 @@ namespace {
         for (const auto& l : g_looks) if (l.style == style && std::strcmp(l.label, label) == 0) return l.id;
         return 0;
     }
-    uint64_t PickFrom(const PickDef* defs, size_t n) {
+    // A random pick among the game's own sky for the phase (id 0), the listed skies and, when INCLUDE ATMOSPHERES is on, that time of day's atmosphere mods
+    // (each used as the mod ships it, with the game's own values for everything else).
+    uint64_t PickFrom(const PickDef* defs, size_t n, int nm) {
         static std::mt19937 rng((unsigned)GetTickCount64());
-        const size_t r = std::uniform_int_distribution<size_t>(0, n)(rng);   // n = the game's own
-        return r < n ? LookId(defs[r].style, defs[r].label) : 0;
+        std::vector<uint64_t> pool;
+        pool.push_back(0);
+        for (size_t i = 0; i < n; ++i) pool.push_back(LookId(defs[i].style, defs[i].label));
+        if (g_set[kCycleAtm]) {
+            const int slot = atmpacks::SlotOfMode(nm);
+            for (int i = 1; i < atmpacks::LabelCount(slot); ++i) { const uint64_t id = atmpacks::IdFor(slot, atmpacks::NameAt(slot, i)); if (id) pool.push_back(id); }
+        }
+        return pool[std::uniform_int_distribution<size_t>(0, pool.size() - 1)(rng)];
     }
     uint64_t PickLook(int nm) {
+        { const uint64_t v = VersionLook(nm); if (v) return v; }   // an atmosphere mod the player chose for that time of day beats the random pick
+        static const PickDef kNone[1] = { { 0, "" } };
         switch (nm) {
-            case 0: return PickFrom(kPickDay, sizeof(kPickDay) / sizeof(kPickDay[0]));
-            case 3: return PickFrom(kPickOvercast, sizeof(kPickOvercast) / sizeof(kPickOvercast[0]));
-            case 2: return PickFrom(kPickSunset, sizeof(kPickSunset) / sizeof(kPickSunset[0]));
-            case 5: return PickFrom(kPickNight, sizeof(kPickNight) / sizeof(kPickNight[0]));
-            default: return 0;   // Early Morning keeps its own sky
+            case 0: return PickFrom(kPickDay, sizeof(kPickDay) / sizeof(kPickDay[0]), nm);
+            case 3: return PickFrom(kPickOvercast, sizeof(kPickOvercast) / sizeof(kPickOvercast[0]), nm);
+            case 2: return PickFrom(kPickSunset, sizeof(kPickSunset) / sizeof(kPickSunset[0]), nm);
+            case 5: return PickFrom(kPickNight, sizeof(kPickNight) / sizeof(kPickNight[0]), nm);
+            case 4: return g_set[kCycleAtm] ? PickFrom(kNone, 0, nm) : 0;   // Early Morning keeps its own sky unless atmosphere mods are included
+            default: return 0;
         }
     }
 
@@ -397,7 +477,7 @@ namespace {
     float Lerp(double a, double b, double t) { return (float)(a + (b - a) * t); }
     Pose PoseAt(double f, bool day_oc) {
         Pose p{ 0, false, 0.f, 0.f };
-        if (f >= 0.93 || f < 0.08) { const double g = (f >= 0.93 ? f - 0.93 : f + 0.07) / 0.15; p.mode = 4; p.sun = true; p.rotd = -85.f; p.elev = Lerp(-1, 12, g); }
+        if (f >= 0.93 || f < 0.08) { const double g = (f >= 0.93 ? f - 0.93 : f + 0.07) / 0.15; p.mode = 4; p.sun = true; p.rotd = -85.f; p.elev = Lerp(-3, 12, g); }
         else if (f < 0.55) {
             if (day_oc) { p.mode = 3; return p; }   // an overcast day: no steered sun
             const double u = (f - 0.08) / 0.47; p.mode = 0; p.sun = true; p.rotd = Lerp(-80, 80, u); p.elev = (float)(8.0 + 62.0 * std::sin(3.14159265358979 * u));
@@ -425,11 +505,25 @@ namespace {
             if (g_cyc_look.exchange(0)) g_cyc_step++;
             return;
         }
-        if (now - g_world_up_at < 30000) return;
+        // "Gameplay has started": 8 s after the world came up, Spider-Man's transform is readable and the world timers advance, both for 4 s in a row
+        // (this replaces the old fixed 30 s wait; the one hang seen came from a lighting setter call 3 s after a load, while the game was still loading).
+        if (now - g_world_up_at < 8000) return;
         const int mode = recorder::CurrentMode();
         if (mode < 0) return;
         SampleHero();
-        if (!g_cyc_started) { g_phase = PhaseOfMode(mode); g_prev_phase = g_phase; g_cyc_overcast = mode == 3 || mode == 6; g_cyc_last = now; g_cyc_started = true; }
+        {
+            static float pre[3] = { 0.f, 0.f, 0.f };
+            bool pm = false;
+            for (int i = 0; i < 3; ++i) { float v = 0.f; memory::Read(scan::FromRva(kWorldTimers[i]), v); pm = pm || v != pre[i]; pre[i] = v; }
+            if (g_hero_speed.load() >= 0.f && pm) { if (!g_ready_since) g_ready_since = now; } else g_ready_since = 0;
+            if (!g_ready_since || now - g_ready_since < 4000) return;
+        }
+        if (!g_cyc_started) {
+            g_phase = PhaseOfMode(mode); g_cyc_overcast = mode == 3 || mode == 6;
+            if (g_saved_phase >= 0.0 && ModeMatches(mode, PoseAt(g_saved_phase, g_saved_overcast).mode)) { g_phase = g_saved_phase; g_cyc_overcast = g_saved_overcast; LOG("sky: cycle resumes at phase %.3f", g_phase); }   // where it stopped last session
+            g_prev_phase = g_phase; g_cyc_last = now; g_cyc_started = true;
+            RollVar(g_var); ++g_cyc_step;   // the first phase gets random variations too
+        }
         // Follow the game's own clock: the world time scale (the pause menu and prompts freeze it), so a paused game pauses the cycle.
         float ts = 1.f;
         if (!memory::Read(scan::FromRva(0x621b890) + 0x18, ts) || !(ts >= 0.f) || ts > 4.f) ts = 1.f;
@@ -444,7 +538,10 @@ namespace {
         if (moved) g_still_since = 0; else if (!g_still_since) g_still_since = now;
         const bool paused = g_still_since && now - g_still_since > 90;
         if (paused != g_was_paused) { LOG("sky: cycle %s", paused ? "paused with the game" : "running again"); g_was_paused = paused; }
-        const ULONGLONG dtms = paused ? 0 : now - g_cyc_last;
+        // In a crime, a hideout, a mission objective or a fight the day stands still, and no lighting switch happens: a switch is a mini-load that ends the activity.
+        const bool busy = modmenu::PlayerBusy();
+        if (busy != g_was_busy) { LOG("sky: cycle %s", busy ? "frozen: the player is in a crime, hideout, mission or fight" : "running again: the activity is over"); g_was_busy = busy; }
+        const ULONGLONG dtms = paused || busy ? 0 : now - g_cyc_last;
         g_cyc_last = now;
         g_prev_phase = g_phase;
         g_phase += (double)(dtms > 1000 ? 1000 : dtms) * ts / (minutes * 60000.0);
@@ -454,6 +551,7 @@ namespace {
             g_cyc_overcast = std::uniform_real_distribution<double>(0.0, 1.0)(wrng) < kOvercastChance;
             LOG("sky: cycle: today's day will be %s", g_cyc_overcast ? "OVERCAST" : "clear");
         }
+        if (now - g_phase_saved_at > 5000) { g_phase_saved_at = now; SavePhase(g_phase, g_cyc_overcast); }
         const Pose p = PoseAt(g_phase, g_cyc_overcast);
         const bool pending = !ModeMatches(mode, p.mode);   // a switch is due
         if (pending) g_due_wait_ms += dtms > 1000 ? 1000 : dtms; else { g_due_wait_ms = 0; g_wait_logged = false; }
@@ -469,13 +567,15 @@ namespace {
             const double lead = std::min(10.0, minutes * 60.0 * 0.06);
             float bt = 0.f;
             if (dsec <= lead + 5.0) {
-                if (g_pick_nm != nm) { g_pick_nm = nm; g_next_look = PickLook(nm); LOG("sky: cycle: next phase (mode %d) sky %016llX%s", nm, (unsigned long long)g_next_look, g_next_look ? "" : " (the game's own)"); }
+                g_blend_nm = nm;
+                if (g_pick_nm != nm) { g_pick_nm = nm; g_next_look = PickLook(nm); RollVar(g_next_var); LOG("sky: cycle: next phase (mode %d) sky %016llX%s", nm, (unsigned long long)g_next_look, g_next_look ? "" : " (the game's own)"); }
                 const uint64_t id = g_next_look ? g_next_look : ModeBaseAtmosphere(nm);
                 if (id && id != g_tgt_asset) { g_tgt_asset = id; g_tgt_valid = false; g_tgt_req_at = 0; }
                 if (id && !g_tgt_valid) {
                     const int slot = recorder::FindSlot(id);
                     if (slot < 0) {
                         if (!g_tgt_req_at || now - g_tgt_req_at > 6000) {
+                            atmpacks::Prepare(id);
                             recorder::LoadAtmosphere(id);
                             g_tgt_req_at = now;
                             if (std::find(g_cyc_hold.begin(), g_cyc_hold.end(), id) == g_cyc_hold.end()) g_cyc_hold.push_back(id);
@@ -486,37 +586,50 @@ namespace {
                     const double u = std::max(0.0, std::min(1.0, 1.0 - dsec / lead));
                     bt = (float)(u * u * (3.0 - 2.0 * u));   // smoothstep
                 }
-            } else if (g_tgt_asset) { g_tgt_asset = 0; g_tgt_valid = false; }
+            } else { g_blend_nm = -1; if (g_tgt_asset) { g_tgt_asset = 0; g_tgt_valid = false; } }
             g_cyc_blend = bt;
         }
         ReleaseIdleHolds();
         if (p.sun || g_cyc_blend > 0.f || g_blend_prev > 0.f) ++g_cyc_step;
         g_blend_prev = g_cyc_blend;
         if (pending && now - g_cyc_switch_at > 8000) {
+            if (busy) return;   // never switch during an activity, however long it lasts
             const float hs = g_hero_speed;
             if (hs >= 3.0f && g_due_wait_ms < 45000) {   // Spider-Man is moving fast: the switch would stop him in mid-air; wait up to 45 s of game time
                 if (!g_wait_logged) { LOG("sky: cycle: switch to mode %d waits for Spider-Man to slow down (%.1f m/s)", p.mode, hs); g_wait_logged = true; }
                 return;
             }
             g_cyc_switch_at = now;
-            if (g_pick_nm != p.mode) { g_pick_nm = p.mode; g_next_look = PickLook(p.mode); }   // no preparation happened (a late start): pick now
+            if (g_pick_nm != p.mode) { g_pick_nm = p.mode; g_next_look = PickLook(p.mode); RollVar(g_next_var); }   // no preparation happened (a late start): pick now
             g_cyc_look = g_next_look;                     // the chosen sky goes on with the switch (0: the game's own)
+            for (int i = 0; i < 4; ++i) g_var[i] = g_next_var[i];
+            ++g_cyc_step;
             g_pick_nm = -1;
             LOG("sky: cycle phase %.3f: lighting mode %d -> %d, sky %016llX", g_phase, mode, p.mode, (unsigned long long)g_next_look);
             modmenu::KeepMenuOpen(6000);
             if (g_smooth_fade) modmenu::SuppressFade(5000);
             recorder::SetMode(p.mode);
+            SaveMode(p.mode);   // the game's load-time call follows the cycle too, so a restart loads the matching time of day
         }
     }
 
     Sun Wanted(const Sun& o) {
         Sun w = o;
-        const int dir = g_set[kDir], height = g_set[kHeight], color = g_set[kColor], bright = g_set[kBright];
+        const int dir = g_set[kDir], height = g_set[kHeight], color = g_set[kColor], bright = EffSel(kBright);
         if (dir > 0 && dir <= kDirSteps) w.rot = (float)((dir - 1) * 15);
         if (height > 0 && height <= (int)(sizeof(kHeights) / sizeof(kHeights[0]))) w.elev = (float)kHeights[height - 1];
         if (color > 0 && color < (int)(sizeof(kColors) / sizeof(kColors[0]))) for (int i = 0; i < 3; ++i) w.rgb[i] = kColors[color].rgb[i];
         if (bright > 0 && bright < (int)(sizeof(kBrights) / sizeof(kBrights[0]))) w.w = o.w * kBrights[bright].mul;
-        if (g_cyc_sun_on) { w.rot = o.rot + g_cyc_rotd; w.elev = g_cyc_elev; }   // the day-night cycle steers the sun
+        if (g_cyc_sun_on) {   // the day-night cycle steers the sun
+            w.rot = o.rot + g_cyc_rotd; w.elev = g_cyc_elev;
+            if (recorder::CurrentMode() == 4 && !color && !g_set[kBright]) {   // dawn: an orange sun rising from below the horizon, faint at first, easing to the sky's own color and strength
+                static const float kOrange[3] = { 1.0f, 0.6f, 0.3f };
+                float u = (g_cyc_elev + 3.f) / 15.f;
+                u = u < 0.f ? 0.f : (u > 1.f ? 1.f : u);
+                for (int i = 0; i < 3; ++i) w.rgb[i] = Mix(kOrange[i], o.rgb[i], u);
+                w.w = o.w * (0.1f + 0.9f * u);
+            }
+        }
         return w;
     }
     void ApplySun() {
@@ -562,8 +675,8 @@ namespace {
         if (have_im) oim = iit->second;
         const float bt = g_cyc_blend;
         if (bt > 0.f && g_tgt_valid) {
-            for (int i = 0; i < 3; ++i) osun.rgb[i] = Mix(osun.rgb[i], g_tgt.sun.rgb[i], bt);
-            osun.w = Mix(osun.w, g_tgt.sun.w, bt);
+            // The sun is never blended toward the next phase (blending its color and strength put the wrong light in the wrong place: a red light overhead
+            // before dawn). Each phase brings its own sun (Wanted); only fog, haze, exposure, filter and fog color are blended.
             for (int i = 0; i < 6; ++i) ofog.d[i] = Mix(ofog.d[i], g_tgt.fog.d[i], bt);
             for (int i = 0; i < 4; ++i) oim.fogdist[i] = Mix(oim.fogdist[i], g_tgt.im.fogdist[i], bt);
             oim.exposure = Mix(oim.exposure, g_tgt.im.exposure, bt);
@@ -575,9 +688,11 @@ namespace {
         float buf[6] = { w.rgb[0], w.rgb[1], w.rgb[2], w.w, w.rot, w.elev };
         recorder::SlotSun(idx, buf, true);
         // fog density
-        const int fogsel = g_set[kFog];
+        const bool nb = bt > 0.f && g_tgt_valid;   // toward the next phase: its random fog and haze blend in with the colors
+        const int fogsel = EffSel(kFog);
         float fmul = 1.f;
         if (fogsel > 0 && fogsel < (int)(sizeof(kFogs) / sizeof(kFogs[0]))) fmul = kFogs[fogsel].mul;
+        if (nb && !g_set[kFog]) { const int ns = EffSel(kFog, true); fmul = Mix(fmul, ns > 0 && ns < (int)(sizeof(kFogs) / sizeof(kFogs[0])) ? kFogs[ns].mul : 1.f, bt); }
         if (have_fog) {
             float fb[6];
             for (int i = 0; i < 6; ++i) fb[i] = ofog.d[i] * fmul;
@@ -587,12 +702,15 @@ namespace {
         if (have_im) {
             const Image& o = oim;
             auto pick = [](int sel, int n) { return sel > 0 && sel < n ? sel : 0; };
-            const int dsel = pick(g_set[kFogDist], (int)(sizeof(kFogDists) / sizeof(kFogDists[0])));
+            const int dsel = pick(EffSel(kFogDist), (int)(sizeof(kFogDists) / sizeof(kFogDists[0])));
+            float dmul = kFogDists[dsel].mul;
+            if (nb && !g_set[kFogDist]) dmul = Mix(dmul, kFogDists[pick(EffSel(kFogDist, true), (int)(sizeof(kFogDists) / sizeof(kFogDists[0])))].mul, bt);
             float db[4];
-            for (int i = 0; i < 4; ++i) db[i] = o.fogdist[i] * kFogDists[dsel].mul;
+            for (int i = 0; i < 4; ++i) db[i] = o.fogdist[i] * dmul;
             recorder::SlotFloats(idx, kOffFogDist, db, 4, true);
-            const int hsel = pick(g_set[kHaze], (int)(sizeof(kHazes) / sizeof(kHazes[0])));
+            const int hsel = pick(EffSel(kHaze), (int)(sizeof(kHazes) / sizeof(kHazes[0])));
             float haze = hsel ? kHazes[hsel].value : o.haze;
+            if (nb && !g_set[kHaze]) { const int hn = pick(EffSel(kHaze, true), (int)(sizeof(kHazes) / sizeof(kHazes[0]))); haze = Mix(haze, hn ? kHazes[hn].value : o.haze, bt); }
             recorder::SlotFloats(idx, kOffHaze, &haze, 1, true);
             const int esel = pick(g_set[kExposure], (int)(sizeof(kExposures) / sizeof(kExposures[0])));
             float ev = o.exposure + kExposures[esel].ev;
@@ -622,6 +740,7 @@ namespace {
         if (p.empty()) return;
         for (int s = 0; s < kSettingCount; ++s) WritePrivateProfileStringA("sky", kKeys[s], std::to_string(g_set[s].load()).c_str(), p.c_str());
         WritePrivateProfileStringA("sky", "mode", std::to_string(g_saved_mode.load()).c_str(), p.c_str());
+        { std::lock_guard<std::mutex> lk(g_ver_mu); for (int i = 0; i < 5; ++i) WritePrivateProfileStringA("version", kVerKeys[i], g_ver[i].c_str(), p.c_str()); }
     }
 }
 
@@ -630,7 +749,15 @@ namespace {
         const std::string p = IniPath();
         for (int s = 0; s < kSettingCount; ++s) g_set[s] = p.empty() ? 0 : (int)GetPrivateProfileIntA("sky", kKeys[s], 0, p.c_str());
         g_saved_mode = p.empty() ? -1 : (int)GetPrivateProfileIntA("sky", "mode", -1, p.c_str());
+        if (!p.empty()) for (int i = 0; i < 5; ++i) { char buf[256] = {}; GetPrivateProfileStringA("version", kVerKeys[i], "", buf, sizeof(buf), p.c_str()); std::lock_guard<std::mutex> lk(g_ver_mu); g_ver[i] = buf; }
         if (g_saved_mode < 0 || g_saved_mode > 6) g_saved_mode = -1;
+        if (!p.empty()) {
+            char pb[32] = {};
+            GetPrivateProfileStringA("cycle", "phase", "", pb, sizeof(pb), p.c_str());
+            const double ph = pb[0] ? atof(pb) : -1.0;
+            g_saved_phase = ph >= 0.0 && ph < 1.0 ? ph : -1.0;
+            g_saved_overcast = GetPrivateProfileIntA("cycle", "overcast", 0, p.c_str()) != 0;
+        }
         // clamp what the tables allow (a changed table must not leave an index past its end)
         if (g_set[kStyle] < 0 || g_set[kStyle] >= kStyleCount) g_set[kStyle] = 0;
         if (g_set[kVariant] < 0 || g_set[kVariant] >= (int)g_variant_look[g_set[kStyle]].size()) g_set[kVariant] = 0;
@@ -645,11 +772,24 @@ namespace {
         if (g_set[kFilter] < 0 || g_set[kFilter] >= (int)(sizeof(kFilters) / sizeof(kFilters[0]))) g_set[kFilter] = 0;
         if (g_set[kFogColor] < 0 || g_set[kFogColor] >= (int)(sizeof(kFogColors) / sizeof(kFogColors[0]))) g_set[kFogColor] = 0;
         if (g_set[kCycle] < 0 || g_set[kCycle] >= (int)(sizeof(kCycles) / sizeof(kCycles[0]))) g_set[kCycle] = 0;
+        if (g_set[kCycleAtm] < 0 || g_set[kCycleAtm] > 1) g_set[kCycleAtm] = 0;
         if (g_set[kClouds] < 0 || g_set[kClouds] >= (int)(sizeof(kCloudsChoices) / sizeof(kCloudsChoices[0]))) g_set[kClouds] = 0;
         LOG("sky: settings style %d variant %d dir %d height %d color %d bright %d fog %d", g_set[kStyle].load(), g_set[kVariant].load(), g_set[kDir].load(), g_set[kHeight].load(), g_set[kColor].load(), g_set[kBright].load(), g_set[kFog].load());
     }
     int Get(Setting s) { return g_set[s]; }
     int SavedMode() { return g_saved_mode; }
+    std::string Version(int slot) {
+        if (slot < 0 || slot > 4) return "";
+        std::lock_guard<std::mutex> lk(g_ver_mu);
+        return g_ver[slot];
+    }
+    void SetVersion(int slot, const std::string& name) {
+        if (slot < 0 || slot > 4) return;
+        { std::lock_guard<std::mutex> lk(g_ver_mu); g_ver[slot] = name; }
+        g_failed_id = 0;   // a new pick gets its tries again
+        g_dirty_ini = true;
+        g_dirty_at = GetTickCount64();
+    }
     void SaveMode(int mode) { g_saved_mode = mode; g_mode_pending = false; g_dirty_ini = true; g_dirty_at = GetTickCount64(); }
     void Set(Setting s, int value) {
         EnsureInit();
@@ -659,7 +799,7 @@ namespace {
         g_dirty_ini = true;
         g_dirty_at = GetTickCount64();
     }
-    void ResetAll() { for (int s = 0; s < kSettingCount; ++s) g_set[s] = 0; g_dirty_ini = true; g_dirty_at = GetTickCount64(); }
+    void ResetAll() { for (int s = 0; s < kSettingCount; ++s) g_set[s] = 0; { std::lock_guard<std::mutex> lk(g_ver_mu); for (auto& v : g_ver) v.clear(); } g_dirty_ini = true; g_dirty_at = GetTickCount64(); }
 
     const char* Key(Setting s) { return kKeys[s]; }
     int LabelCount(Setting s) {
@@ -677,6 +817,7 @@ namespace {
             case kFilter: return FilterCount();
             case kClouds: return CloudsCount();
             case kCycle: return CycleCount();
+            case kCycleAtm: return 2;
             default: return FogColorCount();
         }
     }
@@ -696,6 +837,7 @@ namespace {
             case kFilter: l = FilterLabels(); break;
             case kClouds: l = CloudsLabels(); break;
             case kCycle: l = CycleLabels(); break;
+            case kCycleAtm: { static const char* const kOffOn[] = { "OFF", "ON" }; l = kOffOn; break; }
             default: l = FogColorLabels(); break;
         }
         return l && i >= 0 && i < LabelCount(s) ? l[i] : "";
@@ -715,6 +857,7 @@ namespace {
     int ExposureCount() { EnsureInit(); return (int)g_exposure_labels.size(); } const char* const* ExposureLabels() { EnsureInit(); return g_exposure_labels.data(); }
     int FilterCount() { EnsureInit(); return (int)g_filter_labels.size(); }     const char* const* FilterLabels() { EnsureInit(); return g_filter_labels.data(); }
     int TickMs() { return g_cyc_sun_on || g_cyc_blend > 0.f ? 40 : 250; }
+    bool SmoothFade() { return g_smooth_fade; }
     void SetSmoothFade(bool on) { g_smooth_fade = on; LOG("sky: smooth fade %s", on ? "on (the cycle swallows the lighting transition's fade)" : "off"); }
     int CycleCount() { EnsureInit(); return (int)g_cycle_labels.size(); }       const char* const* CycleLabels() { EnsureInit(); return g_cycle_labels.data(); }
     bool CycleSyncMode(int mode) {
@@ -740,6 +883,7 @@ namespace {
 
     void Tick() {
         EnsureInit();
+        atmpacks::Start();   // once, at the first tick: reads the atmosphere mods in the Atmospheres folder on a background thread (well before the world loads)
         const ULONGLONG now = GetTickCount64();
         if (g_dirty_ini && now - g_dirty_at > 1500) { g_dirty_ini = false; SaveIni(); }
         const int mode = recorder::CurrentMode();
@@ -749,7 +893,7 @@ namespace {
             g_look_id = 0; g_look_idx = -1; g_edit_idx = -1; g_edit_asset = 0; g_edit_touched = false; g_load_req_at = 0; g_held.clear(); g_failed_id = 0; g_load_tries = 0;
             for (int s = 0; s < kSettingCount; ++s) g_edit_seen[s] = -1;
             g_hold_until = now + 3000;
-            g_world_up_at = now; g_cyc_started = false;
+            g_world_up_at = now; g_cyc_started = false; g_ready_since = 0;
             return;
         }
         if (now < g_hold_until) return;
