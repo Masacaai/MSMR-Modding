@@ -327,6 +327,8 @@ namespace {
     float g_last_timers[3] = { 0.f, 0.f, 0.f };
     ULONGLONG g_still_since = 0;
     bool g_was_paused = false, g_was_busy = false;
+    bool g_hold = false;                      // a phase boundary came and the lighting has not switched yet: the day's clock stands at the boundary, so the next phase runs its full length
+    ULONGLONG g_hold_since = 0;
     ULONGLONG g_last_switch_at = 0, g_frozen_ms = 0;   // for the log: when the lighting last changed, and how much cycle time stood still since (paused or busy)
     double g_phase = 0.2;
     bool g_cyc_started = false;
@@ -522,7 +524,7 @@ namespace {
         if (!g_cyc_started) {
             g_phase = PhaseOfMode(mode); g_cyc_overcast = mode == 3 || mode == 6;
             if (g_saved_phase >= 0.0 && ModeMatches(mode, PoseAt(g_saved_phase, g_saved_overcast).mode)) { g_phase = g_saved_phase; g_cyc_overcast = g_saved_overcast; LOG("sky: cycle resumes at phase %.3f", g_phase); }   // where it stopped last session
-            g_prev_phase = g_phase; g_cyc_last = now; g_cyc_started = true;
+            g_prev_phase = g_phase; g_cyc_last = now; g_cyc_started = true; g_hold = false;
             RollVar(g_var); ++g_cyc_step;   // the first phase gets random variations too
         }
         // Follow the game's own clock: the world time scale (the pause menu and prompts freeze it), so a paused game pauses the cycle.
@@ -546,8 +548,17 @@ namespace {
         if (paused || busy) g_frozen_ms += now - g_cyc_last;
         g_cyc_last = now;
         g_prev_phase = g_phase;
-        g_phase += (double)(dtms > 1000 ? 1000 : dtms) * ts / (minutes * 60000.0);
-        g_phase -= std::floor(g_phase);
+        if (!g_hold) {
+            g_phase += (double)(dtms > 1000 ? 1000 : dtms) * ts / (minutes * 60000.0);
+            g_phase -= std::floor(g_phase);
+            // A boundary was crossed: the clock stops right on it until the lighting has switched (a switch can be late: Spider-Man swinging, an activity), so
+            // every phase runs its full length from the moment it actually starts, never less.
+            const int before = PoseAt(g_prev_phase, g_cyc_overcast).mode, after = PoseAt(g_phase, g_cyc_overcast).mode;
+            if (before != after) {
+                g_phase = after == 4 ? 0.93 : (after == 2 ? 0.55 : (after == 5 ? 0.68 : 0.08));
+                g_hold = true; g_hold_since = now;
+            }
+        }
         if (g_prev_phase < 0.93 && g_phase >= 0.93) {   // a new day begins: roll whether its daytime is overcast
             static std::mt19937 wrng((unsigned)GetTickCount64() ^ 0x5bd1e995u);
             g_cyc_overcast = std::uniform_real_distribution<double>(0.0, 1.0)(wrng) < kOvercastChance;
@@ -555,9 +566,11 @@ namespace {
         }
         if (now - g_phase_saved_at > 5000) { g_phase_saved_at = now; SavePhase(g_phase, g_cyc_overcast); }
         const Pose p = PoseAt(g_phase, g_cyc_overcast);
+        const Pose ps = g_hold ? PoseAt(std::fmod(g_phase + 1.0 - 1e-6, 1.0), g_cyc_overcast) : p;   // while the clock waits at a boundary, the sun stays where the old phase left it
         const bool pending = !ModeMatches(mode, p.mode);   // a switch is due
+        if (g_hold && !pending) g_hold = false;            // the lighting already matches (picked by hand): nothing to wait for
         if (pending) g_due_wait_ms += dtms > 1000 ? 1000 : dtms; else { g_due_wait_ms = 0; g_wait_logged = false; }
-        g_cyc_rotd = p.rotd; g_cyc_elev = p.elev; g_cyc_sun_on = p.sun;
+        g_cyc_rotd = ps.rotd; g_cyc_elev = ps.elev; g_cyc_sun_on = ps.sun;
         // ---- get ready for the next switch: pick its sky, load it quietly and blend toward it over the last seconds ----
         if (pending) { g_cyc_blend = g_tgt_valid ? 1.f : 0.f; }   // waiting for a calm moment: keep the colors at the next sky's
         else {
@@ -599,7 +612,7 @@ namespace {
             g_cyc_blend = bt;
         }
         ReleaseIdleHolds();
-        if (p.sun || g_cyc_blend > 0.f || g_blend_prev > 0.f) ++g_cyc_step;
+        if (ps.sun || g_cyc_blend > 0.f || g_blend_prev > 0.f) ++g_cyc_step;
         g_blend_prev = g_cyc_blend;
         if (pending && now - g_cyc_switch_at > 8000) {
             if (busy) return;   // never switch during an activity, however long it lasts
@@ -614,12 +627,11 @@ namespace {
             for (int i = 0; i < 4; ++i) g_var[i] = g_next_var[i];
             ++g_cyc_step;
             g_pick_nm = -1;
-            {   // how late the switch is: the day's clock never restarts at a switch, so a delay (waiting for a calm moment, a freeze) shortens the phase that follows
-                const double start = p.mode == 4 ? 0.93 : (p.mode == 2 ? 0.55 : ((p.mode == 5) ? 0.68 : 0.08));
-                const double late = (std::fmod(g_phase - start + 1.0, 1.0)) * minutes * 60.0;
-                LOG("sky: cycle phase %.3f: lighting mode %d -> %d, sky %016llX; %.0f s after its nominal start, previous look lasted %.0f s (%.0f s of cycle time stood still)", g_phase, mode, p.mode,
-                    (unsigned long long)g_next_look, late, g_last_switch_at ? (double)(now - g_last_switch_at) / 1000.0 : 0.0, (double)g_frozen_ms / 1000.0);
-                g_last_switch_at = now; g_frozen_ms = 0;
+            {   // the clock stood still at the boundary since g_hold_since: that wait does not shorten the phase that starts now
+                LOG("sky: cycle phase %.3f: lighting mode %d -> %d, sky %016llX; the switch waited %.0f s past the boundary, the previous look lasted %.0f s (%.0f s of cycle time stood still)", g_phase,
+                    mode, p.mode, (unsigned long long)g_next_look, g_hold ? (double)(now - g_hold_since) / 1000.0 : 0.0,
+                    g_last_switch_at ? (double)(now - g_last_switch_at) / 1000.0 : 0.0, (double)g_frozen_ms / 1000.0);
+                g_last_switch_at = now; g_frozen_ms = 0; g_hold = false;
             }
             modmenu::KeepMenuOpen(6000);
             if (g_smooth_fade) modmenu::SuppressFade(5000);
@@ -879,7 +891,7 @@ namespace {
         if (g_set[kCycle] <= 0) return true;
         g_cyc_overcast = mode == 3 || mode == 6;   // picking Overcast starts an overcast day
         g_cyc_look = 0; g_pick_nm = -1;
-        g_phase = PhaseOfMode(mode); g_prev_phase = g_phase; g_cyc_started = true; g_cyc_last = GetTickCount64();
+        g_phase = PhaseOfMode(mode); g_prev_phase = g_phase; g_cyc_started = true; g_cyc_last = GetTickCount64(); g_hold = false;
         return true;
     }
     int FogColorCount() { EnsureInit(); return (int)g_fogcolor_labels.size(); } const char* const* FogColorLabels() { EnsureInit(); return g_fogcolor_labels.data(); }
