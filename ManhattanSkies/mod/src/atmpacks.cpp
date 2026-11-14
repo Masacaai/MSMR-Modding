@@ -313,11 +313,12 @@ namespace {
         bool located = false;
         for (int i = 0; i < 90 && !located; ++i) { located = toc::Locate(true); if (!located) Sleep(2000); }
         if (!located) { LOG("atmpacks: the game's asset table was not found; no atmosphere mods this session"); return; }
-        const int arch = toc::PickRawArchive();
+        const bool pretend = std::filesystem::exists(data / L"force_blocked.txt", ec);   // test switch: behave as if there were no Overstrike archive
+        const int arch = pretend ? -1 : toc::PickRawArchive();
         if (arch < 0) {
             g_blocked = true;
             g_ready = true;
-            LOG("atmpacks: no raw mod archive to borrow: install any .smpcmod mod with Overstrike (and press Install mods); no atmosphere mods this session");
+            LOG("atmpacks: %s: install any .smpcmod mod with Overstrike (and press Install mods); no atmosphere mods this session", pretend ? "force_blocked.txt exists (test switch)" : "no raw mod archive to borrow");
             return;
         }
         size_t added = 0;
