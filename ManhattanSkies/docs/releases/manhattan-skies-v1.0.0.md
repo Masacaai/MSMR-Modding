@@ -14,6 +14,8 @@ Adds **atmosphere mods from a folder**: drop `.smpcmod` and `.modular` atmospher
 - **SUN COLOR AMOUNT and FOG COLOR AMOUNT:** how much of the color you picked replaces the sky's own (AUTO is all of it, down to 10% for a faint tint).
 - **23 more presets** that ship with the mod (night, overcast, dawn, day and sunset looks built from the game's own skies).
 - **Every cycle phase runs its full length** from when it actually starts: a switch that waits for a calm moment no longer shortens the next phase.
+- **No transition blending.** The cycle picks the next sky a few seconds ahead and switches once, like a menu pick; the fog, haze and color blends are gone.
+- **Mods' extra files are used.** The files an atmosphere mod ships besides its atmosphere (a color-grading lookup, the sun flare) replace the game's own while the mod is on, and are put back afterwards. (This replaces the earlier "stays vanilla" limit; `no_extras.txt` in the data folder turns it off.)
 - **SUN BRIGHTNESS can be OFF** (last choice of the row): no direct sunlight at all.
 - **Transitions no longer touch the sun.** Only fog, haze, exposure, filter and fog color blend toward the next phase; each phase brings its own sun.
 - **No black fade** when you change TIME OF DAY from the menu, like the cycle.
@@ -28,7 +30,6 @@ As 0.1.0, plus: **at least one mod installed through Overstrike that replaces ga
 
 - Everything in 0.1.0's list still applies, except the 30-second wait.
 - A mod's textures are unpacked into a `cache` folder next to the Atmospheres folder the first time you pick it (under a second), and `.modular` options are unpacked once at start-up. The cache can be deleted; it is rebuilt. Plan for roughly the size of your atmosphere mods in free disk space.
-- A mod that ships a shared helper asset (the sun-flare texture, one material) keeps the game's own version of it: those two details stay vanilla.
 - A row holds 31 mods per time of day.
 - Only the five open-world atmospheres are supported (the ones the time-of-day modes use). Mods that replace only other atmospheres are skipped, and the log says which.
 
