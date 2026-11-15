@@ -15,7 +15,7 @@ Adds **atmosphere mods from a folder**: drop `.smpcmod` and `.modular` atmospher
 - **23 more presets** that ship with the mod (night, overcast, dawn, day and sunset looks built from the game's own skies).
 - **Every cycle phase runs its full length** from when it actually starts: a switch that waits for a calm moment no longer shortens the next phase.
 - **No transition blending.** The cycle picks the next sky a few seconds ahead and switches once, like a menu pick; the fog, haze and color blends are gone.
-- **Mods' extra files are used.** The files an atmosphere mod ships besides its atmosphere (a color-grading lookup, the sun flare) replace the game's own while the mod is on, and are put back afterwards. (This replaces the earlier "stays vanilla" limit; `no_extras.txt` in the data folder turns it off.)
+- **Mods' extra files (experiment, off by default).** The files an atmosphere mod ships besides its atmosphere (a color-grading lookup, the sun flare, small configs) can replace the game's own while the mod is on, if `use_extras.txt` exists in the data folder. It showed a black sky in its first test, so it stays off until understood.
 - **Atmosphere mods keep their author's values.** The cycle's steered sun, random fog/haze/sun strength and dawn sun apply to the game's own skies only; a mod sky is shown as shipped. Rows you set yourself still apply to every sky.
 - **SUN BRIGHTNESS can be OFF** (last choice of the row): no direct sunlight at all.
 - **Transitions no longer touch the sun.** Only fog, haze, exposure, filter and fog color blend toward the next phase; each phase brings its own sun.

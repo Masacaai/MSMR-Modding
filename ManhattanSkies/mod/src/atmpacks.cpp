@@ -47,7 +47,7 @@ namespace {
     std::mutex g_mu, g_prep_mu;
     int g_arch = -1;                       // the archive the new assets borrow
     uint64_t g_selected = 0;               // the pack whose extra files are swapped into the toc now
-    bool g_no_extras = false;              // test switch: no_extras.txt in the data folder
+    bool g_no_extras = true;               // the extra-file swap is an experiment: on only with use_extras.txt in the data folder
     std::vector<Pack> g_packs;
     std::vector<std::string> g_label_store[kSlots];
     std::vector<const char*> g_labels[kSlots];
@@ -346,7 +346,9 @@ namespace {
             return;
         }
         g_arch = arch;
-        g_no_extras = std::filesystem::exists(data / L"no_extras.txt", ec);   // test switch: do not swap the files an atmosphere does not reference
+        // Off unless use_extras.txt exists: the first session with the swap (2026-11-14, Lavender Skyfall) showed a black sky and no texture request after it was on,
+        // and the shipped extras are real edits (the flare texture, a 90-byte change of a config, the colour-grade lookup), not copies of the game's own files.
+        g_no_extras = !std::filesystem::exists(data / L"use_extras.txt", ec);
         size_t added = 0;
         for (const auto& a : assets) {
             if (!toc::AddAsset(a.id, (uint32_t)arch, a.path.c_str(), a.size)) { LOG("atmpacks: adding assets failed after %zu; stopping", added); return; }
