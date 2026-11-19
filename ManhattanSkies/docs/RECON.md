@@ -555,3 +555,12 @@ and reopen it) for one play session; in the fault handler, also dump `Rsi` (the 
    of `exe+32c2550` is at `[rsp+0x70]` in that frame).
 4. **`fsinfo`** dev command: prints the file system object `q[exe+74a6a00]`, the toc object at `fs+0x18`, the DAT1 pointer, the location and open tables, and compares them with the heap-scan result, to settle which toc object layout is right
    (Part 23's toc-object offsets differ from the ones our grow code uses: `+0x10 ids, +0x28 sizes, +0x30 offsets, +0x48 count`) and whether new archive entries (open table capacity 0x200, about 210 used) can be added without any Overstrike archive.
+
+## Part 26. Why atmosphere loads were "buggy": the slot's own values were captured too early (2026-11-19, fix built, not yet played)
+
+Reported: relaunching a save that was left on a mod atmosphere gave a **red screen** until a setting was changed; switching between atmospheres sometimes loaded no texture or a wrong look; **NYC Clear Day sometimes came up grey instead of bright blue**.
+**Cause [I from the code and Part 19; the log lines added below will confirm it]:** a slot is created and filled with the **"Default Atmosphere"** (grey, neutral; `exe+162dc80`) as soon as a load is requested, and the asset's real values are copied in later by the parser
+`exe+162cc00(slot, data)` (`AtmosphereManager::OnLoaded`). `ApplySun` read the slot 500 ms after `look on` and kept what it read as "the sky's own values" in `g_orig*` (**never cleared, keyed by asset id**). On a slow or busy load (a relaunched save, the first seconds of a world, a lighting
+switch) that was the default, and every later edit pass (the cycle runs one constantly) wrote those grey/neutral values back over the real ones; the parser's own late copy also wiped edits made before it. A request for textures made while the game was still loading is also sometimes lost.
+**Fixes:** (1) `recorder` hooks the parser (bytes `40 55 57 48 81 ec 88 00 00 00` verified) and records when each slot's parse finished (`SlotParsedTick`); `ApplySun` waits for the parse (+150 ms) before reading or editing and re-applies after a re-parse;
+(2) an **atmosphere mod is not loaded until the world is ready** (8 s after a load, Spider-Man readable and the world timers moving for 4 s: the cycle's readiness, now shared); (3) a log line `sky: own values of <asset> kept (slot, parsed N ms ago): sun ..., exposure, haze, fog color` for every capture, to check for grey/neutral values.

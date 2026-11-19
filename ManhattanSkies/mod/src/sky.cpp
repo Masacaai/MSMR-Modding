@@ -201,6 +201,7 @@ namespace {
     ULONGLONG g_look_at = 0, g_load_req_at = 0;
     int g_edit_idx = -1;                          // the slot whose sun we last wrote
     uint64_t g_edit_asset = 0;
+    ULONGLONG g_edit_parsed = 0;                  // the parse (recorder::SlotParsedTick) our last edit of that slot was made after
     int g_edit_seen[kSettingCount] = {};          // the sun settings as last written
     bool g_edit_touched = false;                  // we have written to g_edit_idx (so AUTO must restore the original)
 
@@ -257,6 +258,7 @@ namespace {
         if (idx >= 0 && recorder::SlotInfo(idx, a, w) && a == id && w <= 0 && recorder::ReleaseSlot(idx)) g_held.erase(id);
     }
 
+    bool WorldReady(ULONGLONG now);   // defined with the cycle: 8 s after a load, Spider-Man readable and the world timers moving for 4 s
     // A pick made in the menu waits until it has rested for 350 ms before the sky is loaded: scrolling through the variants used to load and release
     // several skies a second (a Settings-screen crash followed such a session). The dynamic cycle's own picks are not delayed (they must land with the switch).
     uint64_t g_want_pending = 0;
@@ -265,6 +267,9 @@ namespace {
         const uint64_t want = DesiredLook();
         const ULONGLONG now = GetTickCount64();
         if (want == g_look_id) { g_want_pending = want; return; }
+        // An atmosphere mod's load requests (the atmosphere, then its sky and baked-light textures) made while the game is still loading or streaming (a relaunched save, the
+        // first seconds of a world) are sometimes lost or half-served: a red screen after a relaunch, a missing or grey sky. They wait until the world is ready.
+        if (want && atmpacks::IsMod(want) && !WorldReady(now)) return;
         if (g_set[kStyle] > 0) {
             if (want != g_want_pending) { g_want_pending = want; g_want_since = now; }
             if (now - g_want_since < 350) return;
@@ -520,6 +525,17 @@ namespace {
         if (want == 3) return cur == 3 || cur == 6;
         return cur == want;
     }
+    // "Gameplay has started": 8 s after the world came up, Spider-Man's transform is readable and the world timers advance, both for 4 s in a row (this replaced the old
+    // fixed 30 s wait; the one hang seen came from a lighting setter call 3 s after a load, while the game was still loading). UpdateReadiness runs every tick.
+    void UpdateReadiness(ULONGLONG now) {
+        if (now - g_world_up_at < 8000) { g_ready_since = 0; return; }
+        SampleHero();
+        static float pre[3] = { 0.f, 0.f, 0.f };
+        bool pm = false;
+        for (int i = 0; i < 3; ++i) { float v = 0.f; memory::Read(scan::FromRva(kWorldTimers[i]), v); pm = pm || v != pre[i]; pre[i] = v; }
+        if (g_hero_speed.load() >= 0.f && pm) { if (!g_ready_since) g_ready_since = now; } else g_ready_since = 0;
+    }
+    bool WorldReady(ULONGLONG now) { return g_ready_since && now - g_ready_since >= 4000; }
     // Worker thread, every 40 ms while the cycle steers the sun (after the world has settled): advance the phase, steer the sun, and switch the
     // lighting mode (and the sky) at dawn, day, dusk and night. The first switch waits 30 s after a load (a setter call during a load hung it).
     void Cycle(ULONGLONG now) {
@@ -531,19 +547,9 @@ namespace {
             if (g_cyc_look.exchange(0)) g_cyc_step++;
             return;
         }
-        // "Gameplay has started": 8 s after the world came up, Spider-Man's transform is readable and the world timers advance, both for 4 s in a row
-        // (this replaces the old fixed 30 s wait; the one hang seen came from a lighting setter call 3 s after a load, while the game was still loading).
-        if (now - g_world_up_at < 8000) return;
+        if (!WorldReady(now)) return;
         const int mode = recorder::CurrentMode();
         if (mode < 0) return;
-        SampleHero();
-        {
-            static float pre[3] = { 0.f, 0.f, 0.f };
-            bool pm = false;
-            for (int i = 0; i < 3; ++i) { float v = 0.f; memory::Read(scan::FromRva(kWorldTimers[i]), v); pm = pm || v != pre[i]; pre[i] = v; }
-            if (g_hero_speed.load() >= 0.f && pm) { if (!g_ready_since) g_ready_since = now; } else g_ready_since = 0;
-            if (!g_ready_since || now - g_ready_since < 4000) return;
-        }
         if (!g_cyc_started) {
             g_phase = PhaseOfMode(mode); g_cyc_overcast = mode == 3 || mode == 6;
             if (g_saved_phase >= 0.0 && ModeMatches(mode, PoseAt(g_saved_phase, g_saved_overcast).mode)) { g_phase = g_saved_phase; g_cyc_overcast = g_saved_overcast; LOG("sky: cycle resumes at phase %.3f", g_phase); }   // where it stopped last session
@@ -665,12 +671,19 @@ namespace {
         uint64_t asset; int weight;
         if (idx < 0 || !recorder::SlotInfo(idx, asset, weight) || !asset || weight <= 0) return;
         if (g_look_id ? now - g_look_at < 500 : now - g_base_seen_at.load() < 900) return;   // let a fresh slot finish loading
+        // ... and really wait for it: until the game's parser has copied the asset's own values into the slot, the slot holds the "Default Atmosphere", and reading it now would
+        // keep that as the sky's "own" values for the session while the parser later overwrites our edits. (Falls back to the timing above when the parser is not hooked.)
+        ULONGLONG parsed_at = 0;
+        if (recorder::ParseHooked()) {
+            parsed_at = recorder::SlotParsedTick(idx, asset);
+            if (!parsed_at || now - parsed_at < 150) return;
+        }
         g_cur_mod = atmpacks::IsMod(asset);
         // what the player set by hand always applies; what the cycle adds (the steered sun, the random variations) only to the game's own skies
         bool any = false;
         for (int s = kDir; s < kSettingCount; ++s) if (s != kCycle && s != kCycleAtm) any = any || g_set[s];
         any = any || (g_set[kCycle] > 0 && !g_cur_mod);
-        bool changed = idx != g_edit_idx || asset != g_edit_asset || g_cyc_seen != g_cyc_step;
+        bool changed = idx != g_edit_idx || asset != g_edit_asset || g_cyc_seen != g_cyc_step || parsed_at != g_edit_parsed;   // a new parse of the slot wipes our edits
         for (int s = kDir; s < kSettingCount; ++s) if (g_edit_seen[s] != g_set[s]) changed = true;
         if (!changed) return;
         if (!any && !(g_edit_touched && idx == g_edit_idx && asset == g_edit_asset)) {   // nothing asked for and nothing of ours to undo here
@@ -683,7 +696,13 @@ namespace {
         float cur[6];
         if (!recorder::SlotSun(idx, cur, false)) return;
         auto it = g_orig.find(asset);
-        if (it == g_orig.end()) { Sun o; memcpy(o.rgb, cur, 12); o.w = cur[3]; o.rot = cur[4]; o.elev = cur[5]; it = g_orig.emplace(asset, o).first; }
+        if (it == g_orig.end()) {
+            Sun o; memcpy(o.rgb, cur, 12); o.w = cur[3]; o.rot = cur[4]; o.elev = cur[5]; it = g_orig.emplace(asset, o).first;
+            float ex = 0.f, hz = 0.f, fc[3] = {};
+            recorder::SlotFloats(idx, kOffExposure, &ex, 1, false); recorder::SlotFloats(idx, kOffHaze, &hz, 1, false); recorder::SlotFloats(idx, kOffFogColor, fc, 3, false);
+            LOG("sky: own values of %016llX kept (slot %d, parsed %lld ms ago): sun %.2f %.2f %.2f x%.2f rot %.0f elev %.0f, exposure %.2f, haze %.3f, fog color %.2f %.2f %.2f", (unsigned long long)asset, idx,
+                parsed_at ? (long long)(now - parsed_at) : -1LL, cur[0], cur[1], cur[2], cur[3], cur[4], cur[5], ex, hz, fc[0], fc[1], fc[2]);
+        }
         auto fit = g_orig_fog.find(asset);
         float fcur[6];
         if (fit == g_orig_fog.end() && recorder::SlotFog(idx, fcur, false)) { Fog f; memcpy(f.d, fcur, sizeof(fcur)); fit = g_orig_fog.emplace(asset, f).first; }
@@ -773,7 +792,7 @@ namespace {
         }
         recorder::Recompute();
         g_cyc_seen = g_cyc_step;
-        g_edit_idx = idx; g_edit_asset = asset; g_edit_touched = any || g_edit_touched;
+        g_edit_idx = idx; g_edit_asset = asset; g_edit_parsed = parsed_at; g_edit_touched = any || g_edit_touched;
         for (int s = kDir; s < kSettingCount; ++s) g_edit_seen[s] = g_set[s];
         if (!g_cyc_sun_on) LOG("sky: edits on slot %d (%016llX): sun rgb %.2f %.2f %.2f intensity %.2f rotation %.1f elevation %.1f, fog x%.2f, distance/haze/exposure/filter/clouds %d/%d/%d/%d/%d",
             idx, (unsigned long long)asset, w.rgb[0], w.rgb[1], w.rgb[2], w.w, w.rot, w.elev, fmul, g_set[kFogDist].load(), g_set[kHaze].load(), g_set[kExposure].load(), g_set[kFilter].load(), g_set[kClouds].load());
@@ -962,6 +981,7 @@ namespace {
             return;
         }
         if (now < g_hold_until) return;
+        UpdateReadiness(now);
         Cycle(now);
         ApplyLook();
         ApplySun();

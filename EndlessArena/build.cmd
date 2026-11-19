@@ -18,4 +18,7 @@ cl /nologo /LD /O2 /MT /EHa /std:c++20 /W3 /Zi /DNDEBUG /DNOMINMAX /DWIN32_LEAN_
    /link /LIBPATH:"%LIB_DIR%" minhook.x64.lib user32.lib shell32.lib hid.lib setupapi.lib /DEBUG /MAP /OPT:REF /OPT:ICF || exit /b 1
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%pack.ps1" || exit /b 1
+rem Standing rule (maintainer, 2026-11-19): every build leaves the packed .script in Overstrike's Mods Library, so "Install mods" always installs the latest build.
+set "MODLIB=C:\Program Files (x86)\Steam\steamapps\common\Marvel's Spider-Man Remastered\Mods Library"
+if exist "%MODLIB%" copy /y "%ROOT%build\EndlessArena.script" "%MODLIB%\" >nul && echo Copied EndlessArena.script to the Mods Library
 echo BUILD OK

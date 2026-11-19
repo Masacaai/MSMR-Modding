@@ -10,6 +10,7 @@
 
 #include <MinHook.h>
 #include <Windows.h>
+#include <cstring>
 #include <intrin.h>
 #include <atomic>
 #include <cstdint>
@@ -132,6 +133,47 @@ namespace recorder {
         }
     }
 
+    // ---- when is a slot's data really there? ----
+    // A slot is created (and filled with the "Default Atmosphere", grey and neutral) as soon as a load is requested; the asset's own values are copied in later by the parser
+    // `exe+162cc00(slot, data)` (AtmosphereManager::OnLoaded, RECON Part 19). Reading or editing a slot before that captured the DEFAULT as "the sky's own values" (kept for
+    // the whole session: a grey sky, a red screen after a slow first load) and the parser then overwrote our edits. This hook records each finished parse.
+    uintptr_t SlotAddress(int idx);
+    using ParseFn = uint64_t(__fastcall*)(uintptr_t slot, void* data);
+    static ParseFn g_parse_orig = nullptr;
+    static std::mutex g_parsed_mu;
+    struct Parsed { uint64_t asset; ULONGLONG tick; };
+    static std::map<uintptr_t, Parsed> g_parsed;
+    static uint64_t __fastcall ParseDetour(uintptr_t slot, void* data) {
+        const uint64_t r = g_parse_orig(slot, data);
+        uint64_t asset = 0;
+        memory::Read(slot + 8, asset);
+        std::lock_guard<std::mutex> lk(g_parsed_mu);
+        g_parsed[slot] = { asset, GetTickCount64() };
+        return r;
+    }
+    bool ParseHooked() { return g_parse_orig != nullptr; }
+    unsigned long long SlotParsedTick(int idx, uint64_t asset) {
+        const uintptr_t a = SlotAddress(idx);
+        if (!a) return 0;
+        std::lock_guard<std::mutex> lk(g_parsed_mu);
+        const auto it = g_parsed.find(a);
+        return it != g_parsed.end() && it->second.asset == asset ? it->second.tick : 0;
+    }
+    static bool HookParse() {
+        const uintptr_t at = scan::FromRva(0x162cc00);
+        static const unsigned char want[] = { 0x40, 0x55, 0x57, 0x48, 0x81, 0xec, 0x88, 0x00, 0x00, 0x00 };
+        bool match = false;
+        __try { match = std::memcmp(reinterpret_cast<const void*>(at), want, sizeof(want)) == 0; } __except (EXCEPTION_EXECUTE_HANDLER) { match = false; }
+        if (!match) { LOG("recorder: the atmosphere parser at exe+162cc00 is not this game's: not hooked (slot edits fall back to timing)"); return false; }
+        if (MH_CreateHook(reinterpret_cast<void*>(at), reinterpret_cast<void*>(&ParseDetour), reinterpret_cast<void**>(&g_parse_orig)) != MH_OK || MH_EnableHook(reinterpret_cast<void*>(at)) != MH_OK) {
+            LOG("recorder: hooking the atmosphere parser failed");
+            g_parse_orig = nullptr;
+            return false;
+        }
+        LOG("recorder: hooked the atmosphere parser exe+162cc00");
+        return true;
+    }
+
     static bool Hook(natives::Id id, void* detour, void** orig, const char* what) {
         const uintptr_t target = natives::Get(id);
         if (!target) { LOG("recorder: %s not resolved, not hooked", what); return false; }
@@ -149,6 +191,7 @@ namespace recorder {
         if (init != MH_OK && init != MH_ERROR_ALREADY_INITIALIZED) { LOG("recorder: MinHook init failed (%d)", (int)init); return false; }
         const bool a = Hook(natives::LightingSet, (void*)&SetDetour, (void**)&g_set_orig, "lighting setter");
         const bool b = Hook(natives::AtmosphereAdjust, (void*)&AdjustDetour, (void**)&g_adjust_orig, "AtmosphereAdjust");
+        HookParse();
         g_installed = a || b;
         g_prev_lm = ReadLightingMode();
         LOG("recorder: lighting mode at start %d", g_prev_lm);
