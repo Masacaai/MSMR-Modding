@@ -304,3 +304,254 @@ Goal: several atmosphere `.smpcmod`s usable at once (ROADMAP 4b). Overstrike onl
 ## Part 17f. Files an atmosphere mod ships that the loader does not use (2026-11-14)
 
 `tools/skipped.py` lists, per `.smpcmod`, the files that are neither one of the five base atmospheres nor a texture the atmosphere references. In the maintainer's folder: `A6F92F8761456EE3` (349,632 B, span 0, a 35mm star flare texture) and `95E22EB5BAD81B22` (371,348 B, span 2) in 10 mods; `89D5F9DA0876FDB1` (65,664 B, span 2) in 5 mods (the MM Overcast trio and the two rainy mods); `B0D1CA3D73401F93` (132 B) in 2. 65,664 is exactly 64x64x16 plus a 128-byte header: probably a color-grading lookup texture, which would explain a pink cast on the MM Overcast (Heavy Snow) sky (reported, not confirmed). They stay the game's own while a mod is on. Possible fix, not built: point the game's toc entry for that id at the mod's file while the mod is selected (the carrier method, `toc::AddCarrier`/`RestoreCarriers`), and put it back afterwards; the asset may need to be reloaded to take effect.
+
+---
+
+# Fable session, 2026-11-15 (answers to `docs/FABLE_REQUESTS.md`, MSK-*)
+
+Everything in Parts 18-22 was **read from the exe and from two atmosphere assets on disk; nothing was run in game**. `[V]` here means "read in the
+code/data" (static), `[I]` inference, `[?]` unknown. Live checks are listed at the end of each part. Tool: `tools/sigtools/fx.py`
+(`fx.py ddl <Type>`, `fx.py ddlflat AtmosphereDef`, `fx.py d <rva>`); shared facts are in `docs/GAME_INTERNALS.md` ("Fable session 2026-11-15").
+
+## Part 18. The lighting modes by name, and why a switch is a "mini-load" (MSK-A3, MSK-C2, MSK-E1 partly)
+
+**Names [V]** (enum `LightingModeGame`, descriptor `exe+393c090`): **0 kDay, 1 kNight, 2 kSunset, 3 kOvercast, 4 kBlackout, 5 kNightRain,
+6 kOvercastRain**. This corrects Part 4 (1 is the plain night, 5 is the rain night, 6 the rain overcast). A second enum, `LightingConditions`
+{kDay, kOvercast, kSunset, kNight, kBlackout}, is what assets are tagged with (`LightingConditionAtmosphere{Atmosphere, LightingCondition}`,
+`LightingConditionLL{File, LightingCondition}` = the levellight per condition, `LightingConditionBitSet{Day, Overcast, Sunset, Night, Blackout}`):
+**the two rain modes have no condition of their own**; they reuse the Night/Overcast assets and differ by the atmosphere they activate [I].
+
+**The setter [V]**: `exe+1f7f9e0(world+0xe10d0, mode)` = `X = exe+1f03570(arg)`; `exe+1f058e0(X, mode)`: if `X->vtable[+0x30]()` and
+`mode != (int8)X[+0x1179]`, it writes **synced state field 0xd** (1 byte) of the sync object at `X+0x18` (`exe+1985b40` begin, `exe+1985f80(buf, 0xd, &mode, 1)`,
+`exe+1985e00` commit). The mode is a replicated state variable; the transition is the reaction to the state change, not the setter itself.
+
+**Callers of the setter [V]**: `exe+735d19` (`GUI::MenuRTTUpdater` slot 18: the Settings option), `exe+bd867f` (`SetLightingModeAction` node, execute `exe+bd8640`),
+`exe+1f7485d` and `exe+1f7490f` (inside the game tick `exe+1f745f0`: the load-time apply), `exe+1faab8a` (fn `exe+1faa9e0`), `exe+1fae8fc` (fn `exe+1fae8b0`).
+
+**What makes it a mini-load [V]**: the transition sends `LightingModeTransitionStartedEvent` (id `0x4d116e75`, sender `exe+1f7eb20`; payload
+`+0x138` from-mode, `+0x13c` to-mode) and later `LightingModeTransitionFinishedEvent` (`0x8dd5dcd8`, `exe+1f7e9b0`,
+"LightingZoneManager::DispatchTransitionFinished"). Four systems handle "Started":
+
+| handler | system | what |
+|---|---|---|
+| **`exe+710970`** | **`DynamicLoadScreenSystem`** | **starts a load screen of type `kLightingTransition`** (the enum is {kInitialLoad, kCheckpointWarp, kLightingTransition}) |
+| `exe+20550e0` | `SaveFile` (vtable `+0xa8`) | save bookkeeping |
+| `exe+de64e0` | `ParkedCarSystem` | re-keys parked cars |
+| `exe+e1efb0` | `VehicleSystem` | re-keys traffic |
+
+`DynamicLoadScreenSystem::OnLightingTransitionStarted` (`exe+710970`), read line by line:
+
+```
+if (this[+0x18]) return;                                   // busy/disabled
+cfg = this[+0x228]  (DynamicLoadScreenConfig, asset "configs/system/system_DynamicLoadScreen.config")
+for e in cfg.LightingModeMissionScreens  (ptr cfg+0x138, count cfg+0x140; {StartMissionOrObjective, EndMissionOrObjective, SkipLoadScreen +0x28, WantsDoppelganger +0x29, Screen}):
+    if the mission window matches (mission system exe+7c3ef70) -> override = e;  if e.SkipLoadScreen -> return
+for e in cfg.LightingModeTransitionScreens (ptr cfg+0x128, count cfg+0x130, 0x48 bytes each; {StartingLightingModes[], EndingLightingModes[], SkipLoadScreen +0x28, WantsDoppelganger +0x29, Screen}):
+    if from in e.Starting and to in e.Ending -> candidate (random pick among matches);   if picked.SkipLoadScreen -> return
+this[+0x28] = 2 (kLightingTransition); this[+0x4d] = WantsDoppelganger
+if (this[+0x2c]) exe+713b90(this, 0)                       // sends FastTravelNoVignetteEvent, touches the atmosphere manager and the zone manager
+exe+713720(this, 0.0)                                      // "Dynamic Load Screen PreWarpFadeOut": the fade, the icon, the warp-style freeze
+```
+
+So the loading icon, the fade, the frozen hero and (through the fast-travel-style "no vignette" path, which the crime and mission systems treat as a
+world transition [I]) the ended crime all come from **this one handler**, and the game already has a rule for seamless changes: **`SkipLoadScreen`**.
+
+**Recipes for a seamless switch [I: built from the code above, not run]**, cheapest first:
+
+1. **Hook `exe+710970` and return at once while our own switch is in flight** (exactly what the function does itself for a `SkipLoadScreen` entry). No
+   instance pointer is needed.
+2. **Patch the parsed config in memory**: `cfg = [DynamicLoadScreenSystem + 0x228]`; for each of the `[cfg+0x130]` entries at `[cfg+0x128] + i*0x48` set byte `+0x28` to 1.
+   A pair with no entry at all still gets the load screen, so the hook is safer.
+3. **Data-only**: ship an edited `configs/system/system_DynamicLoadScreen.config` (`LightingModeTransitionScreens[*].SkipLoadScreen = true`) as a `.stage`.
+
+Unknown until tried: whether the levellight/zone swap pops in visibly without the fade (the game uses skip for scripted moments, so it must be acceptable for
+some pairs), and whether the vehicle and parked-car re-key (headlights) still hitches. The hang of Part 5 (setter called 3 s after a load) is consistent
+with a second load screen requested while `kInitialLoad` was still up [I]: with the hook that request never happens.
+
+*Live check:* `sky <mode>` with the hook on while swinging and during a crime; watch for `DynamicLoadScreen*Event`s (none expected) and `LightingModeTransitionFinishedEvent`.
+
+## Part 19. The atmosphere asset, fully named (`AtmosphereDef`), and how it maps into the 0x8c0 slot (MSK-A2, A1, A6, A7, A8, A10, A11, B6)
+
+**The schema [V]**: the exe holds the reflection descriptor of the authoring struct `AtmosphereDef` (0xea8 bytes, descriptor `exe+6a98aa0`): **299 named
+fields**. Print it with `python tools/sigtools/fx.py ddlflat AtmosphereDef`. Groups, in order: `SkySettings` (SkyObjectsScale, SkyObjects[], SkyBoxCubeMap),
+`AssetSwap`, **`EnvLighting`** (KeyLightColor, KeyLightIntensity, KeyLightAzimuth, KeyLightElevation, **SunDiskOffsetAzimuth, SunDiskOffsetElevation**,
+ShadowDrawDist, CsmLodCount, ImpostorCaching, TimeOfDay, **SunDiameter**, FillLightCubeMap, LightGridIntensity, LightGridSkyMultiplier, LightGridAORadius,
+LightGridModConfig, KeylightMaterial, KeylightMaterialScale, CasterRangeLower, CasterRangeUpper, VFXLightMultiplier, **AmbientFillColor, AmbientFillIntensity**),
+`ToneMapSettings` (LuminanceKeyValue, ExposureBias, AdaptationStrength/Stops/Anchor/Range/Bias, AutoAdjustTime), `BloomSettings` (Intensity, Threshold,
+GaussianStrength0-4, BloomDirtiness(+Asset), LensFlare*: LumMin/Max/Intensity, Ghosts, FallOff, Intensity, Distortion, HaloRadius, HaloIntensity, GhostDispersal),
+`ColorCorrectionSettings` (**SourcePath**: the colour-grade lookup), `VignetteSettings` (Intensity, CenterClear), `ChromaticAbSettings`, **`FogSettings`**
+(ColorMapAsset, ColorMapDepthRange/Scale, Color, LuminanceScale, KeyLightInfluence, NearRadius, Height0..4 with Opacity0..4, RemapStrength, RemapKeyOpacity),
+**`VolumetricFogSettings`** (Color, Opacity, BottomHeight, TopHeight, NearDistance, FarDistance, SunLightScale, LightsScale, GIScale, NoiseVSpeed, NoiseSpeed, NoiseScale),
+`MotionBlurSettings`, `DepthOfFieldSettings`, `FilmGrainSettings`, `ScatteringSettings` (RayleighDensity, MieDensity, MieAlbedo), `LightShaftsSettings`
+(Range, Weight, ConeAngle, SortDistance, Color), `ClipSettings`, `ProjectCustomData` (ValueA..D), `AOSettings` (..., SunlightFactor, LocalLightFactor,
+AmbientShadowDrawDist, AmbientShadowIntensity), `AASettings`, `SSRSettings`, **`Weather`** (WeatherConstant; `WetSurfaces`: Porosity/Streak/Splash textures, **Wetness**,
+GlossLimit, VFXSplashRange, VFXSplashRate; **`Particles`**: Texture, NearFadeDistance, MaxDrawDistance, WindInfluence, Turbulence, **Density, Speed, Size, Alpha**, Color,
+ExposureDuration, MotionStretchMax(+Far), RainBloomInfluence; **`Wind`**: Intensity, Azimuth, gust Intensity/Frequency/Duration min-max), `Ocean` (ReflectionMap, Foam*,
+WaveAmplitude, ChopScale, WindSpeed, TimeScale, Darkening, Depth, Color), **`VolumetricClouds`** (ray marching; modeling: CloudsLayerStart, LayerThickness, CloudSize,
+CloudDensity, CloudCoverageModifier, CloudTypeModifier, WeatherMap...; wind: WindAzimuth, WindIntensity, rotation; lighting: CustomColor, Contrast, Precipitation,
+SilverIntensity, CloudBrightness, FogBlendFactor, BackgroundBlendCubemap; shadow: EnabledShadow ...).
+
+This answers several "does it exist" questions at once: **rain, wet streets and wind are atmosphere data** (`Weather.Particles`, `Weather.WetSurfaces.Wetness`, `Weather.Wind`:
+that is why atmosphere mods change the rain and why it cannot be told apart from the mode), there is a **procedural sun disk** with its own size and an offset from the key light
+(`SunDiameter`, `SunDiskOffsetAzimuth/Elevation`), the **colour grade is a file reference per atmosphere** (`ColorCorrectionSettings.SourcePath`), the fog is a **5-point
+height/opacity curve plus a separate volumetric (froxel) fog**, light shafts, SSR, AO and film grain are per atmosphere, the ocean look follows the atmosphere, and the
+atmosphere has an **`AmbientFill` colour and intensity**. `RainIntensityData` (`LightThreshold, MediumThreshold, HeavyThreshold, AsRainParticleAlpha, AsRainParticleSpeed,
+AsRainParticleSize, AsRainWetness`) is the table other systems use to classify the current rain as light/medium/heavy from those particle values [I from names].
+
+**The file [V]** (two assets read: `atm_2018_sunset`, `atm_bank_shocker`): a DAT1 with four sections: `0x02f06d4e` the compiled settings (**0x628 bytes**; the parser demands
+`kBuiltAtmosphereBaseVersion 219`, check `exe+1621af0(slot, data, 0x39f27e27, versionString)`), `0x72f28658` strings (texture paths), `0x71c168b4` (0x7ffec bytes,
+"Light Grid Atmosphere ... Gen"), `0xe7997256` (**0x224010 bytes: the baked IBL**). The size variants in the request (2,770,xxx versus 526,xxx bytes) are with and without the
+big sections [I].
+
+**The parser [V]**: `AtmosphereManager` vtable `exe+3cf1f18`; slot 0 `Init(this, capacity)` (slots = `this+0x110`, capacity `this+0x118`, 16 bytes of per-slot data at
+`this+0x120`), slot 20 `OnLoaded(this, slot, data)` -> **`exe+162cc00(slot, data)`** then `Recompute`, slot 22 `OnUnloaded` -> `exe+162d570(slot)`; `exe+162dc80(slot)` writes the
+"Default Atmosphere". `exe+162cc00` copies the compiled section into the slot in blocks (**slot = section + delta**):
+
+| section bytes | slot bytes | delta | content |
+|---|---|---|---|
+| `0x40..0x57`, `0x58..0x6f` | `0x288..0x29f`, `0x310..0x327` | | two asset references (24 bytes: u64 id, ...): sky box cube map and fill-light cube map [I which is which] |
+| `0x34`, `0x38`, `0x3c` (offsets of strings) | `0x2a0`, `0x328`, `0x2e8` (pointers) | | "Light Grid Atmosphere" name, "Atmosphere LightGridModConfig", "CloudCover" texture |
+| **`0x70..0xaf`** | **`0x2a8..0x2e7`** | 0x238 | **EnvLighting scalars** (table below) |
+| `0xb0..0xcf` | `0x2f0..0x30f` | 0x240 | EnvLighting, second part (**ambient fill**) |
+| `0xd0..0x127` | `0x340..0x397` | 0x270 | (zero in both samples; ends 0.8, 12) |
+| `0x128..0x21b` | `0x398..0x48b` | 0x270 | tone map / bloom / lens flare region (**exposure `slot+0x484` = section `+0x214`**) |
+| `0x220..0x417` | `0x490..0x687` | 0x270 (0x26c for `0x3a8..0x3b7`) | colour correction reference, vignette, chromatic aberration, **fog** (`slot+0x584..0x5c0`), volumetric fog, DoF, grain, scattering, shafts |
+| `0x418..0x627` | `0x6b0..0x8bf` | 0x298 | AO, AA, SSR, **weather (wet surfaces, particles, wind), ocean, volumetric clouds** (`slot+0x81c` = section `+0x584`) |
+| IBL section | `slot+0x650`, `+0x658`, `+0x660` (texture objects), `+0x668..0x677` | | see Part 20 |
+
+`slot+0x674` is preset to 1.0; `slot+0x70/0x74/0x78` are counts from section `+0x20/+0x24/+0x28`, `slot+0x30..` an array of sky-object handles.
+
+**EnvLighting in the slot** (field order checked against the values of both assets: 1,1,1,0.19 / 297.4 / 40.4 ... and 1,1,1,3 / 220 / 25 ...):
+
+| slot | field | sample (sunset / bank) | tag |
+|---|---|---|---|
+| `+0x2a8/2ac/2b0` | KeyLightColor RGB | 1,1,1 | [V] (matches Part 10) |
+| `+0x2b4` | KeyLightIntensity | 0.1875 / 3 | [V] |
+| `+0x2b8` | KeyLightAzimuth (degrees) | 297.4 / 220 | [V] |
+| `+0x2bc` | KeyLightElevation (degrees) | 40.4 / 25 | [V] |
+| `+0x2c0`, `+0x2c4` | **SunDiskOffsetAzimuth, SunDiskOffsetElevation** | 0, 0 | [I: declared order] |
+| `+0x2c8` | ShadowDrawDist | 90 / 100 | [I] |
+| `+0x2cc` | CsmLodCount (int) | 4 | [I] |
+| `+0x2d0` | TimeOfDay | 0.75 / 0.75 | [I] |
+| `+0x2d4` | **SunDiameter** | 0.5 / 1.0 | [I] |
+| `+0x2d8`, `+0x2dc`, `+0x2e0`, `+0x2e4` | KeylightMaterialScale?, CasterRangeLower, CasterRangeUpper, (int flag) | 100, -10, 400 / 40, 0 / 1 | [I: by value] |
+| `+0x2f0`, `+0x2f4`, `+0x2f8`, `+0x2fc` | LightGridIntensity, LightGridSkyMultiplier, LightGridAORadius, VFXLightMultiplier | 1, 1, 15, 1 | [I: by value] |
+| **`+0x300/304/308`** | **AmbientFillColor RGB** | 0.0003 x3 / 1,1,1 | [I, strong] |
+| **`+0x30c`** | **AmbientFillIntensity** | **0 / 0** | [I, strong] |
+
+**The ambient lead (MSK-A1):** Part 10 poked `slot+0x300` and saw nothing. `+0x300` is only the red channel of `AmbientFillColor`, and the **intensity at `+0x30c` is 0 in both
+vanilla atmospheres read**, so a colour change multiplies by zero. *Live check, first thing to try:* `holdf <slot>+0x30c 0.5` (then 1, 2, 5) with `+0x300..0x308` set to 1,1,1,
+`recompute`, and screenshot a shaded alley. If it works it is exactly the row asked for (a fill light independent of the sun). The other ambient knobs in the same block:
+`LightGridIntensity` (`+0x2f0`) and `LightGridSkyMultiplier` (`+0x2f4`) scale the baked GI (light grid) and its sky term; `AOSettings.AmbientShadowIntensity` is in the last block.
+
+**Fog in the slot** (values 400, 800, 1200, 2400 and 0.002, 0.001, 0.005, 0.001, 0.0001 in the sunset asset): `slot+0x584` Height0 (-500), **`+0x588..0x594` Height1..4**
+(Part 10's "fog distance" is the *height* of the curve points), **`+0x598..0x5a8` Opacity0..4** (the "density"), `+0x5ac` RemapStrength [I], `+0x5b0` RemapKeyOpacity [I],
+`+0x5b4/5b8/5bc` Color [V matches Part 10], `+0x5c0` = LuminanceScale or KeyLightInfluence (the "haze", sun in-scatter) [I]. The volumetric fog block follows.
+
+The remaining blocks are not labelled field by field: the compiled order is **not** the declared order (exposure sits at section `+0x214`, after a bloom-like block),
+and the tool that compiles a `Def` into the 0x628 block is not in the retail exe (searched for a converter by the Def offsets: none). Fastest way to finish the map: the
+`fieldprobe` with the named candidates of each block (the names say which values are safe: `Enabled` flags are ints, texture references are pointers). **The probe crash near
+`+0x320` was the fill-light cube map reference at `+0x310..0x327` and the string pointer at `+0x328`: never write `+0x288..0x2a7`, `+0x2e8`, `+0x310..0x33f`, `+0x650..0x667`.**
+`recon/atm_parser_map.txt` (local) lists every copy the parser makes.
+
+## Part 20. The baked lighting of an atmosphere, and runtime textures (MSK-A11, G1; FOF-B3)
+
+[V] Section `0xe7997256` (0x224010 bytes) is three raw **RGBA16F** images plus 16 bytes, turned into textures by the parser (only when `byte [exe+7a89150]` is set):
+
+| blob offset | size | created with | slot |
+|---|---|---|---|
+| `+0x000000` | 0x20000 = 128 x 128 x 8 bytes | `exe+19b1500(TextureManager exe+621b1a0, 128, 128, fmt 0xa, name, pixels, 0)` | `+0x650` |
+| `+0x020000` | 0x200000 = 128 x 128 x 16 x 8 | `exe+19b1280(mgr, 128, 128, 16, fmt 0xa, name, pixels, 0)` ("Runtime Texture (3D)") | `+0x658` |
+| `+0x220000` | 0x4000 = 128 x 16 x 8 | `exe+19b1500(mgr, 128, 16, fmt 0xa, name, pixels, 0)` | `+0x660` |
+| `+0x224000` | 16 bytes (4 floats) | copied | **`+0x668..0x677`: Part 13's "colour filter" is the tail of the IBL blob** |
+
+What each image is (irradiance, prefiltered specular, sky-view lookup) is [?]; the names are formatted as "`<asset name> Gen <n>`". Two consequences: (1) **the engine can make a
+texture from memory** (`exe+19b1500`: width, height, format, name, pixel pointer), which is the route for a sky or an icon without the toc (MSK-G1, Friend or Foe FOF-B3); using
+such a texture object as the *sky box* still needs the `SkyBoxCubeMap` reference path (`slot+0x288`, resolver `exe+1631d80`) [?]. (2) Custom ambient = rewrite these three images
+(same sizes) in a loose atmosphere; no light probes need recapturing.
+
+## Part 21. Cross-fades exist in the engine: `AtmosphereBlender` and `ActivateAtmosphereAction` (MSK-A5, A12, B4)
+
+- [V] Component **`AtmosphereBlender`** (`AtmosphereBlenderPrius`: `StartActive`, `SourceAtmosphere`, `DestinationAtmosphere`, **`BlendFieldCompletePercent`**, `ForceSourceAtmosphere`):
+  the game's own two-atmosphere blend driven by a 0..1 value. Type object and methods: `recon/component_types_4.0630.txt` (`AtmosphereBlender`); not disassembled yet [?].
+- [V] Node `ActivateAtmosphereAction` (`Atmosphere` file, `DisableOnDestroy`), execute `exe+204fb10`, calls `AtmosphereAdjust` (`exe+204fc81`, `exe+204ff6d`).
+- [V] Cinematics have atmosphere tracks: `Cinematic2AtmosphereTrackDef`, `Cinematic2GlobalAtmosphereTrackDef`, `Cinematic2AtmosphereModifierTrackDef`, `Cinematic2AtmosphereActionDef`.
+- [V] `AtmosphereSyncComponent` (type `exe+745f760`) is read by `Recompute` (`exe+162ff10`): the weights are synced state too.
+- **All 26 callers of `AtmosphereAdjust` (`exe+162f020`)** [V]: fast travel / load screen (`exe+712aac`, `712bd6`, `713c5c`, `7140d1`, `714435`, `7154dd`, `715b5f` in fns
+  `7129c0`, `713b90`, `713ea0`, `714400`, `715460`, `7156c0`), menus and 3D UI object viewers (`813526`, `81661a` `GUI::UIObjectDisplayer`, `816676`, `81a6c8`, `81c39b`, `81e183`,
+  `81e67e`, `821950`, `822ebf`: the map/suit/gadget screens' +1000), engine (`16605a5`, `166216a`, `1669aec`, `166b050`), the lighting object (`1a16d87`, `1a17bf0`, `1a19ed3`,
+  `1a1b599`: the base-atmosphere switch already known), `ActivateAtmosphereAction` (`204fc81`, `204ff6d`).
+
+No continuous clock was found in the reflection data: `EnvLighting.TimeOfDay` is a per-atmosphere constant (0.75 in both samples) [V]; the "time of day" of the world is the
+discrete mode. A continuous cycle therefore means blending atmospheres (the blender above) and steering `KeyLightAzimuth/Elevation`, as the mod already does.
+
+## Part 22. Nodes and conditions that set or read the lighting (MSK-C6, A12)
+
+[V] `SetLightingModeAction` (execute `exe+bd8640`, calls the setter), `GetLightingModeAction`, `OnLightingModeChangedAction` (`StartActive`, `TriggerOnRegionLoad`, `MaxTimesToFire`),
+`MissionLightingHelperAction`, `SetBypassDistantLightingAction`, `LightingModeOverlayTrigger` (overlay entries keyed by the mode: Streets Part 9), `PedestrianLoadConditionWeather`,
+`PedestrianRainToggleEvent`, `RainDropEvent`, `AtmosphereChangeFullscreenEvent`, `UIWeatherStationAction` + `WeatherStationAccept/DeclineEvent` (an in-game weather station prompt).
+To keep the player's time of day inside a mission, hook `SetLightingModeAction`'s execute (`exe+bd8640`) rather than the setter (the load-time apply and the menu keep working).
+
+## Part 23. The toc object without a scan, by-id reads, and evicting a texture (MSK-B2, B3, B7; shared with Streets MST-A1/A2)
+
+[V, read from the exe, not run] The game's file system object is the global `q[exe+74a6a00]` (`FileSystem::ArchiveFileSystem`, vtable `exe+3cf9920`): **the toc object is at
+`fs+0x18`**, the toc DAT1 buffer pointer at `fs+0x10`, the 8-byte location table every read uses at `q[fs+0x40]` (= toc object `+0x28`, section `0xdcd720b5`: low dword archive
+index, high dword offset), the per-archive open table at `q[fs+0x68]`, capacity 0x200 archives. Reads are requested **by asset id and kind** (`exe+16d83e0(request, assetId, kind)`
+-> `fs->vtable[+0x28]` = `exe+16da4c0`) and the location is looked up in the toc at that moment (`exe+16d7990(toc, id, languageGroup, kind)`), so nothing holds stale entry
+pointers across requests: repointing the tables is safe between requests, and `toclocate` can be replaced by reading `q[exe+74a6a00]`.
+Texture pixel streams: `TextureStream` static `exe+621b4e0`; `exe+19b5e70(stream, record, 0)` evicts one texture's high mips and `exe+19b5d70(stream, record, 0)` requests them;
+records are 0xc0 bytes at `q[exe+621b2b0]`. The stream is read into a mapped staging buffer (`exe+19b7f30`) and copied later by `exe+19b5a20`, which is a place to substitute
+pixels with no archive at all. Details, the field table and the caveats are in `ManhattanStreets/docs/RECON.md` Part 33 (local); the same text is summarised in
+`docs/GAME_INTERNALS.md`.
+
+## Part 24. The Settings-screen crash at `exe+31e9582`: what the faulting code is (MSK-D1, partial: not root-caused)
+
+[V from the three dumps with `tools/sigtools/dumpctx.py`, and from the disassembly] The dumps' own exception context (the old tool printed the handler's) gives:
+`Rip = exe+31e9582`, read of `0x90`, `Rax = 0`, `R15 = 0x90`, `Rsi` = the object passed in, `Rbp = 1`, `R14 = 0`. Corrected chain (the `exe+31f9422` entry of the old
+stack is a stale slot, not a caller): `31e9582` <- **`32c2745`** <- `32c0db6` / `32261e9` (the ActionScript VM, recursing) <- `3224a31` <- `3224d14` <- `3411ee7` <- `34d5d1d`
+<- `34d8a04` <- `34f511c` <- `1d294d3` (the movie's per-frame advance).
+
+- `exe+31e9540(asObject, index, count)` removes `count` entries starting at `index` from an array kept in the object's **side record** (`exe+31c5070(asObject, 0x200)` finds
+  the record through the 4 KiB page header and the 56-byte cell table; the array is at `record+0x90`), clearing each entry's back pointer (`+0x20`) and dropping its reference.
+  It crashed because the side record was **null**: the cell of `asObject` is free.
+- Its caller `exe+32c2550(displayList, container, index)` is the **display-list child removal** of a `DisplayObjectContainer`: `asObject = container->vtable[+0x228]()` is the
+  container's ActionScript instance, and the call at `32c2740` is "remove 1 child reference at index `d[entry+8] + 1`" from that instance.
+
+So the event is: **during a frame advance, script code removed a child from a container whose ActionScript instance had already been freed** (the native display object was still
+in the display list). It is a use-after-free of a *container's* script object, not of an array of ours. That fits "2 to 7 s after leaving the tab": a timeline or transition
+animation that outlives the screen runs `removeChild` on a clip whose script object lost its last reference early.
+
+What can drop that reference early [I, ranked]:
+
+1. **A call the game's Flash expects and never gets.** `ModMenu` swallows `CloseMenu`, `FadeOut` and `FadeIn` in `InvokeHook` for a few seconds around a lighting change. If the
+   native side has already released its reference to the options clip (it believes the menu is closing) while the clip stays on the timeline because `CloseMenu` never
+   ran, the next transition removes children of a clip whose instance is gone. The crashes follow sessions with many row changes, i.e. many swallowed calls.
+2. **An unbalanced release of a value that references a display object.** `ReleaseValue` calls `ObjectInterface::ObjectRelease` (vtable slot 2) on the tab value after `PushBack`:
+   that is correct for a value *we created* (`g_build_tab` output). It would be one release too many for any value that was *borrowed* (an argument of a hooked `Invoke` or of
+   the callback): check that no code path releases `args[i]`.
+3. The rebuild itself (`OpenOptions` re-entered from inside a Flash callback while the previous build's clips are mid-transition).
+
+Next steps that would settle it [not done]: log every swallowed `Invoke` name with a counter and compare with crash sessions; stop swallowing `CloseMenu` (let the menu close
+and reopen it) for one play session; in the fault handler, also dump `Rsi` (the freed instance), the container (`[rsp+0x70]` in the frame of `exe+32c2550`) and its word at
+`+0x6a` (display-object flags) so the clip can be identified by its class name.
+
+## Part 25. Offline checks of Fable's maps, and what was built from them (2026-11-19)
+
+**Offline slot-map check [V, tools/atmslot.py]**: the compiled settings block (DAT1 section `0x02f06d4e`, 0x628 bytes) of any vanilla atmosphere can be read from `toc.BAK` and mapped to slot offsets with Part 19's delta table.
+`python tools/atmslot.py <path suffix> [...] [--diff]` prints each word as hex and float. Checks against known values: the **haze** (`slot+0x5c0`) of `atm_ibl_lgt_night_rain_02` is 0.15 against 0.05 in
+`night_02` (matches the rain look), **exposure** `+0x484` -1 / -0.5, the key light `+0x2b4..0x2bc` (0.015, 234, 70 in the rain night), the fog table `+0x58c..0x5a8` and the fog colour `+0x5b4..0x5b8`. The mapping holds.
+- **Ambient fill [V]**: `+0x30c` (AmbientFillIntensity) is **0 in `night_02` and 0.003 in `night_rain_02`**; the fill color `+0x300..0x308` does not differ between them. So the scale of real values is 0.001-0.01.
+  (Part 19 found 0 in two other atmospheres.) The AMBIENT LIGHT row writes `+0x300..0x30c` (color white unless AMBIENT COLOR is set, intensity 0.001 .. 0.06) and restores the sky's own values when set back to AUTO.
+- **Rain is not in the compiled Weather block [V negative]**: the NYC Rainy Day and MM Heavy Snow mods change the key light, fog heights/opacities, haze, exposure, bloom/tone values and the clouds switch, but **nothing in `slot+0x6b0..0x8bf`
+  except two words at `+0x780/+0x784` (hash-like in vanilla, 0 in the mod) and `+0x81c`**; `night_rain_02` differs from `night_02` in the same way (no weather-block change). The fields Part 19 names (`Weather.Particles`, `Wetness`) are not what makes
+  rain, or live outside the 0x628 block. Rain stays tied to the lighting mode (names `kNightRain`, `kOvercastRain`); a WEATHER row needs the rain-mode path found in the setter's reaction, not atmosphere values.
+
+**Built from Fable's Parts (all untested in game; each is off or AUTO by default)**:
+1. **SWITCH STYLE (seamless)**, `mod/src/seamless.cpp`: hooks `exe+710970` (`DynamicLoadScreenSystem::OnLightingTransitionStarted`, bytes `40 53 48 83 ec 70 80 79 18 00` verified against the exe) and returns at once for a
+   transition this mod started (`recorder::ApplyMode` arms it for 5 s before calling the setter): Part 18 recipe 1. Row SWITCH STYLE: GAME'S / SEAMLESS; ini `[sky] seamless`; dev command `seamless [0|1]`. The log says
+   `seamless: skipped the load screen of a lighting transition A -> B` per use. **What to watch**: does the hero keep moving, does a crime survive, does the world pop (levellight/zone swap), do the parked cars/traffic hitch.
+2. **AMBIENT LIGHT / AMBIENT COLOR** rows (above).
+3. **`no_swallow.txt`** (in `Documents\...\ManhattanSkies`): the host does not swallow `CloseMenu`, `FadeOut`, `FadeIn` for that session; the test of Part 24's first-ranked cause of the Settings crash. The fault handler also dumps 32 qwords of stack (the container
+   of `exe+32c2550` is at `[rsp+0x70]` in that frame).
+4. **`fsinfo`** dev command: prints the file system object `q[exe+74a6a00]`, the toc object at `fs+0x18`, the DAT1 pointer, the location and open tables, and compares them with the heap-scan result, to settle which toc object layout is right
+   (Part 23's toc-object offsets differ from the ones our grow code uses: `+0x10 ids, +0x28 sizes, +0x30 offsets, +0x48 count`) and whether new archive entries (open table capacity 0x200, about 210 used) can be added without any Overstrike archive.
