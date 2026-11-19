@@ -174,6 +174,7 @@ namespace stats {
         memory::Read((uintptr_t)self + 0x88, before);
         bool from_hero = msg && memory::Read((uintptr_t)msg + 0x138, attacker) && attacker && attacker == g_hero;
         float mult = from_hero ? boons::OutgoingMult() : 1.0f;
+        if (from_hero) { uint32_t type = 0; memory::Read((uintptr_t)msg + 0x13c, type); mult *= boons::MeleeBonus(type); }   // DamageRequest.Type
         if (std::fabs(mult - 1.0f) > 0.01f && memory::Read((uintptr_t)msg + 0x144, amount))
             memory::Write<float>((uintptr_t)msg + 0x144, amount * mult);
         bool r = g_bot_orig(self, msg);

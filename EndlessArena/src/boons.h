@@ -28,6 +28,7 @@ namespace boons {
     void AdjustWave(plan::WavePlan& p, int horde_max);   // curses' enemy-side effects (counts, mix, elites)
 
     float OutgoingMult();         // damage the hero deals
+    float MeleeBonus(uint32_t damage_type);   // Street Brawler: x2.75 for a hero melee hit (the stats hook passes DamageRequest.Type)
     float IncomingMult();         // damage the hero takes
     float IncomingHitMult(float hp, float max_hp);   // per hit (stats hook): adds Spider-Sense Tingle, Black Suit reset, Under the Machinery
     void Debug(const std::string& args);   // `dbg ...` dev command: give boons/curses/powers/mods, offers, Focus, heal; see boons.cpp

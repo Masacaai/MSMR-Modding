@@ -40,6 +40,7 @@ namespace natives {
         ProxClearTiers,     // (sys)
         ProxPushTier,       // (sys, u32 tier): up to 2 tier overrides
         HealthSet,          // Health::SetHealth(health component*, float value): clamps to [0, max], stores at +0x88
+        HealthKill,         // Health::Kill(health component*, int damage type; 6 = kScript): a force-kill DamageRequest through the normal death pipeline (docs/RECON.md section 10)
         // Damage pipeline (as used by melee at exe+69be20): msg = DmgCreate(&DmgSys, &target_handle, &pos, &vec,
         // &dir, -1) -> fill msg fields (+0x138 attacker handle, ...) -> DmgCommit(&DmgSys) dispatches the newest record.
         DmgSys,             // .data damage system

@@ -148,6 +148,8 @@ namespace settings {
                  { "2", "3", "4" }, { 2, 3, 4 }, 1);
             Switch("boon_powers", "SUIT POWERS AS REWARDS", "Your first reward is a suit power, and bosses offer another.", true);
             Switch("boss_power", "POWER PICK AFTER BOSSES", "A boss wave offers a new suit power to swap in.", true);
+            Switch("ignore_focus", "INPUT: IGNORE WINDOW FOCUS", "Steam Deck / Linux fix: accept button presses even when the game window does not report being in front. Leave off on Windows.", false);
+            Switch("boss_realkill", "REAL BOSS KILL (BETA)", "Finish bosses with the game's own kill instead of zeroing health. Experimental.", false);
             Switch("boon_mods", "SUIT MODS AS REWARDS", "Rewards can be suit mods.", true);
             Switch("stat_power", "BOON: HEAVY HITTER", "+20% damage dealt per stack.", true);
             Switch("stat_tough", "BOON: REINFORCED SUIT", "-15% damage taken per stack.", true);

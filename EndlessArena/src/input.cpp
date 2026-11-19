@@ -1,6 +1,8 @@
 #include "input.h"
 
+#include "log.h"
 #include "psinput.h"
+#include "settings.h"
 
 #include <Windows.h>
 #include <atomic>
@@ -24,11 +26,27 @@ namespace input {
         return false;
     }
 
+    // Every read below is gated on the game being the foreground window. A Steam Deck player reports the Interact press does nothing
+    // (2026-11); under Proton and gamescope the foreground window may not belong to the game process. Two aids, both untested on a Deck:
+    // the setting "INPUT: IGNORE WINDOW FOCUS" (off by default) skips the gate, and a few log lines say what the gate saw when it said no.
     static bool Focused() {
+        if (settings::On("ignore_focus")) return true;
         HWND w = GetForegroundWindow();
         DWORD pid = 0;
         GetWindowThreadProcessId(w, &pid);
-        return pid == GetCurrentProcessId();
+        const bool ok = pid == GetCurrentProcessId();
+        if (!ok) {
+            static int shown = 0;
+            static DWORD last = 0;
+            DWORD now = GetTickCount();
+            if (shown < 4 && now - last > 20000) {
+                last = now;
+                shown++;
+                LOG("input: the game is not the foreground window (foreground hwnd %p belongs to pid %lu, we are %lu); input is ignored. "
+                    "If the game does have focus, turn on the setting INPUT: IGNORE WINDOW FOCUS.", (void*)w, (unsigned long)pid, (unsigned long)GetCurrentProcessId());
+            }
+        }
+        return ok;
     }
 
     void Update() {

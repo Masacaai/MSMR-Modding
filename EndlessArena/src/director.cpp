@@ -354,6 +354,20 @@ namespace director {
         return true;
     }
 
+    // Finishing a boss. The old way writes 0 health (verified on Taskmaster, Sable, Hammerhead); the recon (docs/RECON.md section 10) says the real
+    // death is Health::Kill (a force-kill DamageRequest: death state, animation or ragdoll, DeathEvent), so [boss] "REAL KILL" (default off, untested)
+    // calls that instead, which should also end the frozen-pose bodies. Game thread.
+    static void FinishBoss(uintptr_t e) {
+        uintptr_t hc = entity::HealthComponent(e);
+        if (!hc) return;
+        using KillFn = void (*)(uintptr_t, int);
+        using SetFn = void (*)(uintptr_t, float);
+        if (settings::Value("boss_realkill", 0)) {
+            if (auto kill = (KillFn)natives::Get(natives::HealthKill)) { kill(hc, 6); LOG("director: boss killed through Health::Kill"); return; }
+        }
+        if (auto set = (SetFn)natives::Get(natives::HealthSet)) set(hc, 0.0f);
+    }
+
     // Test option `god`: refill HeroHealth (as the stress test does).
     static void TopUpHero() {
         gamethread::Post([] {
@@ -533,11 +547,7 @@ namespace director {
                 if (g_plan.sinister && en.boss && readable && hp > 0.0f && en.last_change && now - en.spawn_time > 120000 &&
                     now - en.last_change > 480000 && now - en.floor_since > 0 && en.floor_since < now) {
                     uintptr_t e = en.entity;
-                    gamethread::Post([e] {
-                        using SetFn = void (*)(uintptr_t, float);
-                        auto set = (SetFn)natives::Get(natives::HealthSet);
-                        if (uintptr_t hc = entity::HealthComponent(e); hc && set) set(hc, 0.0f);
-                    });
+                    gamethread::Post([e] { FinishBoss(e); });
                     LOG("director: %s finished after 8 minutes without losing health (sinister finale)", en.boss->name);
                     en.last_change = now + 3600000;   // once
                 }
@@ -550,11 +560,7 @@ namespace director {
                         if (!en.floor_since) en.floor_since = now;
                         else if (now - en.floor_since > 1000 && now - en.floor_since < 60000) {
                             uintptr_t e = en.entity;
-                            gamethread::Post([e] {
-                                using SetFn = void (*)(uintptr_t, float);
-                                auto set = (SetFn)natives::Get(natives::HealthSet);
-                                if (uintptr_t hc = entity::HealthComponent(e); hc && set) set(hc, 0.0f);
-                            });
+                            gamethread::Post([e] { FinishBoss(e); });
                             LOG("director: finisher on %s at %.0f/%.0f (gate %.0f)", en.boss->name, hp, max_hp, gate_hp);
                             en.floor_since = now - 120000;   // once
                         }

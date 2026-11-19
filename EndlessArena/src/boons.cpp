@@ -52,8 +52,9 @@ namespace boons {
     };
 
     // ---- bittersweet curses (user: always an upside AND a downside; downsides never add enemy health) ----
-    enum class Curse { GlassCannon, RiotCall, OpenSeason, BloodPrice, ParkerLuck, RentIsDue, CloneSaga, OnePunch, DrySpell };
-    struct CurseDef { Curse curse; const char* name; const char* up; const char* down; };
+    enum class Curse { GlassCannon, RiotCall, OpenSeason, BloodPrice, ParkerLuck, RentIsDue, CloneSaga, OnePunch, DrySpell, WebFluid, StreetBrawler };
+    // wip: built from the 2026-11-15 recon but never played; only offered when [boons] wip_curses is on (`dbg curse <name>` always works).
+    struct CurseDef { Curse curse; const char* name; const char* up; const char* down; bool wip = false; };
     static const CurseDef kCurses[] = {
         { Curse::GlassCannon, "Glass Cannon", "+40% damage dealt", "+30% damage taken" },
         { Curse::RiotCall, "Riot Call", "4 choices on every reward", "waves bring 40% more enemies" },
@@ -64,6 +65,8 @@ namespace boons {
         { Curse::CloneSaga, "Clone Saga", "an extra reward after every wave", "every boss wave brings a second copy of its boss" },
         { Curse::DrySpell, "Dry Spell", "+25% damage dealt", "Focus builds 40% slower" },
         { Curse::OnePunch, "One-Punch Spider", "everything goes down in one hit, bosses too", "so do you (damage x20 both ways)" },
+        { Curse::WebFluid, "Out of Web Fluid", "Focus builds 50% faster", "no web shooter, web gadgets, swinging or zipping for the rest of the run", true },
+        { Curse::StreetBrawler, "Street Brawler", "melee hits deal +175% damage", "your health drains while you are airborne", true },
     };
 
     // ---- state ----
@@ -108,7 +111,7 @@ namespace boons {
     void SetPlayerSettings(bool on, bool horde) { g_ps = on; g_pfx.clear(); (void)horde; }
     static int SP(const char* key, int def) { return g_ps ? settings::Value(g_pfx + key, def) : def; }
     static const char* const kStatKeys[] = { "stat_power", "stat_tough", "stat_vamp", "stat_second", "stat_sense", "stat_machinery", "stat_blacksuit", "stat_wheat", "stat_burn", "stat_tank" };
-    static const char* const kCurseKeys[] = { "curse_glass", "curse_riot", "curse_open", "curse_blood", "curse_parker", "curse_rent", "curse_clone", "curse_dry", "curse_punch" };
+    static const char* const kCurseKeys[] = { "curse_glass", "curse_riot", "curse_open", "curse_blood", "curse_parker", "curse_rent", "curse_clone", "curse_dry", "curse_punch", "curse_webless", "curse_brawler" };
     static float CurseStrength() { return S("curse_strength", 100) / 100.0f; }
     static int RewardChoices() { return S("reward_choices", 3); }
 
@@ -324,7 +327,7 @@ namespace boons {
         std::vector<Option> fresh;
         if (g_wave >= 2 && S("boon_gadgets", 1))
             for (const auto& g : kGadgets)
-                if (!gadgets::Owned(g.id)) fresh.push_back({ Kind::Gadget, g.id, 0, std::string("Gadget: ") + g.name + " (" + g.desc + ")" });
+                if (!gadgets::Owned(g.id) && !(HasCurse(Curse::WebFluid) && gadgets::IsWebGadget(g.id))) fresh.push_back({ Kind::Gadget, g.id, 0, std::string("Gadget: ") + g.name + " (" + g.desc + ")" });
         std::shuffle(fresh.begin(), fresh.end(), g_rng);
         bool force_gadget = !fresh.empty() && g_wave >= 3 && OwnedGadgets() == 0;
         if (!fresh.empty() && !force_gadget) pool.push_back(fresh.front());
@@ -365,7 +368,7 @@ namespace boons {
         o.curse = true;
         std::vector<int> pool;
         for (int i = 0; i < (int)std::size(kCurses); i++)
-            if (!HasCurse(kCurses[i].curse) && S(kCurseKeys[i], 1)) pool.push_back(i);
+            if (!HasCurse(kCurses[i].curse) && S(kCurseKeys[i], 1) && (!kCurses[i].wip || S("wip_curses", 0))) pool.push_back(i);
         std::shuffle(pool.begin(), pool.end(), g_rng);
         for (int i = 0; i < (int)pool.size() && i < S("curse_choices", 2); i++) {
             const CurseDef& c = kCurses[pool[i]];
@@ -419,6 +422,7 @@ namespace boons {
     static float FocusRate() {
         float r = 1.0f + 0.30f * g_stacks[(int)Stat::SlowBurn];
         if (HasCurse(Curse::DrySpell)) r *= 0.60f;
+        if (HasCurse(Curse::WebFluid)) r *= 1.5f;
         return r;
     }
     static void FocusTick() {
@@ -577,11 +581,68 @@ namespace boons {
 
     void Debug(const std::string& args) { std::thread([args] { DebugRun(args); }).detach(); }
 
+    // ---- the two curses that need engine levers (docs/RECON.md sections 1, 3, 8; never run in game) ----
+
+    // Out of Web Fluid: timed locks on HeroAbilityLock (Lock(this, ability, layer, seconds) = vtable +0x50; with seconds > 0 the lock expires
+    // by itself, so nothing needs undoing after a crash, a death or the run's end). Re-armed every 500 ms for 1.2 s.
+    // Locked: kWebSwing 24, kWebZip 21, kWebSnap 22, kZipJump 25, kPointLaunch 28, kZipToSurface 35, and kShoot 15 *only while the hero holds
+    // the Web Shooter* (kShoot gates every gadget shot, so it must stay open while a non-web gadget is in hand).
+    static void WebLockTick() {
+        gamethread::Post([] {
+            auto get_actor = (uintptr_t(*)(void*))natives::Get(natives::GetActor);
+            uintptr_t system = scan::FromRva(natives::kHeroSystemRva);
+            uint32_t handle = 0;
+            if (!get_actor || !memory::Read(system + 0x1C, handle) || !handle) return;
+            uintptr_t actor = get_actor(&handle);
+            uintptr_t lock = actor ? entity::FindComponent(actor, "HeroAbilityLock") : 0;
+            uintptr_t vt = 0, fn = 0;
+            if (!lock || !memory::Read(lock, vt) || vt != scan::FromRva(0x38AA530) || !memory::Read(vt + 0x50, fn) || !fn) return;
+            const uint32_t held = gadgets::Held();
+            auto lockit = (void (*)(uintptr_t, int, int, float))fn;
+            static const int kAbilities[] = { 24, 21, 22, 25, 28, 35 };
+            for (int a : kAbilities) lockit(lock, a, 0, 1.2f);
+            if (held == 0 || held == 0x9C89) lockit(lock, 15, 0, 1.2f);
+        });
+    }
+
+    // Street Brawler: "airborne" = HeroMacroState flag kInAir (0x4) and not kNearGround (0x8), kBeam (0x200) or kPerch (0x400): a cheap read of
+    // a component that is rebuilt every frame (component vtable exe+38aaf00, flags at +0x4c).
+    static bool HeroAirborne() {   // game thread
+        auto get_actor = (uintptr_t(*)(void*))natives::Get(natives::GetActor);
+        uintptr_t system = scan::FromRva(natives::kHeroSystemRva);
+        uint32_t handle = 0;
+        if (!get_actor || !memory::Read(system + 0x1C, handle) || !handle) return false;
+        uintptr_t actor = get_actor(&handle);
+        uintptr_t c = actor ? entity::FindComponent(actor, "HeroMacroState") : 0;
+        uintptr_t vt = 0;
+        uint32_t flags = 0;
+        if (!c || !memory::Read(c, vt) || vt != scan::FromRva(0x38AAF00) || !memory::Read(c + 0x4c, flags)) return false;
+        return (flags & 0x4) && !(flags & (0x8 | 0x200 | 0x400));
+    }
+    // Every 250 ms: 1% of max health per tick while airborne (4% a second); never below 1 HP for now (a lethal drain needs Health::Kill).
+    static void BrawlTick() {
+        gamethread::Post([] {
+            static bool prev = false;
+            static int shown = 0;
+            const bool air = HeroAirborne();
+            if (air != prev && shown++ < 60) LOG("brawl: airborne %s", air ? "yes" : "no");   // to check the flag against what the player does
+            prev = air;
+            if (!air) return;
+            HealHero(-0.01f * CurseStrength());
+        });
+    }
+
+    float MeleeBonus(uint32_t damage_type) {   // stats hook: DamageRequest.Type (+0x13c), kMelee = 1, only for hits from the hero
+        return g_active && damage_type == 1 && HasCurse(Curse::StreetBrawler) ? 2.75f : 1.0f;
+    }
+
     void Update() {
         if (!g_active) return;
-        static DWORD last = 0, last_focus = 0;
+        static DWORD last = 0, last_focus = 0, last_web = 0, last_brawl = 0;
         DWORD now = GetTickCount();
         if (now - last_focus >= 50) { last_focus = now; FocusTick(); }
+        if (now - last_web >= 500 && HasCurse(Curse::WebFluid)) { last_web = now; WebLockTick(); }
+        if (now - last_brawl >= 250 && HasCurse(Curse::StreetBrawler)) { last_brawl = now; BrawlTick(); }
         if (!g_stacks[(int)Stat::Machinery] || now - last < 1000) return;
         last = now;
         HealHero(0.01f, 0.25f);
@@ -619,6 +680,7 @@ namespace boons {
             break;
         case Kind::Curse:
             g_curses.push_back(kCurses[op.index].curse);
+            if (kCurses[op.index].curse == Curse::WebFluid) gadgets::DenyWeb();
             what = std::string("Curse: ") + kCurses[op.index].name;
             break;
         case Kind::Gadget:

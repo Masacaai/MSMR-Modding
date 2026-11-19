@@ -1,3 +1,41 @@
+# Build of 2026-11-19 (built from Fable's static recon, docs/RECON.md): NOTHING in it has run in game
+
+Not installed anywhere yet; the beta (0.2.0 beta 1) is what is live. Everything below is a test for the first session with the game open. Start `hook`, then `gadget watch on`.
+
+## What changed
+1. **Gadgets rewritten (`gadgets.cpp`).** Two bugs found by reading the code against the recon: (a) the hook had four arguments but `exe+2162300` is `Equip(this, id, slot, force, sendEvent)`, so every
+   equip passed on a garbage fifth argument; (b) the hook stored `this` of *any* call as "the hero's manager", but the function is shared by every enemy's weapon manager (the `C350/C351` ids in old
+   logs are enemy guns). Our hide/equip calls therefore went to enemies' managers, freed when the enemy despawned: the execute-at-0 crashes. Now the hero's manager is resolved fresh (hero handle,
+   `GetActor`, `FindComponent`) and its vtable checked (`exe+38b59b8`, verified by RTTI name) on every use. Also: a slot holding a gadget about to be hidden is unequipped first (`Equip(0, slot)`), so
+   no slot ever holds an id missing from the table (the `exe+374237` null).
+2. **Dev commands:** `gadget slots` (manager, slot ids, whole table with the enabled byte and weapon actor handle), `gadget create <id>` (make the weapon actor: the cause of the red 0/0 state),
+   `gadget refresh` (force the wheel to rebuild its list: `exe+793320(wheel, true)`), `gadget equip <id> <slot>` (only when the table record and the weapon actor exist).
+3. **Two curses behind `[boons] wip_curses` (off; `dbg curse <name>` always works):** *Out of Web Fluid* (timed ability locks re-armed every 500 ms: swinging, zipping, point launch, web snap; the
+   shot ability only while the Web Shooter is in hand; the four web gadgets hidden and refused; Focus x1.5) and *Street Brawler* (hero melee x2.75 by `DamageRequest.Type == kMelee`; airborne drain of
+   1% of max health per 250 ms by the `HeroMacroState` kInAir flag; not lethal yet).
+4. **`Health::Kill`** native (`exe+1f16590`, unique signature) and the setting **REAL BOSS KILL (BETA)** (off): both boss finishers call it instead of writing health 0.
+5. **Steam Deck aid:** setting **INPUT: IGNORE WINDOW FOCUS** (off), and the log says once why input was ignored when the foreground window is not the game's.
+6. **`autosave on|off|status`** dev command (the game's own switch, `exe+1f05520(exe+1f03570(), bool)`). Nothing calls it in a run yet.
+
+## Test pass (in this order; write down what you see)
+1. **Theory check, free roam, `gadget watch on`:** fight or spawn enemies. The log should show `equip id=C350 ... (not the hero's manager)` lines for enemy equips and *no* such label for the hero's own.
+   `gadget slots`: the manager line says "vtable ok", slot ids are all in the table (no `NOT in the table`), the table has 10 entries (9C43, 9C82-9C89, 9C92).
+2. **Hide with a gadget in hand (the latent crash):** equip Impact Web, then `gadget begin`. Expected: `slot 0 unequipped -> 1`, then `hid 9C83`, no crash; the wheel shows the gadgets red 0/0.
+   `gadget end` restores them.
+3. **The red state:** `gadget begin`, `gadget grant 9C83` (red expected), then `gadget create 9C83`, `gadget refresh`. Question: does the wheel now show it blue with ammo, without the player equipping it?
+   Then `gadget equip 9C83 0`: works? and switching back to the Web Shooter with the wheel? (do this in free roam first, then in a debug-mode run in the yard).
+4. **Out of Web Fluid:** `dbg curse Out of Web`. Expect: no swinging or zipping, no web shots with the Web Shooter, a non-web gadget (Spider Drone, Suspension Matrix, Concussive Blast, once
+   granted) still fires, the four web gadgets are gone; walking, dodging and punching work. `dbg end`: locks lapse within about 1.2 s. If the Web Shooter still fires, the shot ability lock is not what stops it.
+5. **Street Brawler:** `dbg curse Street Brawler`. Punch an enemy: damage about 2.75x (compare with the same enemy before). The log prints `brawl: airborne yes/no` on every change (first 60): check it
+   against what you did (jump, swing, fall, wall-run, perch). Health drains while airborne (about 4% a second), stops on the ground, never below 1 HP.
+6. **REAL BOSS KILL (Settings tab, then a boss wave):** the log says `boss killed through Health::Kill`; does the boss die with an animation or ragdoll and not freeze? Compare Kingpin, Hammerhead, Taskmaster.
+7. **`autosave status`, then `off`, `status`, `on`:** the log prints the byte before and after. Test with a manual save in between if you want to see whether saving is blocked.
+8. **Steam Deck (a tester is needed):** the new setting; the "foreground window" log line shows what the gate saw.
+
+## Not done (no recon answer yet, or too risky to guess)
+Engagement of off-camera bosses (EA-D1), the combat-move locker for web strike and throwables (`HeroCombatActionLocker` enum), The Last Hunt's chase AI, a lethal Street Brawler drain, the wheel's inventory
+way of hiding gadgets (remove the item, add it back: touches the save), ammo get/set (`GadgetItemAmmoManager`), the real choice screen, music names, other arenas.
+
 # Build installed 2026-10-15 ~12:00 (after the Horde crash): check first
 0. Faction-join lines now use the notification box (not the top banner).
 1. **No crash at death** (the capture Value fix): die in a Horde run, respawn, repeat once.

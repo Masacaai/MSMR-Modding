@@ -1047,7 +1047,7 @@ static void RunCommand(const std::string& line) {
         }
         hud::Show(out, 6.0f, slot);
     } else if (cmd == "gadget") {
-        // gadget watch on|off | lock on|off | allow <hex id> | clear | equip <hex id> <slot>: gadget equip hook (gadgets.h)
+        // gadget watch|lock|allow|clear|begin|end|grant|hide|show|equip|create|refresh|slots: the gadget hook and its dev commands (gadgets.h; need `hook` first)
         std::string sub, v; int slot = 0;
         in >> sub >> v >> slot;
         if (sub == "watch") gadgets::Watch(v != "off");
@@ -1061,7 +1061,26 @@ static void RunCommand(const std::string& line) {
             if (v == "all") { for (uint32_t id = 0x9C82; id <= 0x9C88; id++) gadgets::Hide(id, sub == "hide"); }
             else gadgets::Hide((uint32_t)strtoul(v.c_str(), nullptr, 16), sub == "hide");
         }
-        else if (sub == "equip") { uint32_t id = (uint32_t)strtoul(v.c_str(), nullptr, 16); gamethread::Post([id, slot] { gadgets::Equip(id, slot); }); }
+        else if (sub == "equip") gadgets::Equip((uint32_t)strtoul(v.c_str(), nullptr, 16), slot);   // runs on the game thread by itself
+        else if (sub == "create") gadgets::Create((uint32_t)strtoul(v.c_str(), nullptr, 16));
+        else if (sub == "refresh") gadgets::Refresh();
+        else if (sub == "slots" || sub == "dump") gadgets::Dump();
+        else LOG("gadget: watch on|off | lock on|off | allow <id> | clear | begin | end | grant <id> | hide|show <id|all> | equip <id> <slot> | create <id> | refresh | slots");
+    } else if (cmd == "autosave") {
+        // autosave on|off|status: the game's own autosave switch (docs/RECON.md section 11, read from the exe, never run): the game-state sync
+        // object X = exe+1f03570(), the switch exe+1f05520(X, bool), the current value is the byte at X+0x1168. Dev only: nothing calls it in a run yet.
+        std::string v;
+        in >> v;
+        gamethread::Run([v] {
+            auto get = (uintptr_t(*)())scan::FromRva(0x1f03570);
+            uintptr_t x = get ? get() : 0;
+            if (!x) { LOG("autosave: no game-state object"); return; }
+            uint8_t before = 0, after = 0;
+            memory::Read(x + 0x1168, before);
+            if (v == "on" || v == "off") ((void (*)(uintptr_t, bool))scan::FromRva(0x1f05520))(x, v == "on");
+            memory::Read(x + 0x1168, after);
+            LOG("autosave: %s -> %s (state object %llx)", before ? "on" : "off", after ? "on" : "off", (unsigned long long)x);
+        }, 5000);
     } else if (cmd == "dbg") {
         // dbg <give|curse|power|mod|clear|list|status|cleared|heal|focus|begin|end> ...: debug mode toolbox (boons.cpp)
         std::string rest;

@@ -190,3 +190,6 @@ Turn it on with the command `debug on` (or `[debug] arena=1` in `EndlessMode.ini
 | `dbg begin` / `dbg end` | the first give starts the sandbox (loadout cleared like a run); `end` restores your loadout |
 
 Gifts survive a `run` started in debug mode. Gadgets: the existing `inv`, `equip`, `unequip` commands.
+
+### Gadget and recon dev commands (2026-11-19; untested in game, see NEXT_SESSION_TESTS.md)
+`gadget slots` (hero manager, equipped slots, table), `gadget hide|show <id|all>`, `gadget begin|end|grant <id>` (a run's flow by hand), `gadget create <id>` (weapon actor), `gadget refresh` (wheel list), `gadget equip <id> <slot>`, `gadget watch on|off`, `gadget lock on|off`, `gadget allow <id>`; `autosave on|off|status`. Ids: 9C82 Electric Web, 9C83 Impact Web, 9C84 Web Bomb, 9C85 Trip Mine, 9C86 Concussive Blast, 9C87 Spider Drone, 9C88 Suspension Matrix, 9C89 Web Shooter. Work-in-progress curses: `dbg curse Out of Web Fluid`, `dbg curse Street Brawler`.
