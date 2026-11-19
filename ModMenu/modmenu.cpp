@@ -2,6 +2,7 @@
 
 #include <MinHook.h>
 #include <Windows.h>
+#include <ShlObj.h>
 #include <intrin.h>
 #include <array>
 #include <atomic>
@@ -641,6 +642,15 @@ namespace {
             if (v >= g_base && v < g_base + 0x8000000) used += (size_t)snprintf(frames + used, sizeof(frames) - used, " %llx", (unsigned long long)(v - g_base));
         }
         Log("modmenu: crash: stack (exe offsets):%s", frames);
+        {   // the first 0x100 bytes of the stack as qwords, for the frame of exe+32c2550 (its container is at [rsp+0x70] there)
+            char row[200];
+            for (int i = 0; i < 32; i += 4) {
+                unsigned long long q[4] = {};
+                for (int k = 0; k < 4; ++k) { uintptr_t v = 0; ReadMem(c->Rsp + 8ull * (i + k), &v, 8); q[k] = v; }
+                _snprintf_s(row, sizeof(row), _TRUNCATE, "modmenu: crash: [rsp+%02x] %016llx %016llx %016llx %016llx", i * 8, q[0], q[1], q[2], q[3]);
+                if (g_log) g_log(row);
+            }
+        }
         unsigned start = g_ring_next.load();
         for (unsigned k = 0; k < 96; ++k) {   // oldest first, straight to the log function (not through the ring)
             const char* line = g_ring[(start + k) % 96];
@@ -696,8 +706,18 @@ namespace {
         return 0;
     }
     void HostTraceUi(unsigned ms) { g_trace_until = GetTickCount64() + ms; Log("modmenu: tracing UI calls for %u ms", ms); }
-    void HostKeepOpen(unsigned ms) { g_keep_until = GetTickCount64() + ms; }
-    void HostSuppressFade(unsigned ms) { g_nofade_until = GetTickCount64() + ms; }
+    // The Settings-screen crash (exe+31e9582: script code removing a child of a freed container) is most likely caused by the Flash calls we swallow (CloseMenu, FadeOut,
+    // FadeIn; docs/RECON.md Part 24). A file named no_swallow.txt in Documents\Marvel's Spider-Man Remastered\ManhattanSkies turns the swallowing off for a session
+    // (the menu then closes and the fade plays during a lighting change), to test whether the crashes stop.
+    bool NoSwallowFile() {
+        char docs[MAX_PATH] = {};
+        if (FAILED(SHGetFolderPathA(nullptr, CSIDL_PERSONAL, nullptr, SHGFP_TYPE_CURRENT, docs)) || !docs[0]) return false;
+        const std::string p = std::string(docs) + "\\Marvel's Spider-Man Remastered\\ManhattanSkies\\no_swallow.txt";
+        return GetFileAttributesA(p.c_str()) != INVALID_FILE_ATTRIBUTES;
+    }
+    std::atomic<bool> g_no_swallow{ false };
+    void HostKeepOpen(unsigned ms) { if (!g_no_swallow) g_keep_until = GetTickCount64() + ms; }
+    void HostSuppressFade(unsigned ms) { if (!g_no_swallow) g_nofade_until = GetTickCount64() + ms; }
     void HostLogStatus() {
         Log("modmenu: host, %d mods, hooked=%d templates=%d mods-screen=%d openings=%llu tabs=%llu pages=%llu changes=%llu | first page: calls=%llu settings-items=%llu fail=%llu selects=%llu | closes swallowed=%llu",
             g_count.load(), (int)g_hooked, g_tpl.load(), (int)g_mods_screen, (unsigned long long)g_open_count, (unsigned long long)g_tabs_built,
@@ -721,6 +741,8 @@ namespace {
         // The handle and view stay open for the life of the process.
         if (!existed) {
             g_is_host = true;
+            g_no_swallow = NoSwallowFile();
+            if (g_no_swallow) Log("modmenu: no_swallow.txt exists: CloseMenu, FadeOut and FadeIn are NOT swallowed this session");
             g_api = { kProtocol, sizeof(HostApi), &HostRegister, &HostLogStatus, &HostTraceUi, &HostKeepOpen, &HostSuppressFade, &HostPlayerBusy };
             InterlockedExchangePointer(reinterpret_cast<void* volatile*>(&shared->api), &g_api);
             g_elect_code = InstallHooks();
