@@ -551,6 +551,47 @@ namespace {
         LOG("toc: %zu swapped entries restored", g_swaps.size());
         g_swaps.clear();
     }
+    // RECON Part 23 (Fable, read from the exe): the file system object is q[exe+74a6a00]; the toc DAT1 buffer pointer is at +0x10, the toc object at +0x18 (section pointers
+    // at toc+0x00..0x30, counts at +0x38..0x44), the location table at q[fs+0x40], the per-archive "open" table at q[fs+0x68] (4 bytes per archive, 0x200 archives). Our
+    // grow-and-repoint code uses a different layout (toc object +0x10 ids, +0x28 sizes, +0x30 offsets, +0x48 count), so this prints both for a side-by-side check.
+    void FsInfo() {
+        uint64_t fs = 0;
+        if (!ReadBytes(scan::FromRva(0x74a6a00), &fs, 8) || !fs) { LOG("fsinfo: q[exe+74a6a00] is null or unreadable"); return; }
+        uint8_t b[0x100] = {};
+        ReadBytes((uintptr_t)fs, b, sizeof(b));
+        LOG("fsinfo: file system object at %llx", (unsigned long long)fs);
+        for (int i = 0; i < 0x100; i += 0x20) {
+            const uint64_t* q = reinterpret_cast<const uint64_t*>(b + i);
+            LOG("fsinfo:   fs+%02x  %016llx %016llx %016llx %016llx", i, (unsigned long long)q[0], (unsigned long long)q[1], (unsigned long long)q[2], (unsigned long long)q[3]);
+        }
+        const uint64_t dat1 = *reinterpret_cast<uint64_t*>(b + 0x10);
+        uint8_t t[0x60] = {};
+        ReadBytes((uintptr_t)fs + 0x18, t, sizeof(t));
+        for (int i = 0; i < 0x60; i += 0x20) {
+            const uint64_t* q = reinterpret_cast<const uint64_t*>(t + i);
+            LOG("fsinfo:   toc object +%02x  %016llx %016llx %016llx %016llx", i, (unsigned long long)q[0], (unsigned long long)q[1], (unsigned long long)q[2], (unsigned long long)q[3]);
+        }
+        const bool located = Locate(true);
+        LOG("fsinfo: DAT1 pointer in the file system %llx; the heap scan found the table at %llx (%s); archives section at %llx, %zu archives; ids %llx offsets %llx sizes %llx, %zu assets",
+            (unsigned long long)dat1, (unsigned long long)g_tab.base, located ? (dat1 == g_tab.base ? "same buffer" : "DIFFERENT buffer") : "not found", (unsigned long long)g_tab.archives,
+            g_tab.archive_count, (unsigned long long)g_tab.ids, (unsigned long long)g_tab.offs, (unsigned long long)g_tab.sizes, g_tab.count);
+        uint64_t locs = 0, open = 0;
+        ReadBytes((uintptr_t)fs + 0x40, &locs, 8);
+        ReadBytes((uintptr_t)fs + 0x68, &open, 8);
+        uint32_t flags[0x40] = {};
+        if (open) ReadBytes((uintptr_t)open, flags, sizeof(flags));
+        int opened = 0, last = -1;
+        for (int i = 0; i < 0x40; ++i) if (flags[i]) { ++opened; last = i; }
+        LOG("fsinfo: location table %llx (our offsets table %llx: %s), open table %llx: %d of the first 64 archives are open, highest open index %d", (unsigned long long)locs,
+            (unsigned long long)g_tab.offs, locs == g_tab.offs ? "same" : "different", (unsigned long long)open, opened, last);
+        if (g_tab.ok) {
+            for (size_t i = (g_tab.archive_count > 4 ? g_tab.archive_count - 4 : 0); i < g_tab.archive_count; ++i) {
+                uint32_t h = 0;
+                if (open) ReadBytes((uintptr_t)open + 4 * i, &h, 4);
+                LOG("fsinfo: archive %zu '%s' open-table word %08x", i, ArchiveName((uint32_t)i).c_str(), h);
+            }
+        }
+    }
     // An archive index the new assets can borrow: a raw (chunk map 0) mod archive that Overstrike wrote (mods\modN) and that exists on disk. -1: none.
     int PickRawArchive() {
         if (!Locate()) return -1;

@@ -6,6 +6,7 @@
 #include <algorithm>
 #include "scan.h"
 #include "atmpacks.h"
+#include "seamless.h"
 #include "memory.h"
 #include <random>
 #include "../../../ModMenu/modmenu.h"
@@ -114,6 +115,14 @@ namespace {
     struct AmountPreset { const char* label; float t; };   // how much of a chosen color replaces the sky's own (AUTO: all of it)
     const AmountPreset kAmounts[] = { { "AUTO", 1.0f }, { "75%", 0.75f }, { "50%", 0.5f }, { "25%", 0.25f }, { "10%", 0.10f } };
     std::vector<const char*> g_amount_labels;
+    // AMBIENT LIGHT: the atmosphere's AmbientFillColor (slot+0x300..0x308) times AmbientFillIntensity (+0x30c). Vanilla: the intensity is 0 in the day, night and sunset
+    // atmospheres and 0.003 in the rain night (tools/atmslot.py), the color tiny (0.0003) or white. The steps are a guess around that scale (docs/RECON.md Part 25).
+    struct AmbientPreset { const char* label; float v; };
+    const AmbientPreset kAmbients[] = { { "AUTO", 0 }, { "1 (FAINT)", 0.001f }, { "2", 0.002f }, { "3", 0.004f }, { "4", 0.008f }, { "5", 0.016f }, { "6", 0.03f }, { "7 (STRONG)", 0.06f } };
+    std::vector<const char*> g_ambient_labels;
+    constexpr uintptr_t kOffAmbient = 0x300;   // 4 floats: color RGB, intensity (the safe block: never write +0x2e8 or +0x310..0x33f)
+    bool g_amb_dirty = false;                  // we wrote the fill light and the sky's own values are not back yet
+    std::atomic<bool> g_seamless{ false };
     float AmountOf(int sel) { return sel > 0 && sel < (int)(sizeof(kAmounts) / sizeof(kAmounts[0])) ? kAmounts[sel].t : 1.0f; }
     struct CyclePreset { const char* label; int minutes; };   // how long one full day and night takes
     const CyclePreset kCycles[] = { { "OFF", 0 }, { "2 MIN", 2 }, { "5 MIN", 5 }, { "10 MIN", 10 }, { "20 MIN", 20 }, { "30 MIN", 30 }, { "60 MIN", 60 } };
@@ -148,6 +157,7 @@ namespace {
         for (const auto& f : kFogs) g_fog_labels.push_back(f.label);
         for (const auto& f : kFogColors) g_fogcolor_labels.push_back(f.label);
         for (const auto& f : kAmounts) g_amount_labels.push_back(f.label);
+        for (const auto& f : kAmbients) g_ambient_labels.push_back(f.label);
         for (const auto& f : kFogDists) g_fogdist_labels.push_back(f.label);
         for (const auto& f : kHazes) g_haze_labels.push_back(f.label);
         for (const auto& f : kExposures) g_exposure_labels.push_back(f.label);
@@ -167,7 +177,7 @@ namespace {
         return ec ? "" : dir + "\\ManhattanSkies.ini";
     }
     const char* const kVerKeys[5] = { "day", "earlymorning", "sunset", "night", "overcast" };
-    const char* const kKeys[kSettingCount] = { "style", "variant", "dir", "height", "color", "bright", "fog", "fogdist", "haze", "exposure", "filter", "clouds", "fogcolor", "cycle", "cycleatm", "coloramt", "fogcoloramt" };
+    const char* const kKeys[kSettingCount] = { "style", "variant", "dir", "height", "color", "bright", "fog", "fogdist", "haze", "exposure", "filter", "clouds", "fogcolor", "cycle", "cycleatm", "coloramt", "fogcoloramt", "ambient", "ambientcolor" };
 
     // ---- runtime state (worker thread, except where noted) ----
     constexpr float kNoValue = -12345.f;
@@ -175,7 +185,7 @@ namespace {
     std::map<uint64_t, Sun> g_orig;               // each atmosphere's own sun values, read before the first edit
     struct Fog { float d[6]; };
     std::map<uint64_t, Fog> g_orig_fog;           // ... and its own fog densities
-    struct Image { float fogdist[4], exposure, filter[3], haze, clouds, fogcolor[3]; };
+    struct Image { float fogdist[4], exposure, filter[3], haze, clouds, fogcolor[3], ambient[4]; };
     std::map<uint64_t, Image> g_orig_image;       // ... and its own distance bands, exposure, filter, haze and cloud values
     bool g_world_up = false;
     ULONGLONG g_hold_until = 0;                   // don't touch anything before this tick count (the world is settling)
@@ -682,7 +692,8 @@ namespace {
             Image im{};
             if (recorder::SlotFloats(idx, kOffFogDist, im.fogdist, 4, false) && recorder::SlotFloats(idx, kOffExposure, &im.exposure, 1, false) &&
                 recorder::SlotFloats(idx, kOffFilter, im.filter, 3, false) && recorder::SlotFloats(idx, kOffHaze, &im.haze, 1, false) &&
-                recorder::SlotFloats(idx, kOffClouds, &im.clouds, 1, false) && recorder::SlotFloats(idx, kOffFogColor, im.fogcolor, 3, false))
+                recorder::SlotFloats(idx, kOffClouds, &im.clouds, 1, false) && recorder::SlotFloats(idx, kOffFogColor, im.fogcolor, 3, false) &&
+                recorder::SlotFloats(idx, kOffAmbient, im.ambient, 4, false))
                 iit = g_orig_image.emplace(asset, im).first;
         }
         // the sky's own values, blended toward the next sky's when a switch is near (the day-night cycle)
@@ -746,6 +757,19 @@ namespace {
             float fogc[3];
             for (int i = 0; i < 3; ++i) fogc[i] = gsel ? Mix(o.fogcolor[i], kFogColors[gsel].rgb[i], AmountOf(g_set[kFogColorAmt])) : o.fogcolor[i];
             recorder::SlotFloats(idx, kOffFogColor, fogc, 3, true);
+            const int amb = g_set[kAmbient];
+            if (amb > 0 && amb < (int)(sizeof(kAmbients) / sizeof(kAmbients[0]))) {   // the fill light: the chosen color (white unless AMBIENT COLOR is set) at the chosen strength
+                const int ac = g_set[kAmbientColor];
+                const float* c = ac > 0 && ac < (int)(sizeof(kColors) / sizeof(kColors[0])) ? kColors[ac].rgb : nullptr;
+                float f4[4] = { c ? c[0] : 1.f, c ? c[1] : 1.f, c ? c[2] : 1.f, kAmbients[amb].v };
+                recorder::SlotFloats(idx, kOffAmbient, f4, 4, true);
+                g_amb_dirty = true;
+            } else if (g_amb_dirty) {   // back to the sky's own values
+                float f4[4];
+                std::memcpy(f4, o.ambient, sizeof(f4));
+                recorder::SlotFloats(idx, kOffAmbient, f4, 4, true);
+                g_amb_dirty = false;
+            }
         }
         recorder::Recompute();
         g_cyc_seen = g_cyc_step;
@@ -760,6 +784,7 @@ namespace {
         if (p.empty()) return;
         for (int s = 0; s < kSettingCount; ++s) WritePrivateProfileStringA("sky", kKeys[s], std::to_string(g_set[s].load()).c_str(), p.c_str());
         WritePrivateProfileStringA("sky", "mode", std::to_string(g_saved_mode.load()).c_str(), p.c_str());
+        WritePrivateProfileStringA("sky", "seamless", g_seamless.load() ? "1" : "0", p.c_str());
         { std::lock_guard<std::mutex> lk(g_ver_mu); for (int i = 0; i < 5; ++i) WritePrivateProfileStringA("version", kVerKeys[i], g_ver[i].c_str(), p.c_str()); }
     }
 }
@@ -771,6 +796,7 @@ namespace {
         g_saved_mode = p.empty() ? -1 : (int)GetPrivateProfileIntA("sky", "mode", -1, p.c_str());
         if (!p.empty()) for (int i = 0; i < 5; ++i) { char buf[256] = {}; GetPrivateProfileStringA("version", kVerKeys[i], "", buf, sizeof(buf), p.c_str()); std::lock_guard<std::mutex> lk(g_ver_mu); g_ver[i] = buf; }
         if (g_saved_mode < 0 || g_saved_mode > 6) g_saved_mode = -1;
+        if (!p.empty() && GetPrivateProfileIntA("sky", "seamless", 0, p.c_str()) != 0) { seamless::SetEnabled(true); g_seamless = seamless::Enabled(); }
         if (!p.empty()) {
             char pb[32] = {};
             GetPrivateProfileStringA("cycle", "phase", "", pb, sizeof(pb), p.c_str());
@@ -793,6 +819,8 @@ namespace {
         if (g_set[kFogColor] < 0 || g_set[kFogColor] >= (int)(sizeof(kFogColors) / sizeof(kFogColors[0]))) g_set[kFogColor] = 0;
         if (g_set[kCycle] < 0 || g_set[kCycle] >= (int)(sizeof(kCycles) / sizeof(kCycles[0]))) g_set[kCycle] = 0;
         if (g_set[kCycleAtm] < 0 || g_set[kCycleAtm] > 1) g_set[kCycleAtm] = 0;
+        if (g_set[kAmbient] < 0 || g_set[kAmbient] >= (int)(sizeof(kAmbients) / sizeof(kAmbients[0]))) g_set[kAmbient] = 0;
+        if (g_set[kAmbientColor] < 0 || g_set[kAmbientColor] >= (int)(sizeof(kColors) / sizeof(kColors[0]))) g_set[kAmbientColor] = 0;
         if (g_set[kColorAmt] < 0 || g_set[kColorAmt] >= (int)(sizeof(kAmounts) / sizeof(kAmounts[0]))) g_set[kColorAmt] = 0;
         if (g_set[kFogColorAmt] < 0 || g_set[kFogColorAmt] >= (int)(sizeof(kAmounts) / sizeof(kAmounts[0]))) g_set[kFogColorAmt] = 0;
         if (g_set[kClouds] < 0 || g_set[kClouds] >= (int)(sizeof(kCloudsChoices) / sizeof(kCloudsChoices[0]))) g_set[kClouds] = 0;
@@ -841,6 +869,8 @@ namespace {
             case kCycle: return CycleCount();
             case kCycleAtm: return 2;
             case kColorAmt: case kFogColorAmt: return AmountCount();
+            case kAmbient: return AmbientCount();
+            case kAmbientColor: return ColorCount();
             default: return FogColorCount();
         }
     }
@@ -862,6 +892,8 @@ namespace {
             case kCycle: l = CycleLabels(); break;
             case kCycleAtm: { static const char* const kOffOn[] = { "OFF", "ON" }; l = kOffOn; break; }
             case kColorAmt: case kFogColorAmt: l = AmountLabels(); break;
+            case kAmbient: l = AmbientLabels(); break;
+            case kAmbientColor: l = ColorLabels(); break;
             default: l = FogColorLabels(); break;
         }
         return l && i >= 0 && i < LabelCount(s) ? l[i] : "";
@@ -890,6 +922,13 @@ namespace {
         g_cyc_look = 0; g_pick_nm = -1;
         g_phase = PhaseOfMode(mode); g_prev_phase = g_phase; g_cyc_started = true; g_cyc_last = GetTickCount64(); g_hold = false;
         return true;
+    }
+    int AmbientCount() { EnsureInit(); return (int)g_ambient_labels.size(); }   const char* const* AmbientLabels() { EnsureInit(); return g_ambient_labels.data(); }
+    bool Seamless() { return g_seamless; }
+    void SetSeamless(bool on) {
+        seamless::SetEnabled(on);
+        g_seamless = on && seamless::Enabled();   // stays off when the hook could not be installed
+        g_dirty_ini = true; g_dirty_at = GetTickCount64();
     }
     int AmountCount() { EnsureInit(); return (int)g_amount_labels.size(); }     const char* const* AmountLabels() { EnsureInit(); return g_amount_labels.data(); }
     int FogColorCount() { EnsureInit(); return (int)g_fogcolor_labels.size(); } const char* const* FogColorLabels() { EnsureInit(); return g_fogcolor_labels.data(); }

@@ -1,4 +1,5 @@
 #include "recorder.h"
+#include "seamless.h"
 #include "sky.h"
 
 #include "gamethread.h"
@@ -171,6 +172,7 @@ namespace recorder {
         if (!set || !getter) return false;
         const uintptr_t w = ((uintptr_t (*)())getter)();
         if (!w) return false;
+        seamless::Arm(5000);   // when SWITCH STYLE is seamless, the transition this call starts does not get a load screen
         ((SetLightingFn)set)(w + 0xe10d0, index);
         return true;
     }

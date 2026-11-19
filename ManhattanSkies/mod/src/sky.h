@@ -11,7 +11,7 @@
 // gives it the base's weight and takes the base's away; the game's own activation of the next base atmosphere is swallowed while the override
 // is on. Sun edits are written into the active slot's copy of the values and the manager re-blends.
 namespace sky {
-    enum Setting { kStyle, kVariant, kDir, kHeight, kColor, kBright, kFog, kFogDist, kHaze, kExposure, kFilter, kClouds, kFogColor, kCycle, kCycleAtm, kColorAmt, kFogColorAmt, kSettingCount };   // kCycleAtm: 1 = the dynamic cycle also picks among the atmosphere mods
+    enum Setting { kStyle, kVariant, kDir, kHeight, kColor, kBright, kFog, kFogDist, kHaze, kExposure, kFilter, kClouds, kFogColor, kCycle, kCycleAtm, kColorAmt, kFogColorAmt, kAmbient, kAmbientColor, kSettingCount };   // kCycleAtm: 1 = the dynamic cycle also picks among the atmosphere mods
 
     void Load();                       // ini -> settings (once, at start-up)
     int Get(Setting s);
@@ -30,6 +30,9 @@ namespace sky {
     // name of an atmosphere mod found by atmpacks. Saved in the ini; used by the dynamic cycle too.
     std::string Version(int slot);
     void SetVersion(int slot, const std::string& name);
+    bool Seamless();                   // SWITCH STYLE: lighting changes made by this mod skip the game's load screen (experimental; a preference, not part of a look)
+    void SetSeamless(bool on);
+    int AmbientCount(); const char* const* AmbientLabels();   // AMBIENT LIGHT: the atmosphere's fill light (AmbientFillIntensity, slot+0x30c)
     void ResetAll();                   // every sky setting back to AUTO
 
     // Choice labels for the menu rows. Variant labels depend on the style.

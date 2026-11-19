@@ -14,6 +14,7 @@
 #include "presets.h"
 #include "recorder.h"
 #include "scan.h"
+#include "seamless.h"
 #include "sky.h"
 #include "toc.h"
 #include "watchpoint.h"
@@ -203,6 +204,12 @@ static void RunCommand(const std::string& line) {
         std::string a, b, a2;
         in >> a >> b >> a2;
         recorder::SnapDiff(a, b, a2);
+    } else if (cmd == "fsinfo") {   // fsinfo: the game's file system object and toc object, compared with the toc found by the heap scan
+        toc::FsInfo();
+    } else if (cmd == "seamless") {   // seamless [0|1]: the SWITCH STYLE row; no argument: the hook status
+        int v = -1;
+        if (in >> v) sky::SetSeamless(v != 0);
+        seamless::LogStatus();
     } else if (cmd == "presets") {   // presets [rescan]: the folder's presets with their numbers
         std::string what;
         in >> what;

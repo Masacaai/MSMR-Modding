@@ -22,7 +22,7 @@ namespace {
     const char* const kChoices[] = { "DAY", "EARLY MORNING", "SUNSET", "NIGHT", "NIGHT (VARIANT)", "OVERCAST", "OVERCAST (VARIANT)" };
     const int kModes[] = { 0, 4, 2, 5, 1, 6, 3 };
     constexpr int kChoiceCount = 7, kDefault = 0;
-    enum { kHeadSky = 0, kTimeId, kStyleId, kVariantId, kHeadSun, kDirId, kHeightId, kColorId, kBrightId, kFogId, kFogDistId, kHazeId, kHeadImage, kExposureId, kFilterId, kCloudsId, kFogColorId, kPresetId, kCycleId, kVersionId, kCycleAtmId, kColorAmtId, kFogColorAmtId };
+    enum { kHeadSky = 0, kTimeId, kStyleId, kVariantId, kHeadSun, kDirId, kHeightId, kColorId, kBrightId, kFogId, kFogDistId, kHazeId, kHeadImage, kExposureId, kFilterId, kCloudsId, kFogColorId, kPresetId, kCycleId, kVersionId, kCycleAtmId, kColorAmtId, kFogColorAmtId, kAmbientId, kAmbientColorId, kSeamlessId };
 
     // After applying, the row keeps showing the pick until the game's mode field catches up (a few frames).
     std::atomic<int> g_pending{ -1 };
@@ -68,10 +68,10 @@ namespace {
         int n = 0;
         auto add = [&](int id) { if (n < max) ids[n++] = id; };
         add(kPresetId);
-        add(kHeadSky); add(kTimeId); if (atmpacks::LabelCount(VersionSlot()) > 1 || atmpacks::Blocked()) add(kVersionId); add(kCycleId); if (sky::Get(sky::kCycle) > 0 && atmpacks::AnyMods()) add(kCycleAtmId); add(kStyleId);
+        add(kHeadSky); add(kTimeId); add(kSeamlessId); if (atmpacks::LabelCount(VersionSlot()) > 1 || atmpacks::Blocked()) add(kVersionId); add(kCycleId); if (sky::Get(sky::kCycle) > 0 && atmpacks::AnyMods()) add(kCycleAtmId); add(kStyleId);
         if (sky::Get(sky::kStyle) > 0) add(kVariantId);
         add(kHeadSun); add(kDirId); add(kHeightId); add(kColorId); add(kColorAmtId); add(kBrightId); add(kFogId); add(kFogDistId); add(kFogColorId); add(kFogColorAmtId); add(kHazeId);
-        add(kHeadImage); add(kExposureId); add(kFilterId); add(kCloudsId);
+        add(kHeadImage); add(kExposureId); add(kFilterId); add(kCloudsId); add(kAmbientId); add(kAmbientColorId);
         return n;
     }
     void Row(void*, int id, modmenu::Row* out) {
@@ -135,6 +135,20 @@ namespace {
                 out->title = "FOG COLOR AMOUNT";
                 out->help = "How much of the FOG COLOR you picked replaces the fog's own color: AUTO is all of it, 10% is a faint tint. Has no effect while FOG COLOR is AUTO.";
                 out->choices = sky::AmountLabels(); out->choice_count = sky::AmountCount(); break;
+            case kAmbientId:
+                out->title = "AMBIENT LIGHT";
+                out->help = "A fill light that lifts the shadows and unlit surfaces, independent of the sun. AUTO is the sky's own (usually none). Experimental: the scale is a first guess and the strongest steps can wash the picture out. Pair it with AMBIENT COLOR.";
+                out->choices = sky::AmbientLabels(); out->choice_count = sky::AmbientCount(); break;
+            case kAmbientColorId:
+                out->title = "AMBIENT COLOR";
+                out->help = "The tint of the AMBIENT LIGHT fill (AUTO is white). Has no effect while AMBIENT LIGHT is AUTO.";
+                out->choices = sky::ColorLabels(); out->choice_count = sky::ColorCount(); break;
+            case kSeamlessId: {
+                static const char* const kStyles[] = { "GAME'S", "SEAMLESS" };
+                out->title = "SWITCH STYLE";
+                out->help = "How a change of time of day looks. GAME'S: the game's own loading icon and fade, which also stops Spider-Man and can end a crime or mission. SEAMLESS (experimental): this mod's changes skip the game's load screen, so nothing stops. If something looks wrong after a change, set it back to GAME'S.";
+                out->choices = kStyles; out->choice_count = 2; break;
+            }
             case kBrightId:
                 out->title = "SUN BRIGHTNESS";
                 out->help = "Scales the strength of the sun relative to the sky's own. OFF turns the sunlight off completely (no direct sun, no sun shadows).";
@@ -189,6 +203,8 @@ namespace {
             case kFogColorId: return sky::kFogColor;
             case kColorAmtId: return sky::kColorAmt;
             case kFogColorAmtId: return sky::kFogColorAmt;
+            case kAmbientId: return sky::kAmbient;
+            case kAmbientColorId: return sky::kAmbientColor;
             default: return sky::kBright;
         }
     }
@@ -200,6 +216,7 @@ namespace {
             for (int i = 1; i < atmpacks::LabelCount(slot); ++i) if (atmpacks::NameAt(slot, i) == cur) return i;
             return 0;
         }
+        if (id == kSeamlessId) return sky::Seamless() ? 1 : 0;
         if (id == kPresetId) return g_pick_custom ? 0 : presets::Current();
         if (id == kHeadSky || id == kHeadSun || id == kHeadImage) return 0;
         return sky::Get(SettingOf(id));
@@ -207,6 +224,7 @@ namespace {
     int Default(void*, int) { return kDefault; }
     void Set(void*, int id, int choice) {
         if (id == kPresetId) { if (choice >= 1) { ++g_changes; g_pick_custom = false; presets::Apply(choice); g_rebuild = true; g_was_custom = false; } else { g_pick_custom = true; if (presets::RestoreCustom()) { g_rebuild = true; g_pick_custom = presets::Current() != 0; g_was_custom = presets::Current() == 0; } } return; }
+        if (id == kSeamlessId) { sky::SetSeamless(choice == 1); ++g_changes; LOG("menu: SWITCH STYLE -> %s", sky::Seamless() ? "SEAMLESS" : "GAME'S"); g_rebuild = true; return; }
         if (id == kVersionId) {
             sky::SetVersion(VersionSlot(), choice > 0 ? atmpacks::NameAt(VersionSlot(), choice) : std::string());
             ++g_changes;
@@ -229,6 +247,7 @@ namespace {
     }
     void Reset(void*, int id) {
         if (id == kPresetId) return;
+        if (id == kSeamlessId) { sky::SetSeamless(false); return; }
         if (id == kVersionId) { sky::SetVersion(VersionSlot(), std::string()); return; }
         if (id == kTimeId) { Choose(kDefault); NoteCustomness(); return; }
         if (id == kHeadSky || id == kHeadSun || id == kHeadImage) return;

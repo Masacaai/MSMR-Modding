@@ -21,6 +21,7 @@ namespace toc {
     // the toc entry of the existing asset is pointed at our file, and restored afterwards. The game must load the asset after the swap to see it.
     bool SwapAsset(uint64_t id, uint32_t use_archive, const wchar_t* path, uint32_t size);
     void UnswapAll();
+    void FsInfo();   // research: dumps the game's file system object (q[exe+74a6a00]) and its toc object, and compares them with the toc found by the heap scan
     int PickRawArchive();   // an archive index (a raw Overstrike mod archive that exists) the new assets can borrow, or -1
     void FindPointers();   // research: where the game keeps pointers to the toc sections
 }
