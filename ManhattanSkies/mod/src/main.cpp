@@ -77,15 +77,6 @@ static void RunCommand(const std::string& line) {
         unsigned ms = 8000;
         in >> ms;
         toc::IoTrace(ms > 120000 ? 120000 : ms);
-    } else if (cmd == "nofade") {   // nofade <ms>: swallow the lighting transition's fade for that long (then e.g. `sky 2`)
-        unsigned ms = 5000;
-        in >> ms;
-        modmenu::SuppressFade(ms > 60000 ? 60000 : ms);
-        LOG("nofade: lighting transition fade swallowed for %u ms", ms);
-    } else if (cmd == "smoothfade") {   // smoothfade 0|1: the day-night cycle swallows the fade at its dawn/dusk switches
-        int on = 1;
-        in >> on;
-        sky::SetSmoothFade(on != 0);
     } else if (cmd == "holdf") {   // holdf <ms> <addr|exe+rva> <float> [<addr> <float> ...]: rewrites floats every millisecond (for values the game rebuilds each frame)
         unsigned ms = 0;
         in >> ms;

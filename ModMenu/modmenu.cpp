@@ -33,7 +33,6 @@ namespace {
     constexpr uintptr_t kSelectHash = 0x6d8ed44;      // callback hashes (set at start-up from their names)
     constexpr uintptr_t kCloseOptionsHash = 0x6d8ed7c;
     constexpr uintptr_t kResetAllHash = 0x6d8ed88;
-    constexpr uintptr_t kPauseCloseReturn = 0x7dc06b; // where the pause menu's update gets back from its CloseMenu call
     constexpr uintptr_t kPageItemReturn = 0x7dd8ae;   // where the first page's item loop gets back from AddItem
     constexpr uintptr_t kSettingType = 0x3a7d6e8, kHeadingType = 0x3a7d838;
     constexpr uint32_t kSettingsItem = 5;             // the first page's SETTINGS (its Select case calls kOpenOptions)
@@ -65,9 +64,6 @@ namespace {
         uint32_t (*register_mod)(const Mod* mod);
         void (*log_status)();
         void (*trace_ui)(unsigned ms);   // added later in protocol 1; check size
-        void (*keep_open)(unsigned ms);  // likewise
-        void (*suppress_fade)(unsigned ms);   // likewise
-        bool (*player_busy)();                // likewise
     };
     struct Shared { HostApi* api; };
 
@@ -114,9 +110,8 @@ namespace {
     // The last fault caught around a call into the game's UI code: the exception code, where it happened (image offset if in Spider-Man.exe), the address it touched.
     volatile unsigned long g_fault_code = 0;
     volatile uintptr_t g_fault_rip = 0, g_fault_addr = 0;
-    std::atomic<ULONGLONG> g_trace_until{ 0 }, g_keep_until{ 0 }, g_nofade_until{ 0 };
-    std::atomic<uint64_t> g_fades_blocked{ 0 }, g_cb_logged{ 0 };
-    std::atomic<uint64_t> g_closes_blocked{ 0 };
+    std::atomic<ULONGLONG> g_trace_until{ 0 };
+    std::atomic<uint64_t> g_cb_logged{ 0 };
     std::atomic<bool> g_page_off{ false };   // after one fault adding MODS to the first page, never again (a half-built Scaleform value is left behind)
     int CaptureFault(EXCEPTION_POINTERS* ep) {
         g_fault_code = ep->ExceptionRecord->ExceptionCode;
@@ -348,17 +343,6 @@ namespace {
             }
             Log("modmenu: ui '%.40s' (%u args) from%s", name, count, where);
         }
-        // A mod asked for a lighting change without the fade: swallow the transition's Flash FadeOut / FadeIn for a few seconds.
-        if (name && GetTickCount64() < g_nofade_until && (std::strcmp(name, "FadeOut") == 0 || std::strcmp(name, "FadeIn") == 0)) {
-            if (g_fades_blocked++ < 8) Log("modmenu: %s swallowed (%u args, first arg type %u data %llx)", name, count, args && count ? (unsigned)args[0].type : 0u, args && count ? (unsigned long long)args[0].data : 0ull);
-            return true;
-        }
-        // The pause menu closes itself when the world goes into a lighting transition: swallow that one request while a mod's menu change is under way.
-        if (name && g_mods_screen && GetTickCount64() < g_keep_until && _ReturnAddress() == reinterpret_cast<void*>(g_base + kPauseCloseReturn) &&
-            std::strcmp(name, "CloseMenu") == 0) {
-            if (g_closes_blocked++ < 3) Log("modmenu: kept the pause menu open (CloseMenu swallowed)");
-            return true;
-        }
         if (name == reinterpret_cast<const char*>(g_base + kOpenOptionsName) && args && count >= 1 && (args[0].type & kTypeMask) == kArray && args[0].objects) {
             ++g_open_count;
             Log("modmenu: options screen opening (#%llu, %d mod tab(s))", (unsigned long long)g_open_count, g_count.load());
@@ -513,57 +497,6 @@ namespace {
         return TextFor(hash) != nullptr || g_has_text(hash);
     }
 
-    // ---- is the player in a crime, a hideout, a mission objective or a fight? Read from the HUD calls the game makes (docs/UI_HUNT.md): the crime pop-up,
-    // the wave counter, the objective line, the progress bar and the combo counter. Method names are compared exactly; no game state is touched. ----
-    std::atomic<bool> g_in_activity{ false };
-    std::atomic<ULONGLONG> g_activity_seen{ 0 }, g_busy_until{ 0 };
-    using HudInvokeFn = uint64_t(__fastcall*)(void*, void*, const char*, void*, void*, uint64_t, uint64_t, uint64_t);
-    HudInvokeFn g_hud_invoke{};
-    // The Sable APC mission (2026-11-14): the objective and progress bar were hidden while the truck stopped, 13 s after the crime began and well before it was
-    // over, and the cycle switched a second later and ended it. After any end call the state therefore lingers for a minute and a half unless a new start call arrives.
-    constexpr ULONGLONG kLingerMs = 90000;
-    std::atomic<int> g_hud_logged{ 0 };
-    void NoteHudCall(const char* name) {
-        if (!name) return;
-        const ULONGLONG now = GetTickCount64();
-        if ((name[0] == 'S' || name[0] == 'H' || name[0] == 'A' || name[0] == 'D' || name[0] == 'U') && g_hud_logged < 400) {
-            static const char* const kNames[] = { "ShowCrimeScanner", "ShowCounter", "ShowMissionObjective", "ActivateProgressBar", "UpdateProgressBar", "UpdateItemCount",
-                                                  "HideCounter", "HideMission", "HideActivity", "DeactivateProgressBar", "SetComboCounter" };
-            for (const char* k : kNames) if (!std::strcmp(name, k)) { ++g_hud_logged; Log("modmenu: hud %s", name); break; }   // forensics: what a crime or hideout sends, in order
-        }
-        switch (name[0]) {
-            case 'S':
-                if (!std::strcmp(name, "ShowCrimeScanner") || !std::strcmp(name, "ShowCounter") || !std::strcmp(name, "ShowMissionObjective")) { g_in_activity = true; g_activity_seen = now; }
-                else if (!std::strcmp(name, "SetComboCounter")) g_busy_until = now + 12000;   // a fight: the combo counter
-                break;
-            case 'A':
-                if (!std::strcmp(name, "ActivateProgressBar")) { g_in_activity = true; g_activity_seen = now; }
-                break;
-            case 'U':
-                if (!std::strcmp(name, "UpdateProgressBar") || !std::strcmp(name, "UpdateItemCount")) g_activity_seen = now;
-                break;
-            case 'H':
-                if (!std::strcmp(name, "HideCounter") || !std::strcmp(name, "HideMission") || !std::strcmp(name, "HideActivity")) { g_in_activity = false; g_busy_until = now + kLingerMs; }
-                break;
-            case 'D':
-                if (!std::strcmp(name, "DeactivateProgressBar")) { g_in_activity = false; g_busy_until = now + kLingerMs; }
-                break;
-            default: break;
-        }
-    }
-    bool HostPlayerBusy() {
-        const ULONGLONG now = GetTickCount64();
-        if (g_in_activity && now - g_activity_seen < 15 * 60 * 1000) return true;   // 15 minutes without a sign of life: the end call was missed
-        return now < g_busy_until;
-    }
-    int NoteHudCallSafe(const char* name) {
-        __try { NoteHudCall(name); return 1; } __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
-    }
-    uint64_t __fastcall HudInvokeHook(void* a, void* b, const char* name, void* d, void* e, uint64_t f, uint64_t g, uint64_t h) {
-        NoteHudCallSafe(name);
-        return g_hud_invoke(a, b, name, d, e, f, g, h);
-    }
-
     struct Hook {
         uintptr_t rva;
         void* detour;
@@ -585,7 +518,6 @@ namespace {
         { 0x1749ae0, (void*)&HasTextHook, (void**)&g_has_text, { 0x48, 0x83, 0xec, 0x28, 0x8b, 0xd1, 0x48, 0x8b, 0x0d }, 9 },
         { 0x807740, (void*)&BuildTabHook, (void**)&g_build_tab, { 0x48, 0x89, 0x5c, 0x24, 0x10, 0x48, 0x89, 0x74, 0x24, 0x18 }, 10 },
         { 0x80a220, (void*)&AddItemHook, (void**)&g_add_item, { 0x48, 0x89, 0x5c, 0x24, 0x08, 0x48, 0x89, 0x74, 0x24, 0x10 }, 10 },
-        { 0x1d1cee0, (void*)&HudInvokeHook, (void**)&g_hud_invoke, { 0x40, 0x53, 0x48, 0x83, 0xec, 0x40, 0x8b, 0x42, 0x18, 0x49 }, 10 },   // the HUD's per-element method call
     };
 
     // 1: the game's bytes; 2: a jmp another script's hook put there (we chain on top); 0: something else.
@@ -706,23 +638,11 @@ namespace {
         return 0;
     }
     void HostTraceUi(unsigned ms) { g_trace_until = GetTickCount64() + ms; Log("modmenu: tracing UI calls for %u ms", ms); }
-    // The Settings-screen crash (exe+31e9582: script code removing a child of a freed container) is most likely caused by the Flash calls we swallow (CloseMenu, FadeOut,
-    // FadeIn; docs/RECON.md Part 24). A file named no_swallow.txt in Documents\Marvel's Spider-Man Remastered\ManhattanSkies turns the swallowing off for a session
-    // (the menu then closes and the fade plays during a lighting change), to test whether the crashes stop.
-    bool NoSwallowFile() {
-        char docs[MAX_PATH] = {};
-        if (FAILED(SHGetFolderPathA(nullptr, CSIDL_PERSONAL, nullptr, SHGFP_TYPE_CURRENT, docs)) || !docs[0]) return false;
-        const std::string p = std::string(docs) + "\\Marvel's Spider-Man Remastered\\ManhattanSkies\\no_swallow.txt";
-        return GetFileAttributesA(p.c_str()) != INVALID_FILE_ATTRIBUTES;
-    }
-    std::atomic<bool> g_no_swallow{ false };
-    void HostKeepOpen(unsigned ms) { if (!g_no_swallow) g_keep_until = GetTickCount64() + ms; }
-    void HostSuppressFade(unsigned ms) { if (!g_no_swallow) g_nofade_until = GetTickCount64() + ms; }
     void HostLogStatus() {
-        Log("modmenu: host, %d mods, hooked=%d templates=%d mods-screen=%d openings=%llu tabs=%llu pages=%llu changes=%llu | first page: calls=%llu settings-items=%llu fail=%llu selects=%llu | closes swallowed=%llu",
+        Log("modmenu: host, %d mods, hooked=%d templates=%d mods-screen=%d openings=%llu tabs=%llu pages=%llu changes=%llu | first page: calls=%llu settings-items=%llu fail=%llu selects=%llu",
             g_count.load(), (int)g_hooked, g_tpl.load(), (int)g_mods_screen, (unsigned long long)g_open_count, (unsigned long long)g_tabs_built,
             (unsigned long long)g_pages, (unsigned long long)g_changes, (unsigned long long)g_page_calls, (unsigned long long)g_page_settings,
-            (unsigned long long)g_page_fail, (unsigned long long)g_selects, (unsigned long long)g_closes_blocked);
+            (unsigned long long)g_page_fail, (unsigned long long)g_selects);
     }
 
     HostApi* g_remote = nullptr;   // the host's entry points, when another script hosts
@@ -741,9 +661,7 @@ namespace {
         // The handle and view stay open for the life of the process.
         if (!existed) {
             g_is_host = true;
-            g_no_swallow = NoSwallowFile();
-            if (g_no_swallow) Log("modmenu: no_swallow.txt exists: CloseMenu, FadeOut and FadeIn are NOT swallowed this session");
-            g_api = { kProtocol, sizeof(HostApi), &HostRegister, &HostLogStatus, &HostTraceUi, &HostKeepOpen, &HostSuppressFade, &HostPlayerBusy };
+            g_api = { kProtocol, sizeof(HostApi), &HostRegister, &HostLogStatus, &HostTraceUi };
             InterlockedExchangePointer(reinterpret_cast<void* volatile*>(&shared->api), &g_api);
             g_elect_code = InstallHooks();
             return;
@@ -763,22 +681,6 @@ namespace {
         const uint32_t code = g_is_host ? HostRegister(&mod) : g_remote->register_mod(&mod);
         if (code) Log("modmenu: %s not registered (%u)", mod.name, code);
         return code;
-    }
-
-    void KeepMenuOpen(unsigned ms) {
-        if (g_is_host) HostKeepOpen(ms);
-        else if (g_remote && g_remote->size >= sizeof(HostApi)) g_remote->keep_open(ms);
-    }
-
-    void SuppressFade(unsigned ms) {
-        if (g_is_host) HostSuppressFade(ms);
-        else if (g_remote && g_remote->size >= sizeof(HostApi)) g_remote->suppress_fade(ms);
-    }
-
-    bool PlayerBusy() {
-        if (g_is_host) return HostPlayerBusy();
-        if (g_remote && g_remote->size >= sizeof(HostApi)) return g_remote->player_busy();
-        return false;   // an older host cannot say: not busy
     }
 
     void TraceUi(unsigned ms) {

@@ -47,19 +47,6 @@ namespace modmenu {
     // Call from a worker thread after start-up; the host may wait up to 30 s for an older Endless Arena's own hooks.
     uint32_t Register(const Mod& mod, LogFn log);
 
-    // Keeps the pause menu open through a lighting-mode change: for `ms` milliseconds, while an options screen is open, the pause menu's own
-    // per-frame "close because the world is in transition" request (the Flash call CloseMenu from exe+7dc06b) is swallowed. The screen still
-    // fades out and in. Call this right before changing the mode from a mod's menu callback.
-    void KeepMenuOpen(unsigned ms);
-
-    // For `ms` milliseconds the lighting transition's screen fade (the Flash calls FadeOut and FadeIn) is swallowed, so a lighting change made in that
-    // window happens without the fade to black. Call right before changing the mode. Experimental: it is not known whether the game waits for the fade.
-    void SuppressFade(unsigned ms);
-
-    // True while the player seems to be in a crime, a hideout, a mission objective or a fight (read from the HUD calls the game makes: the crime pop-up, the wave
-    // counter, the objective line, the progress bar, the combo counter). Mods that change the world's lighting should wait while it is true.
-    bool PlayerBusy();
-
     // Dev tool: for `ms` milliseconds log every UI call the game makes (name and the code that made it) to the log function given at Register.
     void TraceUi(unsigned ms);
 

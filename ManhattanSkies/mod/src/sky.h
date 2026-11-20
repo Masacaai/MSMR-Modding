@@ -23,8 +23,6 @@ namespace sky {
     void SaveMode(int mode);
     int CycleCount();  const char* const* CycleLabels();
     int TickMs();                      // how long the worker loop should sleep: short while the day-night cycle steers the sun
-    bool SmoothFade();                 // the lighting transition's fade is swallowed (the cycle and the TIME OF DAY row)
-    void SetSmoothFade(bool on);      // dev: swallow the lighting transition's fade for cycle-driven changes
     bool CycleSyncMode(int mode);      // a time of day was picked: the cycle (when on) continues from there; false: that mode is not in the cycle (overcast)
     // The atmosphere version chosen for each time of day (slot 0 day, 1 early morning, 2 sunset, 3 night, 4 overcast): "" is the game's own, otherwise the
     // name of an atmosphere mod found by atmpacks. Saved in the ini; used by the dynamic cycle too.

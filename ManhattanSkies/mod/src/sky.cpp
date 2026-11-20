@@ -127,7 +127,6 @@ namespace {
     struct CyclePreset { const char* label; int minutes; };   // how long one full day and night takes
     const CyclePreset kCycles[] = { { "OFF", 0 }, { "2 MIN", 2 }, { "5 MIN", 5 }, { "10 MIN", 10 }, { "20 MIN", 20 }, { "30 MIN", 30 }, { "60 MIN", 60 } };
     std::vector<const char*> g_cycle_labels;
-    std::atomic<bool> g_smooth_fade{ true };     // dev switch (command smoothfade): swallow the lighting transition's fade for cycle-driven changes
     std::vector<const char*> g_fogdist_labels, g_haze_labels, g_exposure_labels, g_filter_labels, g_clouds_labels;
     constexpr int kDirSteps = 24;   // 15 degrees apiece
 
@@ -345,10 +344,10 @@ namespace {
     const uintptr_t kWorldTimers[3] = { 0x5d6a028, 0x5d6a168, 0x5d6a2a8 };   // exe RVAs of world-update timers (freeze while the game is paused)
     float g_last_timers[3] = { 0.f, 0.f, 0.f };
     ULONGLONG g_still_since = 0;
-    bool g_was_paused = false, g_was_busy = false;
+    bool g_was_paused = false;
     bool g_hold = false;                      // a phase boundary came and the lighting has not switched yet: the day's clock stands at the boundary, so the next phase runs its full length
     ULONGLONG g_hold_since = 0;
-    ULONGLONG g_last_switch_at = 0, g_frozen_ms = 0;   // for the log: when the lighting last changed, and how much cycle time stood still since (paused or busy)
+    ULONGLONG g_last_switch_at = 0, g_frozen_ms = 0;   // for the log: when the lighting last changed, and how much cycle time stood still since (the game paused)
     double g_phase = 0.2;
     bool g_cyc_started = false;
     ULONGLONG g_cyc_last = 0, g_cyc_switch_at = 0, g_world_up_at = 0, g_ready_since = 0, g_phase_saved_at = 0;
@@ -367,8 +366,6 @@ namespace {
     // stops him in mid-air (confirmed for every mode change), so the cycle waits for a calm moment.
     std::atomic<float> g_hero_speed{ -1.f };
     std::atomic<bool> g_hero_job_busy{ false };
-    ULONGLONG g_due_wait_ms = 0;                  // how long (unpaused) a due switch has been waiting for Spider-Man to slow down
-    bool g_wait_logged = false;
     void SampleHero() {
         if (g_hero_job_busy.exchange(true)) return;
         if (!gamethread::Installed() && !gamethread::Install()) { g_hero_job_busy = false; return; }
@@ -545,11 +542,8 @@ namespace {
         if (moved) g_still_since = 0; else if (!g_still_since) g_still_since = now;
         const bool paused = g_still_since && now - g_still_since > 90;
         if (paused != g_was_paused) { LOG("sky: cycle %s", paused ? "paused with the game" : "running again"); g_was_paused = paused; }
-        // In a crime, a hideout, a mission objective or a fight the day stands still, and no lighting switch happens: a switch is a mini-load that ends the activity.
-        const bool busy = modmenu::PlayerBusy();
-        if (busy != g_was_busy) { LOG("sky: cycle %s", busy ? "frozen: the player is in a crime, hideout, mission or fight" : "running again: the activity is over"); g_was_busy = busy; }
-        const ULONGLONG dtms = paused || busy ? 0 : now - g_cyc_last;
-        if (paused || busy) g_frozen_ms += now - g_cyc_last;
+        const ULONGLONG dtms = paused ? 0 : now - g_cyc_last;
+        if (paused) g_frozen_ms += now - g_cyc_last;
         g_cyc_last = now;
         g_prev_phase = g_phase;
         if (!g_hold) {
@@ -573,7 +567,6 @@ namespace {
         const Pose ps = g_hold ? PoseAt(std::fmod(g_phase + 1.0 - 1e-6, 1.0), g_cyc_overcast) : p;   // while the clock waits at a boundary, the sun stays where the old phase left it
         const bool pending = !ModeMatches(mode, p.mode);   // a switch is due
         if (g_hold && !pending) g_hold = false;            // the lighting already matches (picked by hand): nothing to wait for
-        if (pending) g_due_wait_ms += dtms > 1000 ? 1000 : dtms; else { g_due_wait_ms = 0; g_wait_logged = false; }
         g_cyc_rotd = ps.rotd; g_cyc_elev = ps.elev; g_cyc_sun_on = ps.sun;
         // ---- get ready for the next switch: pick its sky a few seconds ahead (an atmosphere mod's textures are unpacked meanwhile). There is no blending toward
         // it and nothing is loaded early: the switch is one clean change (maintainer's decision, 2026-11-14: the blends did little, and an early weight-0 load of
@@ -593,12 +586,6 @@ namespace {
         }
         if (ps.sun) ++g_cyc_step;
         if (pending && now - g_cyc_switch_at > 8000) {
-            if (busy) return;   // never switch during an activity, however long it lasts
-            const float hs = g_hero_speed;
-            if (hs >= 3.0f && g_due_wait_ms < 45000) {   // Spider-Man is moving fast: the switch would stop him in mid-air; wait up to 45 s of game time
-                if (!g_wait_logged) { LOG("sky: cycle: switch to mode %d waits for Spider-Man to slow down (%.1f m/s)", p.mode, hs); g_wait_logged = true; }
-                return;
-            }
             g_cyc_switch_at = now;
             if (g_pick_nm != p.mode) { g_pick_nm = p.mode; g_next_look = PickLook(p.mode); RollVar(g_next_var, p.mode); }   // no preparation happened (a late start): pick now
             g_cyc_look = g_next_look;                     // the chosen sky goes on with the switch (0: the game's own)
@@ -611,8 +598,6 @@ namespace {
                     g_last_switch_at ? (double)(now - g_last_switch_at) / 1000.0 : 0.0, (double)g_frozen_ms / 1000.0);
                 g_last_switch_at = now; g_frozen_ms = 0; g_hold = false;
             }
-            modmenu::KeepMenuOpen(6000);
-            if (g_smooth_fade) modmenu::SuppressFade(5000);
             recorder::SetMode(p.mode);
             SaveMode(p.mode);   // the game's load-time call follows the cycle too, so a restart loads the matching time of day
         }
@@ -907,8 +892,6 @@ namespace {
     int ExposureCount() { EnsureInit(); return (int)g_exposure_labels.size(); } const char* const* ExposureLabels() { EnsureInit(); return g_exposure_labels.data(); }
     int FilterCount() { EnsureInit(); return (int)g_filter_labels.size(); }     const char* const* FilterLabels() { EnsureInit(); return g_filter_labels.data(); }
     int TickMs() { return g_cyc_sun_on ? 40 : 250; }
-    bool SmoothFade() { return g_smooth_fade; }
-    void SetSmoothFade(bool on) { g_smooth_fade = on; LOG("sky: smooth fade %s", on ? "on (the cycle swallows the lighting transition's fade)" : "off"); }
     int CycleCount() { EnsureInit(); return (int)g_cycle_labels.size(); }       const char* const* CycleLabels() { EnsureInit(); return g_cycle_labels.data(); }
     bool CycleSyncMode(int mode) {
         if (g_set[kCycle] <= 0) return true;

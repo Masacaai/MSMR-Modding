@@ -47,8 +47,6 @@ namespace {
         for (int k = 0; k < kChoiceCount; ++k) if (kModes[k] == mode) return k;
         return kDefault;
     }
-    // The game fades the screen for a lighting change and closes every menu during the fade (the pause menu's per-frame update asks Flash to
-    // CloseMenu while the world is in transition); KeepMenuOpen swallows that request, so the menu stays and the sky changes with the fade.
     void Choose(int choice) {
         if (choice < 0 || choice >= kChoiceCount) return;
         ++g_changes;
@@ -56,8 +54,6 @@ namespace {
         if (kModes[choice] == recorder::CurrentMode()) { LOG("menu: TIME OF DAY already %s", kChoices[choice]); return; }
         g_pending = choice;
         g_pending_at = GetTickCount64();
-        modmenu::KeepMenuOpen(6000);
-        if (sky::SmoothFade()) modmenu::SuppressFade(5000);   // no black fade for the switch, like the dynamic cycle's
         const bool ok = recorder::ApplyMode(kModes[choice]);   // menu callbacks run on the game thread, like the game's own option
         LOG("menu: TIME OF DAY -> %s (mode %d)%s", kChoices[choice], kModes[choice], ok ? "" : " FAILED (no world)");
     }
