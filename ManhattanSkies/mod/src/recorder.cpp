@@ -147,6 +147,8 @@ namespace recorder {
         const uint64_t r = g_parse_orig(slot, data);
         uint64_t asset = 0;
         memory::Read(slot + 8, asset);
+        static std::atomic<int> logged{ 0 };
+        if (logged++ < 400) LOG("parse: slot %lld asset %016llX parsed (returned %llu)", SlotIndex(g_mgr.load(), slot), (unsigned long long)asset, (unsigned long long)r);
         std::lock_guard<std::mutex> lk(g_parsed_mu);
         g_parsed[slot] = { asset, GetTickCount64() };
         return r;

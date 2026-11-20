@@ -258,6 +258,7 @@ namespace {
         if (idx >= 0 && recorder::SlotInfo(idx, a, w) && a == id && w <= 0 && recorder::ReleaseSlot(idx)) g_held.erase(id);
     }
 
+    ULONGLONG g_parse_wait_since = 0;   // a look's slot is waiting for the game's parser (see ApplyLook)
     bool WorldReady(ULONGLONG now);   // defined with the cycle: 8 s after a load, Spider-Man readable and the world timers moving for 4 s
     // A pick made in the menu waits until it has rested for 350 ms before the sky is loaded: scrolling through the variants used to load and release
     // several skies a second (a Settings-screen crash followed such a session). The dynamic cycle's own picks are not delayed (they must land with the switch).
@@ -302,6 +303,17 @@ namespace {
                 }
                 return;
             }
+            // Never switch a slot on before the game has parsed its data into it: until then it holds whatever its last asset left (a red sunset from the loading screen's
+            // atmosphere, 2026-11-20 red screen after a relaunch). If the parse never happens (the game rejected the data), say so and give up on this look.
+            if (recorder::ParseHooked() && !recorder::SlotParsedTick(idx, want)) {
+                if (!g_parse_wait_since) g_parse_wait_since = now;
+                if (now - g_parse_wait_since > 5000) {
+                    LOG("sky: look %016llX is in slot %d but the game never parsed its data in 5 s: giving up on it (see the parse: lines)", (unsigned long long)want, idx);
+                    g_failed_id = want; g_parse_wait_since = 0;
+                }
+                return;
+            }
+            g_parse_wait_since = 0;
             if (g_load_req_at) g_held.insert(want);   // it is in the pool because we asked for it: we hold a reference
             // swap the active atmosphere: the old look (or the game's base) off, the new one on
             const uint64_t old_look = g_look_id; const int old_idx = g_look_idx;
@@ -535,7 +547,13 @@ namespace {
         for (int i = 0; i < 3; ++i) { float v = 0.f; memory::Read(scan::FromRva(kWorldTimers[i]), v); pm = pm || v != pre[i]; pre[i] = v; }
         if (g_hero_speed.load() >= 0.f && pm) { if (!g_ready_since) g_ready_since = now; } else g_ready_since = 0;
     }
-    bool WorldReady(ULONGLONG now) { return g_ready_since && now - g_ready_since >= 4000; }
+    // Latched until the next load: the world timers stand still in the pause menu, which un-readied the world each time and delayed an ATMOSPHERE pick by the pause plus 4 s
+    // (2026-11-20: picks took effect 4.5 s after leaving the menu). Readiness is only about the world having finished loading.
+    bool g_ready_latched = false;
+    bool WorldReady(ULONGLONG now) {
+        if (!g_ready_latched && g_ready_since && now - g_ready_since >= 4000) g_ready_latched = true;
+        return g_ready_latched;
+    }
     // Worker thread, every 40 ms while the cycle steers the sun (after the world has settled): advance the phase, steer the sun, and switch the
     // lighting mode (and the sky) at dawn, day, dusk and night. The first switch waits 30 s after a load (a setter call during a load hung it).
     void Cycle(ULONGLONG now) {
@@ -803,7 +821,6 @@ namespace {
         if (p.empty()) return;
         for (int s = 0; s < kSettingCount; ++s) WritePrivateProfileStringA("sky", kKeys[s], std::to_string(g_set[s].load()).c_str(), p.c_str());
         WritePrivateProfileStringA("sky", "mode", std::to_string(g_saved_mode.load()).c_str(), p.c_str());
-        WritePrivateProfileStringA("sky", "seamless", g_seamless.load() ? "1" : "0", p.c_str());
         { std::lock_guard<std::mutex> lk(g_ver_mu); for (int i = 0; i < 5; ++i) WritePrivateProfileStringA("version", kVerKeys[i], g_ver[i].c_str(), p.c_str()); }
     }
 }
@@ -815,7 +832,10 @@ namespace {
         g_saved_mode = p.empty() ? -1 : (int)GetPrivateProfileIntA("sky", "mode", -1, p.c_str());
         if (!p.empty()) for (int i = 0; i < 5; ++i) { char buf[256] = {}; GetPrivateProfileStringA("version", kVerKeys[i], "", buf, sizeof(buf), p.c_str()); std::lock_guard<std::mutex> lk(g_ver_mu); g_ver[i] = buf; }
         if (g_saved_mode < 0 || g_saved_mode > 6) g_saved_mode = -1;
-        if (!p.empty() && GetPrivateProfileIntA("sky", "seamless", 0, p.c_str()) != 0) { seamless::SetEnabled(true); g_seamless = seamless::Enabled(); }
+        // Seamless lighting switches are always on (maintainer, 2026-11-20: tested, "pretty good"; the game's own load screen option is gone). If the hook cannot be installed
+        // (the game's code differs), the game's own transition simply plays.
+        seamless::SetEnabled(true);
+        g_seamless = seamless::Enabled();
         if (!p.empty()) {
             char pb[32] = {};
             GetPrivateProfileStringA("cycle", "phase", "", pb, sizeof(pb), p.c_str());
@@ -974,6 +994,7 @@ namespace {
         if (!g_world_up) {   // a (re)load: every slot we knew is gone
             g_world_up = true;
             atmpacks::Deselect();   // a (re)load puts the game's own atmosphere back: so the game's own files too
+            g_ready_latched = false; g_parse_wait_since = 0;
             g_look_id = 0; g_look_idx = -1; g_edit_idx = -1; g_edit_asset = 0; g_edit_touched = false; g_load_req_at = 0; g_held.clear(); g_failed_id = 0; g_load_tries = 0;
             for (int s = 0; s < kSettingCount; ++s) g_edit_seen[s] = -1;
             g_hold_until = now + 3000;
