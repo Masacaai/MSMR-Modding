@@ -258,6 +258,7 @@ namespace {
         if (idx >= 0 && recorder::SlotInfo(idx, a, w) && a == id && w <= 0 && recorder::ReleaseSlot(idx)) g_held.erase(id);
     }
 
+    bool g_reported = false;                    // the look-report line for the current look has been logged
     ULONGLONG g_parse_wait_since = 0;   // a look's slot is waiting for the game's parser (see ApplyLook)
     bool WorldReady(ULONGLONG now);   // defined with the cycle: 8 s after a load, Spider-Man readable and the world timers moving for 4 s
     // A pick made in the menu waits until it has rested for 350 ms before the sky is loaded: scrolling through the variants used to load and release
@@ -319,7 +320,7 @@ namespace {
             const uint64_t old_look = g_look_id; const int old_idx = g_look_idx;
             if (g_look_id) Activate(g_look_idx, false); else Activate(BaseSlot(), false);
             Activate(idx, true);
-            g_look_id = want; g_look_idx = idx; g_look_at = now; g_load_req_at = 0; g_load_tries = 0;
+            g_look_id = want; g_look_idx = idx; g_look_at = now; g_load_req_at = 0; g_load_tries = 0; g_reported = false;
             ReleaseLook(old_look, old_idx);
             LOG("sky: look on: slot %d asset %016llX", idx, (unsigned long long)want);
             return;
@@ -546,6 +547,7 @@ namespace {
         bool pm = false;
         for (int i = 0; i < 3; ++i) { float v = 0.f; memory::Read(scan::FromRva(kWorldTimers[i]), v); pm = pm || v != pre[i]; pre[i] = v; }
         if (g_hero_speed.load() >= 0.f && pm) { if (!g_ready_since) g_ready_since = now; } else g_ready_since = 0;
+        WorldReady(now);   // evaluates (and latches) the readiness every tick: it used to be evaluated only when a pick asked, which in the pause menu was too late
     }
     // Latched until the next load: the world timers stand still in the pause menu, which un-readied the world each time and delayed an ATMOSPHERE pick by the pause plus 4 s
     // (2026-11-20: picks took effect 4.5 s after leaving the menu). Readiness is only about the world having finished loading.
@@ -865,6 +867,21 @@ namespace {
         if (g_set[kClouds] < 0 || g_set[kClouds] >= (int)(sizeof(kCloudsChoices) / sizeof(kCloudsChoices[0]))) g_set[kClouds] = 0;
         LOG("sky: settings style %d variant %d dir %d height %d color %d bright %d fog %d", g_set[kStyle].load(), g_set[kVariant].load(), g_set[kDir].load(), g_set[kHeight].load(), g_set[kColor].load(), g_set[kBright].load(), g_set[kFog].load());
     }
+    void LookReport() {
+        const int idx = g_look_idx >= 0 ? g_look_idx : BaseSlot();
+        uint64_t asset = 0; int weight = 0;
+        if (idx < 0 || !recorder::SlotInfo(idx, asset, weight)) { LOG("lookreport: no active slot"); return; }
+        float sun[6] = {}, ex = 0, hz = 0, fc[3] = {}, fl[3] = {}, fd[4] = {}, fo[6] = {}, fill[4] = {}, cl = 0, ibl[6] = {};
+        recorder::SlotSun(idx, sun, false);
+        recorder::SlotFloats(idx, kOffExposure, &ex, 1, false); recorder::SlotFloats(idx, kOffHaze, &hz, 1, false); recorder::SlotFloats(idx, kOffFogColor, fc, 3, false);
+        recorder::SlotFloats(idx, kOffFilter, fl, 3, false); recorder::SlotFloats(idx, kOffFogDist, fd, 4, false); recorder::SlotFog(idx, fo, false);
+        recorder::SlotFloats(idx, kOffAmbient, fill, 4, false); recorder::SlotFloats(idx, kOffClouds, &cl, 1, false); recorder::SlotFloats(idx, 0x650, ibl, 6, false);
+        uint64_t p[3]; std::memcpy(p, ibl, 24);
+        LOG("lookreport: slot %d asset %016llX weight %d parsed-ago %lld ms | sun %.2f %.2f %.2f x%.2f az %.0f el %.0f | exposure %.2f haze %.3f clouds %.2f | fog color %.2f %.2f %.2f filter %.2f %.2f %.2f | fog heights %.0f %.0f %.0f %.0f opac %.4f %.4f %.4f | fill %.4f %.4f %.4f x%.4f | ibl %llx %llx %llx",
+            idx, (unsigned long long)asset, weight, recorder::SlotParsedTick(idx, asset) ? (long long)(GetTickCount64() - recorder::SlotParsedTick(idx, asset)) : -1LL, sun[0], sun[1], sun[2], sun[3], sun[4], sun[5],
+            ex, hz, cl, fc[0], fc[1], fc[2], fl[0], fl[1], fl[2], fd[0], fd[1], fd[2], fd[3], fo[0], fo[1], fo[2], fill[0], fill[1], fill[2], fill[3],
+            (unsigned long long)p[0], (unsigned long long)p[1], (unsigned long long)p[2]);
+    }
     int Get(Setting s) { return g_set[s]; }
     int SavedMode() { return g_saved_mode; }
     std::string Version(int slot) {
@@ -1003,6 +1020,7 @@ namespace {
         }
         if (now < g_hold_until) return;
         UpdateReadiness(now);
+        if (g_look_id && !g_reported && now - g_look_at > 1500) { g_reported = true; LookReport(); }   // what the game holds 1.5 s after a look went on (for the next "red screen")
         Cycle(now);
         ApplyLook();
         ApplySun();

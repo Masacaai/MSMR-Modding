@@ -204,6 +204,16 @@ static void RunCommand(const std::string& line) {
         std::string a, b, a2;
         in >> a >> b >> a2;
         recorder::SnapDiff(a, b, a2);
+    } else if (cmd == "lookreport") {   // lookreport: the active look's slot values as the game holds them now
+        sky::LookReport();
+    } else if (cmd == "version") {   // version <slot 0-4: day, early morning, sunset, night, overcast> [mod name]: pick an ATMOSPHERE like the row does (no name: DEFAULT)
+        int slot = -1;
+        in >> slot;
+        std::string name;
+        std::getline(in, name);
+        while (!name.empty() && name[0] == ' ') name.erase(0, 1);
+        sky::SetVersion(slot, name);
+        LOG("version: slot %d -> %s", slot, name.empty() ? "DEFAULT" : name.c_str());
     } else if (cmd == "fsinfo") {   // fsinfo: the game's file system object and toc object, compared with the toc found by the heap scan
         toc::FsInfo();
     } else if (cmd == "seamless") {   // seamless [0|1]: the SWITCH STYLE row; no argument: the hook status

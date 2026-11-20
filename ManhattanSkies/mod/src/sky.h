@@ -30,6 +30,7 @@ namespace sky {
     // name of an atmosphere mod found by atmpacks. Saved in the ini; used by the dynamic cycle too.
     std::string Version(int slot);
     void SetVersion(int slot, const std::string& name);
+    void LookReport();   // dev: the active look's slot values, as the game holds them now (`lookreport`)
     bool Seamless();                   // SWITCH STYLE: lighting changes made by this mod skip the game's load screen (experimental; a preference, not part of a look)
     void SetSeamless(bool on);
     int AmbientCount(); const char* const* AmbientLabels();   // AMBIENT LIGHT: the atmosphere's fill light (AmbientFillIntensity, slot+0x30c)
