@@ -307,6 +307,9 @@ namespace {
             g_look_id = want; g_look_idx = idx; g_look_at = now; g_load_req_at = 0; g_load_tries = 0; g_reported = false;
             ReleaseLook(old_look, old_idx);
             LOG("sky: look on: slot %d asset %016llX", idx, (unsigned long long)want);
+            // The game's blended result (what the renderer reads) is rebuilt by Recompute; a weight change alone may not do it. The parse (which recomputes) now happens BEFORE the slot is
+            // switched on, so without this the blend can stay as it was until something else triggers one: a red screen after a relaunch that cleared when a setting was changed.
+            recorder::Recompute();
             return;
         }
         // back to AUTO: the look off, the game's own base atmosphere for the current mode on again
@@ -325,6 +328,7 @@ namespace {
         }
         Activate(base, true);
         LOG("sky: look off: base slot %d active again", base);
+        recorder::Recompute();
         g_look_id = 0; g_look_idx = -1; g_load_req_at = 0; g_load_tries = 0;
         ReleaseLook(old_look, old_idx);
     }
