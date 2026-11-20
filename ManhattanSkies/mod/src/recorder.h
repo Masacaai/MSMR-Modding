@@ -15,6 +15,8 @@ namespace recorder {
     using AdjustFilter = bool (*)(uintptr_t caller_rva, int slot_idx, uint64_t asset, int delta);
     void SetAdjustFilter(AdjustFilter f);
     uintptr_t Manager();                                  // the AtmosphereManager (0 until the first AtmosphereAdjust call is seen)
+    void DumpLayers();   // dev `layers`: the manager's four active-layer slot pointers (mgr+0x1c8, written by Recompute exe+162ff10) resolved to slots
+    void DumpTextureRecords(unsigned long long key, int hex_digits);   // dev `texrec <hex>`: TextureManager records (exe+621b2b0, 0xc0 bytes each) whose id matches (full id, or a prefix)
     bool SlotState(int idx, unsigned char& b0, unsigned char& b1);   // the slot header's first two bytes: 04 01 = loaded and parsed; 05 00 = a (re)load that never finished; 00 00 = empty
     bool ParseHooked();                                    // the atmosphere parser (exe+162cc00) is hooked: SlotParsedTick is meaningful
     unsigned long long SlotParsedTick(int idx, uint64_t asset);   // when the game finished parsing `asset`'s data into that slot (GetTickCount64), 0 if it has not (yet)

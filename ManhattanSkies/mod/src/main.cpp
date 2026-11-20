@@ -176,6 +176,13 @@ static void RunCommand(const std::string& line) {
         std::string a, b, a2;
         in >> a >> b >> a2;
         recorder::SnapDiff(a, b, a2);
+    } else if (cmd == "layers") {   // layers: the manager's four active-layer slots (what the renderer reads)
+        recorder::DumpLayers();
+    } else if (cmd == "texrec") {   // texrec <hex id or prefix, e.g. e1 for this mod's new ids>: TextureManager records
+        std::string h;
+        in >> h;
+        if (h.empty()) LOG("texrec: usage texrec <hex id or prefix>");
+        else recorder::DumpTextureRecords(strtoull(h.c_str(), nullptr, 16) << (h.size() >= 16 ? 0 : 0), (int)h.size());
     } else if (cmd == "lookreport") {   // lookreport: the active look's slot values as the game holds them now
         sky::LookReport();
     } else if (cmd == "version") {   // version <slot 0-4: day, early morning, sunset, night, overcast> [mod name]: pick an ATMOSPHERE like the row does (no name: DEFAULT)

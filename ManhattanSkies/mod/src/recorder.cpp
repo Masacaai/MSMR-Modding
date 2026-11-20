@@ -561,6 +561,44 @@ namespace recorder {
         for (size_t off = 0; off < len; off += 0x20) LOG("peek: %llx  %s", (unsigned long long)(addr + off), Hex(addr + off, len - off < 0x20 ? len - off : 0x20).c_str());
     }
 
+    void DumpLayers() {
+        const uintptr_t mgr = g_mgr.load();
+        uintptr_t slots = 0;
+        if (!mgr || !memory::Read(mgr + kSlots, slots)) { LOG("layers: no AtmosphereManager seen yet"); return; }
+        for (int k = 0; k < 4; ++k) {
+            uintptr_t p = 0;
+            memory::Read(mgr + 0x1c8 + 8 * (uintptr_t)k, p);
+            uint64_t asset = 0;
+            if (p) memory::Read(p + 8, asset);
+            const long long idx = p && p >= slots ? (long long)((p - slots) / kSlotStride) : -1;
+            LOG("layers: layer %d -> %llx (slot %lld, asset %016llX)%s", k, (unsigned long long)p, idx, (unsigned long long)asset, idx < 0 || idx > 31 ? "  [not one of the pool's slots: the Default Atmosphere?]" : "");
+        }
+    }
+    void DumpTextureRecords(unsigned long long key, int hex_digits) {
+        uintptr_t begin = 0, end = 0;
+        if (!memory::Read(scan::FromRva(0x621b2b0), begin) || !memory::Read(scan::FromRva(0x621b2b8), end) || !begin || end <= begin) { LOG("texrec: texture record array not readable"); return; }
+        const int shift = 64 - 4 * hex_digits;
+        const unsigned long long want = hex_digits >= 16 ? key : (hex_digits <= 0 ? 0 : key);
+        int shown = 0;
+        size_t total = 0;
+        for (uintptr_t r = begin; r + 0xc0 <= end && shown < 60; r += 0xc0) {
+            ++total;
+            unsigned long long id = 0;
+            if (!memory::Read(r + 8, id) || !id) continue;
+            if (hex_digits < 16 && (shift >= 64 || (id >> shift) != (want >> 0))) continue;
+            if (hex_digits >= 16 && id != want) continue;
+            unsigned char b[0xc0] = {};
+            memory::SafeRead(r, b, sizeof(b));
+            const unsigned vram = *(unsigned*)(b + 0x30), high = *(unsigned*)(b + 0x34);
+            const unsigned short h = *(unsigned short*)(b + 0x84), w = *(unsigned short*)(b + 0x86);
+            const bool resident = (b[0x8f] & 0xf) != 0 && (b[0x8e] & 0xf) < (b[0x8f] & 0xf);
+            LOG("texrec: %llx id %016llX state %02x refs %u | %ux%u vram %u highMips %u | top mip %u of %u streamed: high mips %s | stamp %u", (unsigned long long)r, id, b[1], *(unsigned*)(b + 4), w, h, vram, high,
+                b[0x8e] & 0xf, b[0x8f] & 0xf, resident ? "RESIDENT" : "not resident", *(unsigned*)(b + 0xb0));
+            ++shown;
+        }
+        LOG("texrec: %d record(s) shown of about %zu in the array", shown, total);
+    }
+
     void DumpAtmospheres() {
         const uintptr_t mgr = g_mgr.load();
         if (!mgr) { LOG("atm: no AtmosphereManager seen yet (no AtmosphereAdjust call so far)"); return; }
