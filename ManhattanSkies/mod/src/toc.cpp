@@ -17,18 +17,7 @@ namespace toc {
 namespace {
     // Section layout (tools/tocinfo.py prints the distances from the id table): ids 8 bytes each, offsets 8 bytes (archive u32, offset u32), sizes 12 bytes (1, size u32, index u32).
 
-    // Scan one committed region for the 32-byte pattern; SEH-guarded (pages can disappear). No C++ objects here.
-    const uint8_t* SearchRegion(const uint8_t* p, size_t n, const uint64_t pat[4]) {
-        __try {
-            for (size_t i = 0; i + 32 <= n; i += 8) {
-                if (*reinterpret_cast<const uint64_t*>(p + i) != pat[0]) continue;
-                if (std::memcmp(p + i, pat, 32) == 0) return p + i;
-            }
-        } __except (EXCEPTION_EXECUTE_HANDLER) {}
-        return nullptr;
-    }
-
-    // Same as SearchRegion for three consecutive 8-byte values.
+    // Scan one committed region for three consecutive 8-byte values; SEH-guarded (pages can disappear). No C++ objects here.
     const uint8_t* SearchRegion3(const uint8_t* p, size_t n, const uint64_t pat[3]) {
         __try {
             for (size_t i = 0; i + 24 <= n; i += 8) {
@@ -132,52 +121,6 @@ namespace {
     }
 }
 
-    void Find(uint32_t index, const uint64_t pat[4], uintptr_t offsets_delta, uintptr_t sizes_delta) {
-        SYSTEM_INFO si;
-        GetSystemInfo(&si);
-        uintptr_t addr = (uintptr_t)si.lpMinimumApplicationAddress;
-        const uintptr_t end = (uintptr_t)si.lpMaximumApplicationAddress;
-        const ULONGLONG t0 = GetTickCount64();
-        int hits = 0;
-        size_t scanned = 0;
-        MEMORY_BASIC_INFORMATION mbi;
-        while (addr < end && VirtualQuery(reinterpret_cast<void*>(addr), &mbi, sizeof(mbi))) {
-            const uintptr_t base = (uintptr_t)mbi.BaseAddress;
-            const bool readable = mbi.State == MEM_COMMIT && !(mbi.Protect & (PAGE_GUARD | PAGE_NOACCESS)) &&
-                                  (mbi.Protect & (PAGE_READONLY | PAGE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE));
-            // Private memory only, and only big regions: the toc is about 21 MB on the heap. File-backed views (the game maps its archives, tens of GB) must never be scanned.
-            if (readable && mbi.Type == MEM_PRIVATE && mbi.RegionSize >= (8u << 20) && scanned < (6ull << 30)) {
-                scanned += mbi.RegionSize;
-                const uint8_t* p = reinterpret_cast<const uint8_t*>(base);
-                size_t left = mbi.RegionSize;
-                while (left >= 32) {
-                    const uint8_t* h = SearchRegion(p, left, pat);
-                    if (!h) break;
-                    ++hits;
-                    const uintptr_t at = (uintptr_t)h;
-                    const uintptr_t ids_base = at - 8ull * index;
-                    uint32_t arch = 0, off = 0, one = 0, size = 0, idx = 0;
-                    const bool ok = ReadBytes(ids_base + offsets_delta + 8ull * index, &arch, 4) &&
-                                    ReadBytes(ids_base + offsets_delta + 8ull * index + 4, &off, 4) &&
-                                    ReadBytes(ids_base + sizes_delta + 12ull * index, &one, 4) &&
-                                    ReadBytes(ids_base + sizes_delta + 12ull * index + 4, &size, 4) &&
-                                    ReadBytes(ids_base + sizes_delta + 12ull * index + 8, &idx, 4);
-                    LOG("tocfind: hit %d at %llx (region %llx size %llx type %lx prot %lx) -> id table base %llx; entry %u: archive %u offset 0x%x | sizes 1st %u size %u idx %u%s",
-                        hits, (unsigned long long)at, (unsigned long long)base, (unsigned long long)mbi.RegionSize, (unsigned long)mbi.Type, (unsigned long)mbi.Protect,
-                        (unsigned long long)ids_base, index, arch, off, one, size, idx, ok ? "" : " (unreadable)");
-                    const size_t step = (size_t)(h - p) + 8;
-                    p += step;
-                    left -= step;
-                    if (ok && arch < 256) { hits = 12; break; }   // a valid entry: this is the table
-                    if (hits >= 12) break;
-                }
-            }
-            if (hits >= 12) break;
-            addr = base + mbi.RegionSize;
-        }
-        LOG("tocfind: %d hit(s); scanned %zu MB in %llu ms", hits, scanned >> 20, (unsigned long long)(GetTickCount64() - t0));
-    }
-
     void IoTrace(unsigned ms) {
         if (!g_io_hooked.exchange(true)) {
             MH_Initialize();   // harmless if another module did it already
@@ -254,112 +197,6 @@ namespace {
         return name;
     }
 
-    // Makes `carrier_id` (an existing asset the game does not need) load from `path`: the asset's toc entry is pointed at a made-up offset in the archive
-    // file of `use_archive` (a file the game already has open, for example a mod archive), with the size of our file, and reads of exactly that
-    // (file, offset, length) are answered from our own file. `use_archive` is an archive index as tools/tocinfo.py prints it.
-    bool AddCarrier(uint64_t carrier_id, uint32_t use_archive, const wchar_t* path) {
-        if (!Locate()) return false;
-        size_t index = (size_t)-1;
-        for (size_t i = 0; i < g_tab.count; ++i) {
-            uint64_t v = 0;
-            if (!ReadBytes(g_tab.ids + 8 * i, &v, 8)) return false;
-            if (v == carrier_id) { index = i; break; }
-        }
-        if (index == (size_t)-1) { LOG("carrier: %016llX is not in the toc", (unsigned long long)carrier_id); return false; }
-        const std::string aname = ArchiveName(use_archive);
-        if (aname.empty()) { LOG("carrier: archive index %u has no name", use_archive); return false; }
-        HANDLE f = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_OVERLAPPED | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
-        if (f == INVALID_HANDLE_VALUE) { LOG("carrier: cannot open the file (error %lu)", GetLastError()); return false; }
-        LARGE_INTEGER sz{};
-        GetFileSizeEx(f, &sz);
-        Carrier c;
-        c.id = carrier_id; c.index = index; c.archive_name = aname; c.path = path; c.file = f;
-        c.size = (uint32_t)sz.QuadPart;
-        c.offset = g_next_sentinel.fetch_add(0x10000u);
-        ReadBytes(g_tab.offs + 8 * index, &c.old_archive, 4);
-        ReadBytes(g_tab.offs + 8 * index + 4, &c.old_offset, 4);
-        ReadBytes(g_tab.sizes + 12 * index + 4, &c.old_size, 4);
-        {
-            std::lock_guard<std::mutex> lk(g_car_mu);
-            g_cars.push_back(c);   // the hook knows the redirect before the entry changes
-        }
-        g_cars_active = true;
-        MH_Initialize();
-        if (!g_io_hooked.exchange(true)) {
-            if (MH_CreateHook(reinterpret_cast<void*>(&ReadFile), reinterpret_cast<void*>(&ReadFileDetour), reinterpret_cast<void**>(&g_read_orig)) != MH_OK ||
-                MH_EnableHook(reinterpret_cast<void*>(&ReadFile)) != MH_OK) { LOG("carrier: could not hook ReadFile"); g_io_hooked = false; return false; }
-        }
-        const bool w = memory::Write(g_tab.offs + 8 * index, use_archive) && memory::Write(g_tab.offs + 8 * index + 4, c.offset) && memory::Write(g_tab.sizes + 12 * index + 4, c.size);
-        LOG("carrier: %016llX (toc index %zu) was archive %u offset 0x%x size %u -> archive %u (%s) offset 0x%x size %u%s", (unsigned long long)carrier_id, index, c.old_archive, c.old_offset,
-            c.old_size, use_archive, aname.c_str(), c.offset, c.size, w ? "" : " (WRITE FAILED)");
-        return w;
-    }
-
-    void RestoreCarriers() {
-        std::lock_guard<std::mutex> lk(g_car_mu);
-        for (auto& c : g_cars) {
-            memory::Write(g_tab.offs + 8 * c.index, c.old_archive);
-            memory::Write(g_tab.offs + 8 * c.index + 4, c.old_offset);
-            memory::Write(g_tab.sizes + 12 * c.index + 4, c.old_size);
-            if (c.file != INVALID_HANDLE_VALUE) CloseHandle(c.file);
-            LOG("carrier: %016llX restored", (unsigned long long)c.id);
-        }
-        g_cars.clear();
-        g_cars_active = false;
-    }
-    // Where does the game keep pointers to the toc? Scans private memory and the exe's own image for 8-byte values equal to the DAT1 base or a section start,
-    // and prints the first few hits with their surroundings, to see how the game's toc object holds the tables (research for adding new entries).
-    void FindPointers() {
-        if (!Locate()) return;
-        struct Target { const char* name; uintptr_t value; };
-        const Target targets[] = { { "dat1 base", g_tab.base }, { "ids", g_tab.ids }, { "offsets", g_tab.offs }, { "sizes", g_tab.sizes }, { "archives", g_tab.archives }, { "spans", g_tab.spans } };
-        int hits[6] = {};
-        SYSTEM_INFO si;
-        GetSystemInfo(&si);
-        uintptr_t addr = (uintptr_t)si.lpMinimumApplicationAddress;
-        const uintptr_t end = (uintptr_t)si.lpMaximumApplicationAddress;
-        const uintptr_t exe = scan::FromRva(0);
-        MEMORY_BASIC_INFORMATION mbi;
-        size_t scanned = 0;
-        while (addr < end && VirtualQuery(reinterpret_cast<void*>(addr), &mbi, sizeof(mbi))) {
-            const uintptr_t base = (uintptr_t)mbi.BaseAddress;
-            const bool in_exe = base >= exe && base < exe + 0x8000000;
-            const bool ok = mbi.State == MEM_COMMIT && !(mbi.Protect & (PAGE_GUARD | PAGE_NOACCESS)) && (mbi.Protect & (PAGE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_READWRITE | PAGE_READONLY)) &&
-                            (mbi.Type == MEM_PRIVATE || in_exe) && mbi.RegionSize <= (1ull << 29);
-            if (ok) {
-                scanned += mbi.RegionSize;
-                for (uintptr_t a = base; a + 8 <= base + mbi.RegionSize; a += 8) {
-                    uint64_t v = 0;
-                    if (!ReadBytes(a, &v, 8)) break;
-                    if (v < 0x10000) continue;
-                    for (int t = 0; t < 6; ++t) {
-                        if (v != targets[t].value || a == g_tab.ids || (a >= g_tab.ids && a < g_tab.ids + 8 * g_tab.count)) continue;
-                        if (++hits[t] <= 4) {
-                            uint8_t ctx[0x60] = {};
-                            ReadBytes(a - 0x20, ctx, sizeof(ctx));
-                            char hex[0x60 * 3 + 1] = {};
-                            for (int i = 0; i < 0x60; ++i) snprintf(hex + i * 3, 4, "%02x ", ctx[i]);
-                            LOG("tocptrs: %s pointer at %llx (%s, exe+%llx, region %llx size %llx): %s", targets[t].name, (unsigned long long)a, in_exe ? "exe image" : "private",
-                                (unsigned long long)(in_exe ? a - exe : 0), (unsigned long long)base, (unsigned long long)mbi.RegionSize, hex);
-                        }
-                    }
-                }
-            }
-            addr = base + mbi.RegionSize;
-        }
-        LOG("tocptrs: hits: base %d, ids %d, offsets %d, sizes %d, archives %d, spans %d (scanned %zu MB)", hits[0], hits[1], hits[2], hits[3], hits[4], hits[5], scanned >> 20);
-        // the spans section itself: how asset ids are grouped
-        for (size_t i = 0; i < g_tab.span_count && i < 8; ++i) {
-            uint32_t b = 0, c = 0;
-            ReadBytes(g_tab.spans + 8 * i, &b, 4);
-            ReadBytes(g_tab.spans + 8 * i + 4, &c, 4);
-            LOG("tocptrs: span %zu: first asset index %u, count %u", i, b, c);
-        }
-        uint32_t lb = 0, lc = 0;
-        ReadBytes(g_tab.spans + 8 * (g_tab.span_count - 1), &lb, 4);
-        ReadBytes(g_tab.spans + 8 * (g_tab.span_count - 1) + 4, &lc, 4);
-        LOG("tocptrs: last span %zu: first asset index %u, count %u (of %zu assets)", g_tab.span_count - 1, lb, lc, g_tab.count);
-    }
     // ---- adding genuinely new assets to the game's in-memory toc (no carrier, nothing hijacked) ----
     // The game finds an asset with exe+16d7990: it binary-searches ONE span (a contiguous run of the sorted id table, chosen by the caller as group*8+kind) of
     // the ids table and returns the matching 12-byte entry of the sizes table. Atmospheres and the textures they use all live in span 0 (group 0, kind 0).
@@ -500,56 +337,6 @@ namespace {
         LOG("toc: new asset %016llX = toc index %zu, %u bytes from %ls (as archive %u %s offset 0x%x)%s", (unsigned long long)id, index, c.size, path, use_archive, aname.c_str(), offset,
             ok ? "" : " (WRITE FAILED)");
         return ok;
-    }
-    struct Swap { uint64_t id; size_t pos; uint64_t old_offs; uint32_t old_size; };
-    std::vector<Swap> g_swaps;
-    bool SwapAsset(uint64_t id, uint32_t use_archive, const wchar_t* path, uint32_t size) {
-        if (!g_grow.ready || !size) return false;
-        const std::string aname = ArchiveName(use_archive);
-        if (aname.empty()) return false;
-        size_t pos = (size_t)-1;
-        for (size_t i = 0; i < g_grow.base_count; ++i) if (g_grow.ids[i] == id) { pos = i; break; }
-        if (pos == (size_t)-1) { LOG("toc: swap: %016llX is not in the toc", (unsigned long long)id); return false; }
-        Carrier c;
-        c.id = id; c.index = pos; c.archive_name = aname; c.path = path; c.size = size; c.offset = g_next_sentinel.fetch_add(0x10000u);
-        {
-            std::lock_guard<std::mutex> lk(g_car_mu);
-            g_cars.push_back(c);
-        }
-        g_cars_active = true;
-        MH_Initialize();
-        if (!g_io_hooked.exchange(true)) {
-            if (MH_CreateHook(reinterpret_cast<void*>(&ReadFile), reinterpret_cast<void*>(&ReadFileDetour), reinterpret_cast<void**>(&g_read_orig)) != MH_OK ||
-                MH_EnableHook(reinterpret_cast<void*>(&ReadFile)) != MH_OK) { LOG("toc: could not hook ReadFile"); g_io_hooked = false; return false; }
-        }
-        size_t where[2] = { pos, (size_t)-1 };
-        if (pos >= g_grow.copy_first && pos < g_grow.copy_first + g_grow.span_count) where[1] = g_grow.base_count + (pos - g_grow.copy_first);   // span 0 is looked up in its copy
-        for (size_t w : where) {
-            if (w == (size_t)-1) continue;
-            Swap sw{ id, w, 0, 0 };
-            std::memcpy(&sw.old_offs, g_grow.offs + 8 * w, 8);
-            std::memcpy(&sw.old_size, g_grow.sizes + 12 * w + 4, 4);
-            g_swaps.push_back(sw);
-            std::memcpy(g_grow.sizes + 12 * w + 4, &size, 4);                       // size first, then the (archive, offset) pair in one 8-byte store
-            const uint64_t pair = (uint64_t)use_archive | ((uint64_t)c.offset << 32);
-            std::memcpy(g_grow.offs + 8 * w, &pair, 8);
-        }
-        LOG("toc: swapped %016llX (toc index %zu) to %u bytes from %ls", (unsigned long long)id, pos, size, path);
-        return true;
-    }
-    void UnswapAll() {
-        if (g_swaps.empty()) return;
-        for (auto it = g_swaps.rbegin(); it != g_swaps.rend(); ++it) {
-            std::memcpy(g_grow.offs + 8 * it->pos, &it->old_offs, 8);
-            std::memcpy(g_grow.sizes + 12 * it->pos + 4, &it->old_size, 4);
-        }
-        {
-            std::lock_guard<std::mutex> lk(g_car_mu);
-            for (const auto& sw : g_swaps)
-                for (size_t i = 0; i < g_cars.size(); ++i) if (g_cars[i].id == sw.id && g_cars[i].index == (sw.pos >= g_grow.base_count ? sw.pos - g_grow.base_count + g_grow.copy_first : sw.pos)) { if (g_cars[i].file != INVALID_HANDLE_VALUE) CloseHandle(g_cars[i].file); g_cars.erase(g_cars.begin() + (long)i); break; }
-        }
-        LOG("toc: %zu swapped entries restored", g_swaps.size());
-        g_swaps.clear();
     }
     // RECON Part 23 (Fable, read from the exe): the file system object is q[exe+74a6a00]; the toc DAT1 buffer pointer is at +0x10, the toc object at +0x18 (section pointers
     // at toc+0x00..0x30, counts at +0x38..0x44), the location table at q[fs+0x40], the per-archive "open" table at q[fs+0x68] (4 bytes per archive, 0x200 archives). Our

@@ -34,20 +34,15 @@ namespace {
     struct Entry { std::string name; uint16_t method = 0; uint32_t csize = 0, usize = 0, lho = 0; };
 
     struct Tex { uint64_t new_id; Entry entry; std::wstring path; };
-    struct Extra { uint64_t id; Entry entry; std::wstring path; };   // a file the mod ships that its atmosphere does not reference: it replaces the game's own while the mod is on
     struct Pack {
         std::string name;
         int slot = 0;
         uint64_t id = 0;                 // the new asset id of the atmosphere
         std::wstring zip;                // the mod file
         std::vector<Tex> textures;       // unpacked into the cache the first time the pack is picked
-        std::vector<Extra> extras;
         bool extracted = false;
     };
     std::mutex g_mu, g_prep_mu;
-    int g_arch = -1;                       // the archive the new assets borrow
-    uint64_t g_selected = 0;               // the pack whose extra files are swapped into the toc now
-    bool g_no_extras = true;               // the extra-file swap is an experiment: on only with use_extras.txt in the data folder
     std::vector<Pack> g_packs;
     std::vector<std::string> g_label_store[kSlots];
     std::vector<const char*> g_labels[kSlots];
@@ -215,23 +210,6 @@ namespace {
             int found = 0;
             for (const auto& b : kBase) found += byid.count(b.id) ? 1 : 0;
             if (!found) { LOG("atmpacks: %s replaces none of the five open-world atmospheres: skipped", display.c_str()); return; }
-            std::set<uint64_t> referenced;   // every id some base atmosphere of this source points at
-            for (const auto& b : kBase) {
-                auto it = byid.find(b.id);
-                if (it == byid.end()) continue;
-                std::vector<uint8_t> atm0;
-                if (Extract(f, it->second, atm0)) for (size_t off = 0; off + 8 <= atm0.size(); off += 4) { uint64_t v; std::memcpy(&v, atm0.data() + off, 8); if (byid.count(v)) referenced.insert(v); }
-            }
-            std::vector<Extra> extras;
-            for (const auto& kv : byid) {
-                bool is_base = false;
-                for (const auto& bb : kBase) is_base = is_base || bb.id == kv.first;
-                if (is_base || referenced.count(kv.first)) continue;
-                Extra e;
-                e.id = kv.first; e.entry = kv.second;
-                e.path = (cache / (std::to_wstring(NewId(key, kv.first)) + L".x")).wstring();
-                extras.push_back(e);
-            }
             for (const auto& b : kBase) {
                 auto it = byid.find(b.id);
                 if (it == byid.end()) continue;
@@ -253,7 +231,6 @@ namespace {
                 pk.slot = b.slot;
                 pk.id = NewId(key, b.id);
                 pk.zip = zippath.wstring();
-                pk.extras = extras;
                 for (const auto& r : refs) {
                     Tex t;
                     t.new_id = NewId(key, r.first);
@@ -345,10 +322,6 @@ namespace {
             LOG("atmpacks: %s: install any .smpcmod mod with Overstrike (and press Install mods); no atmosphere mods this session", pretend ? "force_blocked.txt exists (test switch)" : "no raw mod archive to borrow");
             return;
         }
-        g_arch = arch;
-        // Off unless use_extras.txt exists: the first session with the swap (2026-11-14, Lavender Skyfall) showed a black sky and no texture request after it was on,
-        // and the shipped extras are real edits (the flare texture, a 90-byte change of a config, the colour-grade lookup), not copies of the game's own files.
-        g_no_extras = !std::filesystem::exists(data / L"use_extras.txt", ec);
         size_t added = 0;
         for (const auto& a : assets) {
             if (!toc::AddAsset(a.id, (uint32_t)arch, a.path.c_str(), a.size)) { LOG("atmpacks: adding assets failed after %zu; stopping", added); return; }
@@ -401,46 +374,9 @@ namespace {
             std::ofstream o{ std::filesystem::path(t.path), std::ios::binary | std::ios::trunc };
             o.write(reinterpret_cast<const char*>(tex.data()), (std::streamsize)tex.size());
         }
-        for (const auto& x : pk->extras) {   // the files the atmosphere does not reference (swapped in by Select)
-            if (std::filesystem::exists(x.path, ec) && std::filesystem::file_size(x.path, ec) == x.entry.usize) continue;
-            std::vector<uint8_t> data;
-            if (!Extract(f, x.entry, data)) { LOG("atmpacks: cannot unpack an extra file of %s", pk->name.c_str()); continue; }
-            std::ofstream o{ std::filesystem::path(x.path), std::ios::binary | std::ios::trunc };
-            o.write(reinterpret_cast<const char*>(data.data()), (std::streamsize)data.size());
-        }
         pk->extracted = true;
         LOG("atmpacks: %s unpacked in %llu ms", pk->name.c_str(), (unsigned long long)(GetTickCount64() - t0));
         return true;
-    }
-
-    // The atmosphere mod `atmosphere_id` is about to be loaded: its extra files take the game's place in the asset table (they were unpacked by Prepare).
-    void Select(uint64_t atmosphere_id) {
-        if (!g_ready || g_no_extras || g_arch < 0) return;
-        std::lock_guard<std::mutex> lk(g_prep_mu);
-        if (g_selected == atmosphere_id) return;
-        const Pack* pk = nullptr;
-        {
-            std::lock_guard<std::mutex> lk2(g_mu);
-            for (const auto& p : g_packs) if (p.id == atmosphere_id) { pk = &p; break; }
-        }
-        toc::UnswapAll();
-        g_selected = 0;
-        if (!pk) return;
-        std::error_code ec;
-        int n = 0;
-        for (const auto& x : pk->extras) {
-            if (!std::filesystem::exists(x.path, ec) || std::filesystem::file_size(x.path, ec) != x.entry.usize) continue;
-            if (toc::SwapAsset(x.id, (uint32_t)g_arch, x.path.c_str(), x.entry.usize)) ++n;
-        }
-        g_selected = atmosphere_id;
-        if (pk->extras.size()) LOG("atmpacks: %s: %d of %zu extra file(s) swapped into the game's table", pk->name.c_str(), n, pk->extras.size());
-    }
-    void Deselect() {
-        if (!g_ready) return;
-        std::lock_guard<std::mutex> lk(g_prep_mu);
-        if (!g_selected) return;
-        toc::UnswapAll();
-        g_selected = 0;
     }
 
     int SlotOfMode(int mode) {

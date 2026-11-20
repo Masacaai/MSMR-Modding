@@ -63,13 +63,6 @@ static void RunCommand(const std::string& line) {
         if (!a || val.empty()) LOG("poke: usage %s <addr|exe+rva> <value>", cmd.c_str());
         else if (cmd == "poke32") recorder::Poke32(a, (uint32_t)strtoul(val.c_str(), nullptr, 16));
         else recorder::PokeF(a, strtof(val.c_str(), nullptr));
-    } else if (cmd == "tocfind") {   // tocfind <asset index> <id0> <id1> <id2> <id3> (hex; tools/tocinfo.py prints them): locate the toc's id table in memory
-        uint32_t index = 0;
-        std::string h[4], od, sd;
-        in >> index >> h[0] >> h[1] >> h[2] >> h[3] >> od >> sd;
-        uint64_t pat[4];
-        for (int i = 0; i < 4; ++i) pat[i] = strtoull(h[i].c_str(), nullptr, 16);
-        if (!pat[3] || od.empty() || sd.empty()) LOG("tocfind: usage tocfind <index> <id0> <id1> <id2> <id3> <offsets-section minus ids-section hex> <sizes-section minus ids-section hex>"); else toc::Find(index, pat, (uintptr_t)strtoull(od.c_str(), nullptr, 16), (uintptr_t)strtoull(sd.c_str(), nullptr, 16));
     } else if (cmd == "addasset") {   // addasset <new id hex> <archive index to borrow> <file path>
         std::string id, path;
         unsigned arch = 0;
@@ -78,20 +71,8 @@ static void RunCommand(const std::string& line) {
         std::wstring w(path.begin(), path.end());
         if (id.empty() || path.empty()) LOG("addasset: usage addasset <id hex> <archive index> <file path>");
         else toc::AddAsset(strtoull(id.c_str(), nullptr, 16), arch, w.c_str());
-    } else if (cmd == "tocptrs") {
-        toc::FindPointers();
     } else if (cmd == "toclocate") {
         toc::Locate();
-    } else if (cmd == "carrier") {   // carrier <carrier asset id hex> <archive index to borrow> <path of the asset's bytes>
-        std::string id, path;
-        unsigned arch = 0;
-        in >> id >> arch;
-        std::getline(in >> std::ws, path);
-        std::wstring w(path.begin(), path.end());
-        if (id.empty() || path.empty()) LOG("carrier: usage carrier <id hex> <archive index> <file path>");
-        else toc::AddCarrier(strtoull(id.c_str(), nullptr, 16), arch, w.c_str());
-    } else if (cmd == "uncarrier") {
-        toc::RestoreCarriers();
     } else if (cmd == "iotrace") {   // iotrace [ms]: log the game's asset_archive reads
         unsigned ms = 8000;
         in >> ms;
@@ -240,7 +221,7 @@ static void RunCommand(const std::string& line) {
         std::getline(in, rest);
         LOG("==== mark:%s ====", rest.c_str());
     } else {
-        LOG("unknown command (ping, sky [index], findq <hex64>, pokef <addr> <f>, poke32 <addr> <hex>, recompute, atmrelease <slot>, skystate, skyreset, look <style> <variant>, sun <dir> <height> <color> <bright> [fog], loadtrace [ms], atmload <id|@name> [mgr], atmlist [name], adj <slot> <delta>, slotaddr <n>, tocfind, toclocate, addasset, carrier, uncarrier, iotrace [ms], holdf <ms> <addr> <f> [...], wp set|dump|clear, uitrace [ms], snap <name>, snapdiff <a> <b> [<a2>], menu, atm, peek <addr|exe+rva> [len], mark <text>)");
+        LOG("unknown command (ping, sky [index], findq <hex64>, pokef <addr> <f>, poke32 <addr> <hex>, recompute, atmrelease <slot>, skystate, skyreset, look <style> <variant>, sun <dir> <height> <color> <bright> [fog], loadtrace [ms], atmload <id|@name> [mgr], atmlist [name], adj <slot> <delta>, slotaddr <n>, toclocate, addasset, iotrace, fsinfo, seamless, presets, preset, lookreport, version [ms], holdf <ms> <addr> <f> [...], wp set|dump|clear, uitrace [ms], snap <name>, snapdiff <a> <b> [<a2>], menu, atm, peek <addr|exe+rva> [len], mark <text>)");
     }
 }
 

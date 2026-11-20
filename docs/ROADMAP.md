@@ -112,4 +112,4 @@ Install state: both mods' packages in `Mods Library` and the DLLs in `scripts\` 
 2. **AMBIENT LIGHT / AMBIENT COLOR** (IMAGE section). Step 1..7 in a shaded alley and on a night rooftop; report which step is the first visible one and which washes out. The steps are a guess (vanilla night rain is 0.003).
 3. **no_swallow.txt**: create it in `Documents\Marvel's Spider-Man Remastered\ManhattanSkies` for one long Settings-heavy session. If the `exe+31e9582` crash does not come back, swallowing was the cause. (With seamless on there is no fade to swallow anyway.)
 4. **`fsinfo`** in the command file once in a loaded world: tells which toc object layout is right and how many archives are open (needed to add an archive entry without another Overstrike mod).
-5. Still untested from before: the colour-amount rows, the activity freeze in a real crime, the hold at a phase boundary, `use_extras.txt` (off by default).
+5. Still untested from before: the colour-amount rows, the activity freeze in a real crime, the hold at a phase boundary, the extra-file swap (removed in the 2026-11-20 cleanup: `RECON.md` Part 27).

@@ -193,7 +193,6 @@ namespace {
     std::atomic<uint64_t> g_base_asset{ 0 };
     std::atomic<ULONGLONG> g_base_seen_at{ 0 };
     std::set<uint64_t> g_held;                    // atmospheres this module loaded and still holds a reference on (released when its look goes off)
-    std::vector<uint64_t> g_cyc_hold;             // atmospheres the cycle loaded quietly ahead of a switch: released once they are idle
     uint64_t g_failed_id = 0;                     // a look that would not load (pool full?): not retried until the setting changes
     int g_load_tries = 0;
     uint64_t g_look_id = 0;                       // the override atmosphere that is active (0: none)
@@ -279,25 +278,11 @@ namespace {
         if (want) {
             int idx = recorder::FindSlot(want);
             if (want == g_failed_id) return;
-            // An atmosphere mod the cycle loaded quietly (weight 0) ahead of the switch never gets its textures requested when it is switched on later (the game
-            // asks for them when the atmosphere finishes loading with a weight, 2026-11-13: black sky, lit city). Drop that load and load it again the way a menu
-            // pick does, so it is switched on as it arrives.
-            if (idx >= 0 && atmpacks::IsMod(want)) {
-                const auto hit = std::find(g_cyc_hold.begin(), g_cyc_hold.end(), want);
-                uint64_t a; int w;
-                if (hit != g_cyc_hold.end() && recorder::SlotInfo(idx, a, w) && w <= 0 && recorder::ReleaseSlot(idx)) {
-                    g_cyc_hold.erase(hit);
-                    g_load_req_at = 0;
-                    LOG("sky: look %016llX was loaded quietly: loading it again so its textures are requested", (unsigned long long)want);
-                    return;
-                }
-            }
             if (idx < 0) {   // not in the pool yet: ask for it and try again on the next ticks
                 if (!g_load_req_at || now - g_load_req_at > 6000) {
                     if (g_load_tries >= 3) { g_failed_id = want; LOG("sky: look %016llX would not load after 3 tries (the atmosphere pool is probably full); giving up on it", (unsigned long long)want); return; }
                     ++g_load_tries;
                     atmpacks::Prepare(want);   // an atmosphere mod's textures are unpacked on first use
-                    atmpacks::Select(want);    // and the files it ships besides its atmosphere replace the game's while it is on
                     recorder::LoadAtmosphere(want);
                     g_load_req_at = now;
                     LOG("sky: loading look %016llX (try %d)", (unsigned long long)want, g_load_tries);
@@ -326,7 +311,6 @@ namespace {
             return;
         }
         // back to AUTO: the look off, the game's own base atmosphere for the current mode on again
-        atmpacks::Deselect();
         const uint64_t old_look = g_look_id; const int old_idx = g_look_idx;
         Activate(g_look_idx, false);
         int base = BaseSlot();
@@ -379,16 +363,6 @@ namespace {
         WritePrivateProfileStringA("cycle", "phase", b, p.c_str());
         WritePrivateProfileStringA("cycle", "overcast", overcast ? "1" : "0", p.c_str());
     }
-    // Softening the switch: shortly before a mode change the next sky is loaded quietly (weight 0) and its sun color, fog, haze, exposure and
-    // filter are blended into the current one, so at the instant of the switch (the fade is swallowed) only the sky texture and the lights jump.
-    struct Target { Sun sun; Fog fog; Image im; };
-    Target g_tgt{};
-    bool g_tgt_valid = false;
-    uint64_t g_tgt_asset = 0;
-    ULONGLONG g_tgt_req_at = 0;
-    std::atomic<float> g_cyc_blend{ 0.f };
-    std::atomic<int> g_blend_nm{ -1 };            // the lighting mode the colors are being blended toward (-1: none)
-    float g_blend_prev = 0.f;
     // Spider-Man's speed (m/s, smoothed; -1 unknown), sampled on the game thread from the hero's transform. The lighting switch is a mini load that
     // stops him in mid-air (confirmed for every mode change), so the cycle waits for a calm moment.
     std::atomic<float> g_hero_speed{ -1.f };
@@ -490,25 +464,6 @@ namespace {
         }
     }
 
-    bool ReadAtm(int slot, Target& t) {
-        float c[6], f[6];
-        if (!recorder::SlotSun(slot, c, false) || !recorder::SlotFog(slot, f, false)) return false;
-        memcpy(t.sun.rgb, c, 12); t.sun.w = c[3]; t.sun.rot = c[4]; t.sun.elev = c[5];
-        memcpy(t.fog.d, f, sizeof(f));
-        return recorder::SlotFloats(slot, kOffFogDist, t.im.fogdist, 4, false) && recorder::SlotFloats(slot, kOffExposure, &t.im.exposure, 1, false) &&
-               recorder::SlotFloats(slot, kOffFilter, t.im.filter, 3, false) && recorder::SlotFloats(slot, kOffHaze, &t.im.haze, 1, false) &&
-               recorder::SlotFloats(slot, kOffClouds, &t.im.clouds, 1, false) && recorder::SlotFloats(slot, kOffFogColor, t.im.fogcolor, 3, false);
-    }
-    void ReleaseIdleHolds() {
-        for (size_t i = 0; i < g_cyc_hold.size();) {
-            const uint64_t id = g_cyc_hold[i];
-            const int idx = recorder::FindSlot(id);
-            uint64_t a; int w;
-            if (idx < 0 || !recorder::SlotInfo(idx, a, w)) { g_cyc_hold.erase(g_cyc_hold.begin() + (long)i); continue; }
-            if (w <= 0 && id != g_tgt_asset && id != g_cyc_look.load() && recorder::ReleaseSlot(idx)) { g_cyc_hold.erase(g_cyc_hold.begin() + (long)i); continue; }
-            ++i;
-        }
-    }
     // The next boundary after phase f and the lighting mode that follows it.
     void NextBoundary(double f, bool day_oc, double& fb, int& nm) {
         if (f >= 0.93 || f < 0.08) { fb = 0.08; nm = day_oc ? 3 : 0; return; }
@@ -563,7 +518,7 @@ namespace {
         const int minutes = kCycles[csel > 0 && csel < (int)(sizeof(kCycles) / sizeof(kCycles[0])) ? csel : 0].minutes;
         if (!minutes) {
             if (g_cyc_sun_on.exchange(false)) ++g_cyc_step;
-            g_cyc_started = false; g_cyc_blend = 0.f; g_tgt_asset = 0; g_tgt_valid = false; g_pick_nm = -1;
+            g_cyc_started = false; g_pick_nm = -1;
             if (g_cyc_look.exchange(0)) g_cyc_step++;
             return;
         }
@@ -623,7 +578,6 @@ namespace {
         // ---- get ready for the next switch: pick its sky a few seconds ahead (an atmosphere mod's textures are unpacked meanwhile). There is no blending toward
         // it and nothing is loaded early: the switch is one clean change (maintainer's decision, 2026-11-14: the blends did little, and an early weight-0 load of
         // an atmosphere mod sometimes never got its skybox textures requested). ----
-        g_cyc_blend = 0.f; g_blend_nm = -1; g_tgt_valid = false; g_tgt_asset = 0;
         if (!pending) {
             double fb = 0.0; int nm = 0;
             NextBoundary(g_phase, g_cyc_overcast, fb, nm);
@@ -637,9 +591,7 @@ namespace {
                 if (g_next_look && atmpacks::IsMod(g_next_look)) atmpacks::Prepare(g_next_look);
             } else if (dsec > lead + 5.0) g_pick_nm = -1;
         }
-        ReleaseIdleHolds();
-        if (ps.sun || g_cyc_blend > 0.f || g_blend_prev > 0.f) ++g_cyc_step;
-        g_blend_prev = g_cyc_blend;
+        if (ps.sun) ++g_cyc_step;
         if (pending && now - g_cyc_switch_at > 8000) {
             if (busy) return;   // never switch during an activity, however long it lasts
             const float hs = g_hero_speed;
@@ -743,26 +695,14 @@ namespace {
         Image oim{};
         const bool have_im = iit != g_orig_image.end();
         if (have_im) oim = iit->second;
-        const float bt = g_cyc_blend;
-        if (bt > 0.f && g_tgt_valid) {
-            // The sun is never blended toward the next phase (blending its color and strength put the wrong light in the wrong place: a red light overhead
-            // before dawn). Each phase brings its own sun (Wanted); only fog, haze, exposure, filter and fog color are blended.
-            for (int i = 0; i < 6; ++i) ofog.d[i] = Mix(ofog.d[i], g_tgt.fog.d[i], bt);
-            for (int i = 0; i < 4; ++i) oim.fogdist[i] = Mix(oim.fogdist[i], g_tgt.im.fogdist[i], bt);
-            oim.exposure = Mix(oim.exposure, g_tgt.im.exposure, bt);
-            for (int i = 0; i < 3; ++i) { oim.filter[i] = Mix(oim.filter[i], g_tgt.im.filter[i], bt); oim.fogcolor[i] = Mix(oim.fogcolor[i], g_tgt.im.fogcolor[i], bt); }
-            oim.haze = Mix(oim.haze, g_tgt.im.haze, bt);
-        }
         // sun
         const Sun w = Wanted(osun);
         float buf[6] = { w.rgb[0], w.rgb[1], w.rgb[2], w.w, w.rot, w.elev };
         recorder::SlotSun(idx, buf, true);
         // fog density
-        const bool nb = bt > 0.f && g_tgt_valid;   // toward the next phase: its random fog and haze blend in with the colors
         const int fogsel = EffSel(kFog);
         float fmul = 1.f;
         if (fogsel > 0 && fogsel < (int)(sizeof(kFogs) / sizeof(kFogs[0]))) fmul = kFogs[fogsel].mul;
-        if (nb && !g_set[kFog]) { const int ns = EffSel(kFog, true); fmul = Mix(fmul, ns > 0 && ns < (int)(sizeof(kFogs) / sizeof(kFogs[0])) ? kFogs[ns].mul : 1.f, bt); }
         if (have_fog) {
             float fb[6];
             for (int i = 0; i < 6; ++i) fb[i] = ofog.d[i] * fmul;
@@ -774,13 +714,11 @@ namespace {
             auto pick = [](int sel, int n) { return sel > 0 && sel < n ? sel : 0; };
             const int dsel = pick(EffSel(kFogDist), (int)(sizeof(kFogDists) / sizeof(kFogDists[0])));
             float dmul = kFogDists[dsel].mul;
-            if (nb && !g_set[kFogDist]) dmul = Mix(dmul, kFogDists[pick(EffSel(kFogDist, true), (int)(sizeof(kFogDists) / sizeof(kFogDists[0])))].mul, bt);
             float db[4];
             for (int i = 0; i < 4; ++i) db[i] = o.fogdist[i] * dmul;
             recorder::SlotFloats(idx, kOffFogDist, db, 4, true);
             const int hsel = pick(EffSel(kHaze), (int)(sizeof(kHazes) / sizeof(kHazes[0])));
             float haze = hsel ? kHazes[hsel].value : o.haze;
-            if (nb && !g_set[kHaze]) { const int hn = pick(EffSel(kHaze, true), (int)(sizeof(kHazes) / sizeof(kHazes[0]))); haze = Mix(haze, hn ? kHazes[hn].value : o.haze, bt); }
             recorder::SlotFloats(idx, kOffHaze, &haze, 1, true);
             const int esel = pick(g_set[kExposure], (int)(sizeof(kExposures) / sizeof(kExposures[0])));
             float ev = o.exposure + kExposures[esel].ev;
@@ -968,7 +906,7 @@ namespace {
     int HazeCount() { EnsureInit(); return (int)g_haze_labels.size(); }         const char* const* HazeLabels() { EnsureInit(); return g_haze_labels.data(); }
     int ExposureCount() { EnsureInit(); return (int)g_exposure_labels.size(); } const char* const* ExposureLabels() { EnsureInit(); return g_exposure_labels.data(); }
     int FilterCount() { EnsureInit(); return (int)g_filter_labels.size(); }     const char* const* FilterLabels() { EnsureInit(); return g_filter_labels.data(); }
-    int TickMs() { return g_cyc_sun_on || g_cyc_blend > 0.f ? 40 : 250; }
+    int TickMs() { return g_cyc_sun_on ? 40 : 250; }
     bool SmoothFade() { return g_smooth_fade; }
     void SetSmoothFade(bool on) { g_smooth_fade = on; LOG("sky: smooth fade %s", on ? "on (the cycle swallows the lighting transition's fade)" : "off"); }
     int CycleCount() { EnsureInit(); return (int)g_cycle_labels.size(); }       const char* const* CycleLabels() { EnsureInit(); return g_cycle_labels.data(); }
@@ -1010,7 +948,6 @@ namespace {
         if (mode < 0 || !recorder::Manager()) { g_world_up = false; return; }
         if (!g_world_up) {   // a (re)load: every slot we knew is gone
             g_world_up = true;
-            atmpacks::Deselect();   // a (re)load puts the game's own atmosphere back: so the game's own files too
             g_ready_latched = false; g_parse_wait_since = 0;
             g_look_id = 0; g_look_idx = -1; g_edit_idx = -1; g_edit_asset = 0; g_edit_touched = false; g_load_req_at = 0; g_held.clear(); g_failed_id = 0; g_load_tries = 0;
             for (int s = 0; s < kSettingCount; ++s) g_edit_seen[s] = -1;
