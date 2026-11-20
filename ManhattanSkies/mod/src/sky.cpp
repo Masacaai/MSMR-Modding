@@ -16,6 +16,7 @@
 #include <ShlObj.h>
 #include <atomic>
 #include <cmath>
+#include <deque>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -250,10 +251,23 @@ namespace {
     }
 
     // A look we loaded goes off: drop our reference so the asset system can free its pool slot (the pool holds only ~16 atmospheres).
+    // A look that goes off is KEPT loaded (weight 0) and the oldest beyond kKeepIdle are released. Releasing a slot at once and loading the same asset again within about a
+    // second left the slot stuck in state 05 00 with the Default Atmosphere in it (never parsed): a black sky, 2026-11-20. A released asset is not requested again for 8 s.
+    constexpr size_t kKeepIdle = 5;
+    std::deque<uint64_t> g_idle;                  // idle looks we hold, most recent first
+    std::map<uint64_t, ULONGLONG> g_released_at;  // when we released a look's slot
     void ReleaseLook(uint64_t id, int idx) {
         if (!id || !g_held.count(id)) return;
-        uint64_t a; int w;
-        if (idx >= 0 && recorder::SlotInfo(idx, a, w) && a == id && w <= 0 && recorder::ReleaseSlot(idx)) g_held.erase(id);
+        g_idle.erase(std::remove(g_idle.begin(), g_idle.end(), id), g_idle.end());
+        g_idle.push_front(id);
+        while (g_idle.size() > kKeepIdle) {
+            const uint64_t ev = g_idle.back();
+            g_idle.pop_back();
+            const int ei = recorder::FindSlot(ev);
+            uint64_t a; int w;
+            if (ei >= 0 && recorder::SlotInfo(ei, a, w) && a == ev && w <= 0 && recorder::ReleaseSlot(ei)) { g_held.erase(ev); g_released_at[ev] = GetTickCount64(); }
+        }
+        (void)idx;
     }
 
     bool g_reported = false;                    // the look-report line for the current look has been logged
@@ -278,6 +292,8 @@ namespace {
             int idx = recorder::FindSlot(want);
             if (want == g_failed_id) return;
             if (idx < 0) {   // not in the pool yet: ask for it and try again on the next ticks
+                const auto rel = g_released_at.find(want);
+                if (rel != g_released_at.end() && now - rel->second < 8000) return;   // just released: its slot is not safe to reuse yet
                 if (!g_load_req_at || now - g_load_req_at > 6000) {
                     if (g_load_tries >= 3) { g_failed_id = want; LOG("sky: look %016llX would not load after 3 tries (the atmosphere pool is probably full); giving up on it", (unsigned long long)want); return; }
                     ++g_load_tries;
@@ -288,15 +304,20 @@ namespace {
                 }
                 return;
             }
-            // Never switch a slot on before the game has parsed its data into it: until then it holds whatever its last asset left (a red sunset from the loading screen's
-            // atmosphere, 2026-11-20 red screen after a relaunch). If the parse never happens (the game rejected the data), say so and give up on this look.
-            if (recorder::ParseHooked() && !recorder::SlotParsedTick(idx, want)) {
-                if (!g_parse_wait_since) g_parse_wait_since = now;
-                if (now - g_parse_wait_since > 5000) {
-                    LOG("sky: look %016llX is in slot %d but the game never parsed its data in 5 s: giving up on it (see the parse: lines)", (unsigned long long)want, idx);
-                    g_failed_id = want; g_parse_wait_since = 0;
+            // Never switch a slot on before the game has really loaded it: the slot header reads 04 01 when its data is in. 05 00 is a load that never finished (see ReleaseLook);
+            // after 3 s of that the slot is released and the look is requested again later. (The first version of this check used the parser hook's last parse time, which a
+            // reload of the same asset id satisfied with its OLD parse: a black sky, 2026-11-20.)
+            {
+                unsigned char b0 = 4, b1 = 1;
+                if (recorder::SlotState(idx, b0, b1) && b0 != 4) {
+                    if (!g_parse_wait_since) g_parse_wait_since = now;
+                    if (now - g_parse_wait_since > 3000) {
+                        LOG("sky: look %016llX sat in slot %d in state %02x %02x (never loaded) for 3 s: releasing the slot to load it again", (unsigned long long)want, idx, b0, b1);
+                        if (recorder::ReleaseSlot(idx)) { g_held.erase(want); g_released_at[want] = now; }
+                        g_load_req_at = 0; g_parse_wait_since = 0;
+                    }
+                    return;
                 }
-                return;
             }
             g_parse_wait_since = 0;
             if (g_load_req_at) g_held.insert(want);   // it is in the pool because we asked for it: we hold a reference
@@ -304,6 +325,7 @@ namespace {
             const uint64_t old_look = g_look_id; const int old_idx = g_look_idx;
             if (g_look_id) Activate(g_look_idx, false); else Activate(BaseSlot(), false);
             Activate(idx, true);
+            g_idle.erase(std::remove(g_idle.begin(), g_idle.end(), want), g_idle.end());
             g_look_id = want; g_look_idx = idx; g_look_at = now; g_load_req_at = 0; g_load_tries = 0; g_reported = false;
             ReleaseLook(old_look, old_idx);
             LOG("sky: look on: slot %d asset %016llX", idx, (unsigned long long)want);
@@ -634,11 +656,11 @@ namespace {
         if (g_look_id ? now - g_look_at < 500 : now - g_base_seen_at.load() < 900) return;   // let a fresh slot finish loading
         // ... and really wait for it: until the game's parser has copied the asset's own values into the slot, the slot holds the "Default Atmosphere", and reading it now would
         // keep that as the sky's "own" values for the session while the parser later overwrites our edits. (Falls back to the timing above when the parser is not hooked.)
-        ULONGLONG parsed_at = 0;
-        if (recorder::ParseHooked()) {
-            parsed_at = recorder::SlotParsedTick(idx, asset);
-            if (!parsed_at || now - parsed_at < 150) return;
+        {
+            unsigned char b0 = 4, b1 = 1;
+            if (recorder::SlotState(idx, b0, b1) && b0 != 4) return;   // not loaded yet (see ApplyLook)
         }
+        const ULONGLONG parsed_at = recorder::ParseHooked() ? recorder::SlotParsedTick(idx, asset) : 0;   // a new parse of the slot wipes our edits
         g_cur_mod = atmpacks::IsMod(asset);
         // what the player set by hand always applies; what the cycle adds (the steered sun, the random variations) only to the game's own skies
         bool any = false;

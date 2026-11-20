@@ -15,6 +15,7 @@ namespace recorder {
     using AdjustFilter = bool (*)(uintptr_t caller_rva, int slot_idx, uint64_t asset, int delta);
     void SetAdjustFilter(AdjustFilter f);
     uintptr_t Manager();                                  // the AtmosphereManager (0 until the first AtmosphereAdjust call is seen)
+    bool SlotState(int idx, unsigned char& b0, unsigned char& b1);   // the slot header's first two bytes: 04 01 = loaded and parsed; 05 00 = a (re)load that never finished; 00 00 = empty
     bool ParseHooked();                                    // the atmosphere parser (exe+162cc00) is hooked: SlotParsedTick is meaningful
     unsigned long long SlotParsedTick(int idx, uint64_t asset);   // when the game finished parsing `asset`'s data into that slot (GetTickCount64), 0 if it has not (yet)
     bool SlotInfo(int idx, uint64_t& asset, int& weight); // a slot's asset id and weight (counter 0); false if unreadable

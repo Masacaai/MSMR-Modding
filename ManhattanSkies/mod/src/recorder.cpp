@@ -283,6 +283,13 @@ namespace recorder {
         if (!mgr || idx < 0 || idx > 32 || !memory::Read(mgr + kSlots, base) || !base) return 0;
         return base + (uintptr_t)idx * kSlotStride;
     }
+    bool SlotState(int idx, unsigned char& b0, unsigned char& b1) {
+        const uintptr_t a = SlotAddress(idx);
+        unsigned char b[2] = {};
+        if (!a || !memory::SafeRead(a, b, 2)) return false;
+        b0 = b[0]; b1 = b[1];
+        return true;
+    }
     bool SlotInfo(int idx, uint64_t& asset, int& weight) {
         const uintptr_t a = SlotAddress(idx);
         int c[4] = {};
