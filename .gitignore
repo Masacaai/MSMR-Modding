@@ -1,5 +1,7 @@
 # Build output and package caches
 EndlessArena/build/
+DisableWebs/build/
+HyperSense/build/
 EndlessArena/vcpkg_installed/
 tools/toctool/vcpkg_installed/
 *.obj
@@ -60,10 +62,15 @@ SpidyVR/
 EndlessArena/src/SECRET.md
 
 
-# Uncontained: not ready for publishing, local only (game-derived recon inside; never commit). Only mods that are ready for release come out of here.
-Uncontained/
+# Manhattan Streets (the street-level companion to Manhattan Skies; was Uncontained): not ready for publishing, local only (game-derived recon inside;
+# never commit). Only mods that are ready for release come out of here.
+ManhattanStreets/
 
 # Manhattan Skies: source, tools and docs are published; its recon/ folder holds game-derived material (extracted assets, catalogs,
 # memory dumps, screenshots): NEVER commit it.
 ManhattanSkies/recon/
 ManhattanSkies/mod/build/
+
+# Friend or Foe (companion allies): unreleased, local only; holds game-derived addresses and recon. Comes out of here when it is ready for release.
+FriendOrFoe/
+.fxcache/

@@ -12,13 +12,15 @@ mods for [Overstrike](https://www.nexusmods.com/marvelsspidermanremastered/mods/
 |---|---|---|
 | [**Endless Arena**](EndlessArena/README.md) | Waves of enemies, bosses, boons and curses on Ryker's Island, until you go down | Beta released |
 | [**Manhattan Skies**](ManhattanSkies/README.md) | Time of day, sky, sun, fog and image controls from the pause menu: 124 skies, presets, Early Morning | Alpha released |
+| [**Hyper-Sense**](HyperSense/README.md) | Slow motion (T / D-pad Right) with a fading trail of Spider-Man after-images: looks, colours, decay, presets, all in the Settings screen | 1.0.0 |
+| [**Disable Webs**](DisableWebs/README.md) | F7 turns off swinging, zipping, point launch, the web shooter and the web-assisted wall-run moves | 1.0.0 |
 | [**ModMenu**](ModMenu/README.md) | The shared code that puts the mods' tabs in the game's Settings screen (a library compiled into each mod) | Working |
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `EndlessArena/`, `ManhattanSkies/` | One folder per mod: source (`src/` or `mod/src/`), its own `docs/`, and its own tools |
+| `EndlessArena/`, `ManhattanSkies/`, `HyperSense/`, `DisableWebs/` | One folder per mod: source (`src/` or `mod/src/`), its own `docs/`, and its own tools |
 | `ModMenu/` | Shared Settings-tab library |
 | `docs/` | **Shared knowledge**: [getting started](docs/GETTING_STARTED.md), [game internals](docs/GAME_INTERNALS.md), [reverse-engineering method](docs/REVERSE_ENGINEERING.md), [UI notes](docs/UI_HUNT.md), [releasing](docs/RELEASING.md), [roadmap](docs/ROADMAP.md). Start at [docs/README.md](docs/README.md) |
 | `recon/`, `tools/` | Reverse-engineering notes and the Python/C++ helpers (crash dumps, signatures, asset extraction) |

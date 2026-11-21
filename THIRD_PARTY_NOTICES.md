@@ -105,3 +105,8 @@ tab, a setting and a heading from the game's own menu config, build the tab with
 the tabs handed to Flash, and answer for the new setting numbers by hooking the game's per-setting functions. The
 addresses, structure layouts and hook prologues for Spider-Man.exe 4.0630.0.0 come from SpidyVR's `docs/REFERENCE.md` and
 `src/game_menu.cpp`; the code here is written for this mod. Thank you for working it out and publishing it.
+
+## nanodanc's QuantumBreak (idea)
+
+Hyper-Sense's slow motion (T / D-pad Right) writes the same three fields of the hero's time-scale component as **nanodanc's "QuantumBreak"** Script Hook mod.
+That mod was read for which fields to write and how often; no code from it is copied. Thank you for the idea.

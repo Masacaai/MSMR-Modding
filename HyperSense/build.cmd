@@ -1,0 +1,25 @@
+@echo off
+rem Builds HyperSense.dll, packs build\HyperSense.script and copies it to Overstrike's Mods Library (standing rule: every build leaves the latest package there).
+rem Shares EndlessArena's game-access code (natives, entity, spawn, psinput), common\ and ModMenu\. MinHook comes from EndlessArena's vcpkg install.
+setlocal
+set ROOT=%~dp0
+set EA=%ROOT%..\EndlessArena
+set VS=C:\Program Files\Microsoft Visual Studio\2022\Community
+call "%VS%\VC\Auxiliary\Build\vcvars64.bat" >nul || exit /b 1
+
+set VCP=%EA%\vcpkg_installed\x64-windows-static
+if not exist "%VCP%\lib\minhook.x64.lib" (
+    echo MinHook not found at %VCP%. Build EndlessArena once first ^(its build.cmd installs it^).
+    exit /b 1
+)
+if not exist "%ROOT%build" mkdir "%ROOT%build"
+
+cl /nologo /LD /O2 /MT /EHa /std:c++20 /W3 /Zi /DNDEBUG /DNOMINMAX /DWIN32_LEAN_AND_MEAN /I"%VCP%\include" /I"%ROOT%..\common" /I"%EA%\src" /I"%ROOT%src" /Fo"%ROOT%build\\" /Fd"%ROOT%build\\" ^
+   "%ROOT%src\*.cpp" "%ROOT%..\common\log.cpp" "%ROOT%..\common\scan.cpp" "%ROOT%..\common\memory.cpp" "%ROOT%..\common\gamethread.cpp" "%ROOT%..\ModMenu\modmenu.cpp" ^
+   "%EA%\src\natives.cpp" "%EA%\src\entity.cpp" "%EA%\src\spawn.cpp" "%EA%\src\psinput.cpp" /Fe"%ROOT%build\HyperSense.dll" ^
+   /link /LIBPATH:"%VCP%\lib" minhook.x64.lib user32.lib shell32.lib hid.lib setupapi.lib /DEBUG /MAP /OPT:REF /OPT:ICF || exit /b 1
+
+powershell -NoProfile -ExecutionPolicy Bypass -File "%ROOT%pack.ps1" || exit /b 1
+set "MODLIB=C:\Program Files (x86)\Steam\steamapps\common\Marvel's Spider-Man Remastered\Mods Library"
+if exist "%MODLIB%" copy /y "%ROOT%build\HyperSense.script" "%MODLIB%\" >nul && echo Copied HyperSense.script to the Mods Library
+echo BUILD OK
