@@ -256,7 +256,7 @@ namespace spawn {
         return ok;
     }
 
-    uintptr_t SpawnActor(const std::string& path, Vec3 pos, float heading_deg, bool engaged) {
+    uintptr_t SpawnActor(const std::string& path, Vec3 pos, float heading_deg, bool engaged, std::function<void(uintptr_t)> on_spawned) {
         if (!gamethread::Installed()) { LOG("spawn: game-thread hook not installed"); return 0; }
         if (!AllResolved()) return 0;
 
@@ -296,7 +296,7 @@ namespace spawn {
         LOG("spawn: [2] asset loaded");
 
         // 3. Spawn + sync setup (game thread), step by step.
-        ok = RunOnGameThread([st, pos, heading_deg, engaged] {
+        ok = RunOnGameThread([st, pos, heading_deg, engaged, on_spawned] {
             uintptr_t& entity = st->entity;
             alignas(16) float transform[16];
             BuildTransform(transform, pos, heading_deg);
@@ -368,6 +368,7 @@ namespace spawn {
             Fn<SyncBoolFn>(natives::SyncFinish1)(sync, 1);
             Fn<SyncBoolFn>(natives::SyncFinish0)(sync, 0);
             LOG("spawn: [8] done");
+            if (on_spawned) on_spawned(entity);
         }, 5000);
         if (!ok) { LOG("spawn: [3] game thread did not run the job within 5s (it may still run later)"); return 0; }
         return st->entity;

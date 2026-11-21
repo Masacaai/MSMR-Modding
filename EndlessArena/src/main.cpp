@@ -486,14 +486,16 @@ static void RunCommand(const std::string& line) {
         LOG("vsearch: scanned %zu MB", scanned >> 20);
         LOG("vsearch: %d hits", hits);
     } else if (cmd == "poke") {
-        // poke <addr|exe+rva> <u32|f32|u64> <value>   (game thread)
+        // poke <addr|exe+rva> <u8|u32|f32|u64> <value>   (game thread)
+        // u8 exists for the boolean globals (docs/E3_START_RECON.md: exe+73cf03a), where a u32 write would clobber the neighbouring bytes.
         std::string a, type, v;
         in >> a >> type >> v;
         uintptr_t addr = ParseAddr(a);
         if (!gamethread::Installed()) { LOG("poke: run 'hook' first"); return; }
         gamethread::Post([addr, type, v] {
             bool ok = false;
-            if (type == "f32") ok = memory::Write<float>(addr, strtof(v.c_str(), nullptr));
+            if (type == "u8") ok = memory::Write<uint8_t>(addr, (uint8_t)strtoul(v.c_str(), nullptr, 16));
+            else if (type == "f32") ok = memory::Write<float>(addr, strtof(v.c_str(), nullptr));
             else if (type == "u64") ok = memory::Write<uint64_t>(addr, strtoull(v.c_str(), nullptr, 16));
             else ok = memory::Write<uint32_t>(addr, (uint32_t)strtoul(v.c_str(), nullptr, 16));
             LOG("poke %llx %s %s: %s", (unsigned long long)addr, type.c_str(), v.c_str(), ok ? "ok" : "FAILED");

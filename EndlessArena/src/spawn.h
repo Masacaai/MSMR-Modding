@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <string>
 
 namespace spawn {
@@ -12,7 +13,9 @@ namespace spawn {
     // engaged: right after SpawnRaw (before activation) sets BotData.SpawnEngagedWithHero (+0x08) on every
     // BotData-shaped struct found in the bot's components. EXPERIMENTAL, see entity::FindBotData.
     // path may also be "#<16 hex digits>", a raw asset id, for actors whose path isn't known.
-    uintptr_t SpawnActor(const std::string& path, Vec3 pos, float heading_deg, bool engaged = false);
+    // on_spawned (optional) runs on the game thread inside the spawn job, right after the entity is attached and before the game's next frame renders it:
+    // a ghost can be given its pose and material there without ever being drawn in its default pose.
+    uintptr_t SpawnActor(const std::string& path, Vec3 pos, float heading_deg, bool engaged = false, std::function<void(uintptr_t)> on_spawned = nullptr);
 
     // Starts loading an actor asset (and returns immediately): heavy actors (bosses) spawn incomplete - no mover, no
     // head - if spawned before their dependencies have streamed in. Preload them well ahead (verified 2026-10-13).
