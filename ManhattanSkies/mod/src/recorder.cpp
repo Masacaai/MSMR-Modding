@@ -561,6 +561,19 @@ namespace recorder {
         for (size_t off = 0; off < len; off += 0x20) LOG("peek: %llx  %s", (unsigned long long)(addr + off), Hex(addr + off, len - off < 0x20 ? len - off : 0x20).c_str());
     }
 
+    int DeadModTextures() {
+        uintptr_t begin = 0, end = 0;
+        if (!memory::Read(scan::FromRva(0x621b2b0), begin) || !memory::Read(scan::FromRva(0x621b2b8), end) || !begin || end <= begin) return 0;
+        int dead = 0;
+        for (uintptr_t r = begin; r + 0xc0 <= end; r += 0xc0) {
+            unsigned long long id = 0;
+            if (!memory::Read(r + 8, id) || (id >> 56) != 0xE1) continue;
+            unsigned char b[0x90] = {};
+            if (!memory::SafeRead(r, b, sizeof(b))) continue;
+            if (b[1] == 0 && (b[0x8f] & 0xf) == 0) ++dead;
+        }
+        return dead;
+    }
     void DumpLayers() {
         const uintptr_t mgr = g_mgr.load();
         uintptr_t slots = 0;

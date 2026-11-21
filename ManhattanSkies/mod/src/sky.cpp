@@ -280,7 +280,33 @@ namespace {
     void ApplyLook() {
         const uint64_t want = DesiredLook();
         const ULONGLONG now = GetTickCount64();
-        if (want == g_look_id) { g_want_pending = want; return; }
+        if (want == g_look_id) {
+            g_want_pending = want;
+            // A mod look whose textures never became real textures (placeholders that never start streaming) renders as a solid red screen: seen after a relaunch, cured by
+            // releasing the slot and loading the look again. Checked twice, 5 s after the look went on; at most 2 reloads per look.
+            static uint64_t s_id = 0; static int s_tries = 0, s_bad = 0; static ULONGLONG s_last = 0;
+            if (want != s_id) { s_id = want; s_tries = 0; s_bad = 0; }
+            if (want && atmpacks::IsMod(want) && now - g_look_at > 5000 && now - s_last > 1500 && s_tries < 2) {
+                s_last = now;
+                const int dead = recorder::DeadModTextures();
+                s_bad = dead > 0 ? s_bad + 1 : 0;
+                if (s_bad >= 2) {
+                    LOG("sky: look %016llX has %d texture(s) that never started streaming (red screen): turning it off and loading it again (reload %d)", (unsigned long long)want, dead, s_tries + 1);
+                    ++s_tries; s_bad = 0;
+                    const int idx = g_look_idx;
+                    Activate(idx, false);
+                    int base = BaseSlot();
+                    if (base >= 0) Activate(base, true);
+                    recorder::Recompute();
+                    g_look_id = 0; g_look_idx = -1;
+                    uint64_t a; int w;
+                    if (idx >= 0 && recorder::SlotInfo(idx, a, w) && a == want && recorder::ReleaseSlot(idx)) { g_held.erase(want); g_released_at[want] = now; }
+                    g_idle.erase(std::remove(g_idle.begin(), g_idle.end(), want), g_idle.end());
+                    g_load_req_at = 0; g_load_tries = 0;
+                }
+            }
+            return;
+        }
         // An atmosphere mod's load requests (the atmosphere, then its sky and baked-light textures) made while the game is still loading or streaming (a relaunched save, the
         // first seconds of a world) are sometimes lost or half-served: a red screen after a relaunch, a missing or grey sky. They wait until the world is ready.
         if (want && atmpacks::IsMod(want) && !WorldReady(now)) return;
