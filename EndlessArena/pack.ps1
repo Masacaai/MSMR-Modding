@@ -7,7 +7,7 @@ New-Item -ItemType Directory $stage | Out-Null
 
 $info = [ordered]@{
     name         = 'EndlessArena'
-    author       = 'Masacaai'
+    author       = 'Quail0'
     version      = '0.2.0'
     game         = 'MSMR'
     type         = 'script'

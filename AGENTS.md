@@ -52,6 +52,7 @@ command file and read the log yourself; a lot of debugging works that way.
    Change the generator and regenerate; don't hand-edit. Regenerating needs a local game install (see [EndlessArena/docs/HOW_TO.md](EndlessArena/docs/HOW_TO.md)).
 8. **Keep the docs true.** If your change makes a doc wrong, update it in the same change. New game knowledge goes in GAME_INTERNALS.md.
 9. **Licensing**: the project is GPL-3.0-or-later. Don't paste code from other projects unless its license is compatible, and say where it came from.
+10. **Mod author name is `Quail0`** (maintainer, 2026-11-20; it was Masacaai). Every `pack*.ps1` sets `author = 'Quail0'` in the Overstrike `info.json`; use it for any new mod's package, README and release notes. The GitHub account/repository slug stays `Masacaai/MSMR-Modding` (URLs unchanged). A port of someone else's mod keeps its credit, e.g. `Quail0 (port of nanodanc's QuantumBreak)`.
 
 ## Working on this with an agent: practical notes
 
