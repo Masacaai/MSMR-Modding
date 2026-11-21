@@ -113,3 +113,34 @@ Install state: both mods' packages in `Mods Library` and the DLLs in `scripts\` 
 3. **The Settings-screen crash** (`exe+31e9582`): the fade/menu swallowing that Fable's analysis ranked as the likeliest cause is gone (cleanup pass 2, 2026-11-20). If the crash does not come back over several sessions, that was it; if it does, the forensic block in the log (`modmenu: CRASH in Scaleform`) has the context.
 4. **`fsinfo`** in the command file once in a loaded world: tells which toc object layout is right and how many archives are open (needed to add an archive entry without another Overstrike mod).
 5. Still untested from before: the colour-amount rows, the activity freeze in a real crime, the hold at a phase boundary, the extra-file swap (removed in the 2026-11-20 cleanup: `RECON.md` Part 27).
+
+## 6. Hyper-Sense (name final: Hyper-Sense (the "Quail0's" prefix was dropped 2026-11-20); built 2026-11-20, untested in game)
+
+**Status 2026-11-20:** `HyperSense/` exists and builds (own slow motion, ModMenu tab, looks incl. 9 colours + rainbow, decay, opacity-decay scale, drift and size experiments; lean removed). QBR was reset to slow-motion only (0.1.0 modular). S4 wired (SPEED BLUR, SPEED STREAKS rows, `speedfx.cpp`): the live `HeroSpeedFXConfig` is reached tracker (`HeroTraversalTracker`) +0x48 handle -> handle table (`exe+7a44320`/`7a44340`) -> obj+0x48 -> [+0x40] or +0x1850 -> +0x17b8 [RE from `exe+863ff0`/`923950`, untested]. Still open: `StatusEffectActorTrail` as the clone scheduler, the time-scale split beyond the speed multiplier.
+
+**Why:** Quantum Break Renewed is a port of another modder's Script Hook mod and stays exactly as it was (gitignored, untouched). Everything built for it on 2026-11-20 (after-images with pose tracking, looks, decay) moves into a **new, separate mod**. QBR is reset to its pre-after-image state (v0.2.0 sources; remove ghosts/fnatives/settings/marker looks and decay options, the F8/F6 keys and the `qbr_ghosts_*` markers).
+
+**Decisions**
+- Own folder (`HyperSense/`), gitignored until the maintainer says it is release-ready. Author `Quail0`. Name: tentative, to be finalized (candidates in the 2026-11-20 chat: "Quail0's Hyper-Sense", "Hyper-Sense: Afterimage", "Hyper-Sense Reborn", "Quail0's Flash Sense").
+- **No `.modular`.** Settings live in the in-game **ModMenu** tab (`ModMenu/`), like Manhattan Skies and Endless Arena, with the optional ini behind it. The `qbr_*` marker DLLs and `pack.ps1` module layout are dropped; pack as a single `.script` into `Mods Library`.
+- Slow motion is NOT part of it: Hyper-Sense reads QBR's state (or its own simple "after-images always / while fast" gate) so the two mods coexist. Open question to settle when the mod is made: does Hyper-Sense detect QBR's slow-mo (shared time-scale read), or offer its own trigger.
+
+**Port list (from QBR 0.3.0 sources):** ghosts.cpp/.h (ring, pose copy, hide-spawn A-pose fix, photo-mode hold, instant removal, flicker, fade curve), fnatives (AddMaterial, SetModified, HashPath, MapLookup, SkinPart), settings, hero helpers; behaviours: only while slow-mo is on, keep spawning while standing still, remove all clones the moment slow-mo ends.
+
+**Menu knobs**
+1. Look (default "Default"): the original model look plus colour variants.
+2. Clone decay (how long a clone lasts): now a number, not four steps. Default 0.9 s.
+3. **Opacity decay scale (new):** the exponent of the age-to-opacity curve (today `fade_curve` 1.6; 1 = linear, bigger = near clones stay solid longer then drop off).
+4. Spawn interval, max clones (auto from decay), flicker amount, lean, starting opacity.
+5. Mode: off / while fast / always.
+
+**Colour variants (keep Red glow and Flat grey; add more)**: candidates are other tints of the same surface-material family (`light_red`, `test_grey_medium`): blue, cyan, gold, green, purple, white, black/negative, plus a rainbow cycle through them by age. Each needs a loaded, surface-type material found in the archive (`toctool check`); where none exists, tint via the model's own materials (colour parameters) instead. Unverified until tried.
+
+**Effects experiments outside shaders (wire up as toggles for testing; each [?] until run)**
+- **S4:** raise `HeroSpeedFXConfig` motion blur and speed contrails (`HeroSpeedFXContrailsOn/OffEvent`, `HeroScreenSpeedFXOn/OffEvent`) while Hyper-Sense is active (FLASH_RECON.md section 2.1).
+- **S1b:** drive the spawning with a hand-built `StatusEffectActorTrail` on the hero (the engine's own trail scheduler with a shader ramp), instead of our timer; unknown whether a hero can host it.
+- **Time-scale split ("hypersense" proper):** world slowed, hero at normal speed through `HeroTimeScaleManager` / `Actor::SetTimeScale`.
+- Idle-animation mimic: clones keep copying the pose while Spider-Man stands still (already pose-tracked; verify it reads well).
+- Ghost extras: per-clone scale pulse, upward drift, hue shift by age.
+
+**Steps when the name is chosen:** (1) create the folder and port the ghost code; (2) ModMenu tab with the knobs above; (3) colour variants; (4) effect toggles; (5) reset QBR to its original state and repack; (6) package into Mods Library (hash checked); (7) play-test checklist; (8) release prep later, with the maintainer.

@@ -14,6 +14,8 @@ If you are new, read these in order:
 | Doc | What it holds |
 |---|---|
 | [UI_HUNT.md](UI_HUNT.md) | The chronology of finding and driving the game's HUD and menus: every recording, what each panel accepts |
+| [FLASH_RECON.md](FLASH_RECON.md) | Flash overhaul recon: locking the web moves, and after-images (the Holo Decoy ghost actor, trail scheduler, skinning data) |
+| [E3_START_RECON.md](E3_START_RECON.md) | Bringing back the 2018 demo's "Spidey on his phone, press X" start screen: the leftover demo title-screen config, scene assets and mission-graph nodes |
 | [RELEASING.md](RELEASING.md) | How to cut a release |
 | [ROADMAP.md](ROADMAP.md) | Ideas and plans across the repository: shareable presets, the shared `common/` layer |
 | [`../recon/M1_natives_4.0630.md`](../recon/M1_natives_4.0630.md) | The first reverse-engineering pass: how the natives were decoded |

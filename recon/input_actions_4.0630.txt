@@ -1,0 +1,119 @@
+# input action name hashes read through exe+169a690(controller, &ref{+0x14 hash}) / exe+1697fa0 (value): <hash> <name> <some users>
+dfc4d464 kAccept | GUI::PlayerHudE3Demo[2]
+7bb74728 kAcceptOffer | 8552f0, 857360, Offer[18]+35 more
+17541a94 kAcceptOfferPassthrough | Offer[18]+35 more, Offer[19]+21 more
+68f1729c kAccessibilityShaderToggle | 2be500, AccessibilitySystemGame[20]
+514d1888 kAimMode | 901930, a74ee0
+550292c8 kAltWeaponWheelX | 792300, 792c10
+2205a25e kAltWeaponWheelY | 792300, 792c10
+7a4bf183 kAnyFaceButton | 1e2bbd0
+f96f4a21 kCameraFast | Camera2::CameraMotionFly[10]
+bd5e9772 kCameraInputGyroX | Camera2::CameraInputYawAndPitch[10], Camera2::FollowCameraMover[16]+4 more
+ca59a7e4 kCameraInputGyroY | Camera2::CameraInputYawAndPitch[10], Camera2::FollowCameraMover[16]+4 more
+5404c1eb kCameraInputX | 1e2bbd0, 792c10, 86adc0, 86b0f0, Camera2::CameraInputYawAndPitch[10], Camera2::FollowCameraMover[16]+4 more
+2303f17d kCameraInputY | 1e2bbd0, 792c10, 86adc0, 86b0f0, Camera2::CameraInputYawAndPitch[10], Camera2::FollowCameraMover[16]+4 more
+0c248b5a kCameraLower | Camera2::CameraMotionFly[10]
+eb3d010b kCameraMoveX | Camera2::CameraMotionFly[10]
+9c3a319d kCameraMoveY | Camera2::CameraMotionFly[10]
+bad86be0 kCameraRaise | Camera2::CameraMotionFly[10]
+e90e7238 kCameraSlow | Camera2::CameraMotionFly[10]
+1d7c9c71 kCameraZoomStick | 1e2ceb0, 1e2cf60
+39786992 kCombatAltFunction | e36520
+e52da6a8 kExit | 8536b0, 853c10, 9e6050, Hero::HeroStateUseTurretLocal[12]
+29fa2b69 kFire | a74540
+30c7c12c kGUIAnalogL2 | 81fca0, 820f50, ca0290
+e486fef3 kGUIAnalogR2 | 81fca0, 820f50, ca0290
+fe51b430 kGUIDown | 81fca0, Camera2::CameraInputYawAndPitch[10]
+98c9c363 kGUILeft | 81fca0, Camera2::CameraInputYawAndPitch[10]
+b1de3d37 kGUILeftStickX | 1d2a550, 81fca0, HackingMiniGameUI[18]+5 more, ScaleformRTTUpdater[18]
+c6d90da1 kGUILeftStickY | 1d2a550, 81fca0, HackingMiniGameUI[18]+5 more, ScaleformRTTUpdater[18]
+fac730bf kGUIMouseLeft | 8191a0, c9fa40
+d130d8f3 kGUIMouseLeftDoubleClick | 7c2be0
+23b6f95f kGUIMouseMoveX | 8191a0
+654722b7 kGUIPopupExit | GUI::PopupBaseUI[3]+2 more
+e4c9e745 kGUIRTTStart | 735df0, 736ef0
+f1f8ed35 kGUIRight | 81fca0, Camera2::CameraInputYawAndPitch[10]
+1a6928d3 kGUIRightStickX | 1d2a550, 81fca0, HackingMiniGameUI[18]+5 more, ScaleformRTTUpdater[18]
+6d6e1845 kGUIRightStickY | 1d2a550, 81fca0, HackingMiniGameUI[18]+5 more, ScaleformRTTUpdater[18]
+8da1aa6a kGUIRotateX | 820f50, 8220a0
+6c3eee5d kGUISelectButton | GUI::PauseMapUI[6]
+14a700c0 kGUIUp | 81fca0, Camera2::CameraInputYawAndPitch[10]
+48604e71 kHideOSD | 1f8df00
+85920bad kInteract | 798370, 915950, 915a90, 94f430, 9e6050, GUI::PopupMissionStartUI[3]
+d69724b0 kJump | 98fab0, 9c96e0, Hero::HeroStateSlopeSlideLocal[12], Hero::HeroStateStrafeStandToJumpLocal[11], Hero::HeroStateStrafeToJumpLocal[11], Hero::HeroStateUseTurretLocal[12]
+98491e07 kLoadOptions | 1f8df00
+2221b6d3 kMelee | 8a5440, 9cd380, 9f8e60, Hero::HeroStatePileOnIdleLocal[17], a79430, ad8020
+cf8dea56 kMoveSlow | b2fe10
+04453c00 kMoveX | 1e2bbd0, 792c10, Camera2::CameraInputYawAndPitch[10], Camera2::FollowCameraMover[16]+4 more, VehicleDriverCarSteering[10]
+73420c96 kMoveY | 1e2bbd0, 792c10, Camera2::CameraInputYawAndPitch[10], Camera2::FollowCameraMover[16]+4 more, VehicleDriverCarSteering[10]
+f83de382 kOptionDown | 1f8df00, 1f8ec50
+120f9a44 kOptionInputX | 1f8df00, 1f8eea0
+6508aad2 kOptionInputY | 1f8df00, 1f8eea0
+39cc4b65 kOptionLookX | 1f8df00, 1f8eea0
+4ecb7bf3 kOptionLookY | 1f8df00, 1f8eea0
+96b295ab kOptionUp | 1f8df00
+054d31da kPhotomodeCameraInputX | Camera2::PhotomodeCameraMotionFly[10], c99480, c9e580, ca0290
+724a014c kPhotomodeCameraInputY | Camera2::PhotomodeCameraMotionFly[10], Camera2::PhotomodeLookCameraMover[16], c99480, c9e580, ca0290
+9bd4806b kPhotomodeCameraLower | Camera2::PhotomodeCameraMotionFly[10], c99480, ca0290
+7ccd0a3a kPhotomodeCameraMoveX | Camera2::PhotomodeCameraInputYawAndPitch[10], Camera2::PhotomodeLookCameraMover[16], c99480
+0bca3aac kPhotomodeCameraMoveY | Camera2::PhotomodeCameraInputYawAndPitch[10], Camera2::PhotomodeLookCameraMover[16], c99480
+2d2860d1 kPhotomodeCameraRaise | Camera2::PhotomodeCameraMotionFly[10], c99480, ca0290
+90bec23a kPhotomodeFullExit | c9fa40
+5344041d kPhotomodeReset | c9fa40
+3555167a kPhotomodeSave | c9fa40
+6efeeb04 kPhotomodeStickerRotateLeft | ca0290
+22d82ee6 kPhotomodeStickerRotateRight | ca0290
+1410762f kPhotomodeToggleCameraMove | c9fa40
+d59ce1da kPhotomodeTogglePanel | c9fa40
+92c61347 kPhotomodeToggleUI | 7899a0
+17ba5d6a kPolyControl | 1f8df00, 1f8eea0
+65a7639b kPolyControl2 | 1f8df00, 1f8eea0
+28ea837b kProgBack | ccca10, ccd310, cce2f0, cdb970
+59dbd277 kProgDown | ccca10, ccd0e0, ccd310, cce2f0, cdb970
+3f43a524 kProgLeft | ccd0e0
+12fc5215 kProgNextCat | ccca10
+60f17fb1 kProgPing | cddec0
+8ab278ad kProgPitch | cddec0
+a39a0ad2 kProgPitchGyro | cddec0
+09b71c1d kProgPrevCat | ccca10
+8e411f41 kProgResetView | ProgressionTechBox[18]
+19e7b360 kProgRight | ccd0e0
+f1bd28eb kProgScrollHorizontal | ProgressionTechBox[18], cdac40
+4618e91a kProgScrollVertical | ProgressionTechBox[18], cdac40
+ce359dae kProgSelect | ProgressionTechBox[18], ccca10, cccf70, ccd310, cce2f0, cdb970
+f977eaf2 kProgSelect2 | ProgressionTechBox[18]
+553fe37a kProgToggleCameraMove | cddec0
+ab515809 kProgTriangle | ccca10, cccf70
+ec02c440 kProgUp | ccca10, ccd0e0, ccd310, cce2f0, cdb970
+e2927dbf kProgYaw | cddec0
+89ac9ae5 kProgYawGyro | cddec0
+b0d2ba94 kQTEFire | a74540
+328ef533 kQuit | ModeGameplay[6]
+c0cc44a9 kResetAllOptions | 1f8df00, 1f8eea0
+4b5c4712 kResetOption | 1f8df00, 1f8eea0
+c3269c91 kRetry | 766630, 766760, GUI::PlayerHudActivities[2]
+5f911068 kRoll | 9f8e60, Hero::HeroTransitionManager[129], adc0d0
+bf85319f kSaveOptions | 1f8dc50, 1f8df00
+6b25fbe5 kShowOSD | 1f8df00, 1f8eb60
+83646ce7 kSprint | 8a57f0, 9c96e0, Hero::HeroStateScaledAnimToLedgeLocal[12]+1 more, Hero::HeroTransitionManager[62], a05690, aaced0
+0cd07a28 kSwing | 901930, Hero::HeroStateJumpLocal[12]+8 more, Hero::HeroStateSwingLocal[12], Hero::HeroTransitionManager[81]
+4e03ad2e kSystemPause | GUI::PlayerHUD[3]
+144f5fe2 kSystemPause2 | 783420, GUI::PlayerHUD[3], GUI::PlayerHudMission[2]
+6cd01317 kUseAction | 1684880
+a1fb8430 kViewBackpack | 781570
+d4be86e9 kWallCrawl | Hero::HeroStateWallCrawlIdleLocal[12], Hero::HeroStateWallCrawlMoveLocal[12], Hero::HeroStateWallRunBaseLocal[17]+12 more, ac7fb0, ac81b0, b6f690
+09930af8 kWallPerch | Hero::HeroTransitionManager[119], ac7fb0, ac81b0
+74465ea1 kWallRun | Hero::HeroStateWallRunBaseLocal[17]+12 more, Hero::HeroTransitionManager[141], b6f690
+f4de43f5 kWeaponNext | 792300
+f62e5145 kWeaponPrevious | 792300
+4938dd86 kWeaponWheelX | 792300, 792c10
+3e3fed10 kWeaponWheelY | 792300, 792c10
+775e96e1 kWebStrike | 9f8e60, Hero::HeroStateVehicleTakedownLocal[12]
+46db23ab kWebStruggle | a60350
+b513d2d6 kWebYankBot | Hero::HeroStateWebYankAndThrowDownLocal[18], Hero::HeroStateWebYankAndThrowLocal[18]
+6f08475b kWebYankSpecial | 9f8e60, Hero::HeroStateWebYankAndThrowDownLocal[18], Hero::HeroStateWebYankAndThrowLocal[18]
+8eed688b kWebZip | Hero::HeroTransitionManager[119], aaced0
+ffaf3f23 kWebZipToObject1 | 823960, 98fd40
+66a66e99 kWebZipToObject2 | 823960, 98fd40
+3e4ccccd ? | 9917f0, 9c8800, DevCommentaryOffer[19], Offer[19]+21 more, RadioTowerOffer[19]
+26901d7d ? | 98e4f0

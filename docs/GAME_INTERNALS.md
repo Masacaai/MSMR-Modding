@@ -291,3 +291,154 @@ All `[V]` = verified in game. Addresses are `exe+RVA`.
 - The Options movie takes the tab-list banner from `_locStrings.PAUSE_OPTION_SETTINGS` (it stays "SETTINGS") and the in-tab header from the tab's `menu_header`.
 - The pause menu **closes itself on a lighting change** by sending Flash `CloseMenu` from `exe+7dc06b`; swallowing that call for a few seconds keeps the menu open.
 - Scaleform `GfxValue` / ObjectInterface vtable slots: 2 Release, 5 SetMember, 15 PushBack.
+
+## Fable session 2026-11-15: the game describes itself (reflection tables, events, component types)
+
+All of this was **read from the exe on disk** (`[RE]`: nothing here was run in game). The tool is `tools/sigtools/fx.py` (commands in its header);
+the dumps it writes go to `recon/*_4.0630.txt` (generated: regenerate rather than edit; they hold names and offsets only, no game bytes).
+
+### DDL type descriptors: 9,716 reflected types with field names, types and runtime offsets
+Every "DDL" type (each `*Event`, every config type such as `BotConfigMovement`, each component's `*Prius` data, script-action data) has a
+**static descriptor in `.data`**:
+
+```
++0x00 char* name            +0x08 u32 type hash (CRC-32 of the name)      +0x10 u32 base type hash    +0x14 u32 size of the runtime struct
++0x18 u32 field count       +0x48 u32* field name hashes   +0x50 char** field names   +0x58 u8* field kinds
++0x70 u32* array counts     +0x78 u32* field offsets (in the runtime struct)          +0x80 u32* field type hashes   +0x98 char** display names
+kinds: 0 u8, 1 u16, 2 u32, 3 u64, 4 i8, 5 i16, 6 i32, 7 i64, 8 float, 9 double, 0xa String, 0xb enum, 0xc flags, 0xd struct, 0xf Boolean, 0x10 File,
+       0x11 Tuid, 0x12 Json, 0x14 AssetId
+```
+
+- `fx.py ddl <regex>` prints matching types; `fx.py ddls recon/ddl_types_4.0630.txt` writes all of them. Example: `fx.py ddl "^DamageRequest$"`.
+- The offsets are those of the **runtime object** a config or event is parsed into, so a config can be edited as data *and* read or patched live.
+- A class's descriptor is returned by its vtable slot 7 (`lea rax, [descriptor]; ret`); slot 0 returns the name, slot 8 is `IsA(hash)`.
+
+### Enums: 3,808 static enum descriptors
+`{u32 type hash, u32 count, ..., +0x18 u32* value hashes, +0x20 char** value names}` in `.rdata` (a pointer table to them sits in `.data`).
+`fx.py enum <regex>` (matches value or type names), `fx.py enums recon/enums_4.0630.txt`. Most enum *type* names are not in the exe; the dump lists
+which DDL fields use each enum ("used by"), which names it in practice. Enum value hashes and type hashes are the same CRC-32.
+
+### The name hash
+Insomniac CRC-32: polynomial `0xEDB88320`, **initial value `0xEDB88320`, no final xor** (`fx.py h <name>`; `fx.py hn <hex>` looks a hash up among
+every string in the exe). It is the id of events, DDL types and fields, enum values, script-node pins, mission names, message payload verbs.
+In code the hasher is `exe+1bb88d0(const char*, 0xedb88320)`.
+
+### Component and script-action type objects: 4,359 of them
+Each component class registers a **type object** in `.data` (`recon/component_types_4.0630.txt`: `<type object RVA> <name> <factory...>`), e.g.
+`HeroAbilityLock exe+6daad90`, `HeroLocal exe+6da9d90`, `HeroCameraManager exe+6dd6030`, `HeroMoverManager exe+6dd6c70`, `HeroWeaponManager exe+6dd8370`,
+`BotCommandGoto exe+7bf6840`. Lookup by type, as the game does everywhere:
+
+```
+comp = word[entity+0x88] != 0 ? exe+16799a0(entity+0x80, &type) : exe+167ab40(entity+0x58, &type)     // null if the entity has none
+```
+
+`fx.py` annotates these addresses in disassembly as `type:<Name>`, and `fx.py x <type rva>` lists every function that looks the component up
+(that is how the 173 users of `HeroAbilityLock` were found).
+
+### Events: the whole catalogue, and how handlers are registered
+`tools/sigtools/events.py recon/events_4.0630.txt` lists **3,061 events**: id, name, payload size and fields (from the DDL descriptor), the
+functions that send it and the handlers systems register for it.
+
+- Send: `SendEvent exe+16d5e80(&EventSys /*exe+7475690*/, u32 id, u32 target handle (0 = broadcast), source, 0, 0, 0, 0, 1, f, f, payload, size)`.
+  The event object is an `EventBase` (0x138 bytes: `+0x28 Frame`, `+0x2c SenderHandle`, `+0x30 TrackedNameHash`, `+0x40 Orientation`...) followed by
+  the event's own fields from `+0x138`. `EventSys`: id -> index map at `+0x291e0`, type records (0x28 bytes) at `+0x11d8`, count `+0x291d8`.
+- Listen (what the game's systems do): `exe+198f160 AddEventHandler(listener, u32 id, void (*handler)(void* owner, EventBase* ev))`.
+  `listener` is the system's own hidden listener object (`ResolveRef exe+16798f0(&system+0xc)`), which keeps a map "event handlers hash" at
+  `+0x48` (event index -> handler) and calls `handler(q[listener+0x78], event)` from the dispatcher `exe+198f2f0`. **One handler per event per
+  listener**: registering a second one for the same id on the same listener replaces the first, so a mod that borrows a system's listener must
+  only add ids that system does not use (the catalogue shows who uses what) or chain to the old pointer. Not tried from a mod yet: hooking
+  `SendEvent` stays the proven route.
+- Components receive events through their own virtual handlers (a `cmp reg, <id>` chain); `fx.py imm <id>` finds those.
+
+### Entity messages ("synced actor calls"): 74
+`MsgRegister exe+21423d0(&type, handler, "name")`, `MsgSend exe+2142440(1, type, target handle, arg, &payload, size)` (the screen fade, hero
+lock, halt traversal...). Table: `recon/messages_4.0630.txt`.
+
+### Script-node pins
+A nodegraph action's execute method (vtable slot 10) receives the triggered input pin's hash in `edx`, reads inputs with
+`exe+1923410/1923490/19234e0(node+0x58 ctx, &out, pinHash)` and fires outputs with `exe+1923a90(ctx, pinHash)`. Resolving the hashes
+(`fx.py hn`) gives the pin names; the node's data fields are in the DDL dump under `<Action>Prius`.
+
+### More from the same session (pointers; all `[RE]`, read from the exe, not run)
+- **World singleton** `exe+1f707e0()`: overlays `+0xe2060` (records `[+0xe2070]`, 0x38 bytes, count `+0xe2078`; load `exe+1f73580(world, &id)`, unload `exe+1f735a0`), checkpoint table
+  `+0xe0900` / `[+0xe08f0]`, loading state `dword +0xe3cb0` (0x17..0x19 while loading), lighting object `+0xe10d0`.
+- **Level/checkpoint loader**: `gm = exe+1ef6560()` (`GameManager`), `gm->vtable[+0xf8](gm, levelAssetId, crc32(checkpoint), delay)` = `exe+1ef4ca0` (`docs/MISC_RECON.md` section 2).
+- **Mission state**: `exe+201f640` / `exe+201f800` on `q[exe+7c4bbb0]`, or `exe+1fa74f0` on `q[exe+7c3ef70]`; 0 Inactive, 1 Available, 2 Active, 3 Cleanup, 4 Complete, 5 Failed.
+- **Hero**: `HeroAbilityLock` (40 abilities, 4 layers), `HeroMacroState` (+0x4c: kOnGround 0x2, kInAir 0x4...), `WeaponManagerBase::Equip exe+2162300` (five arguments), gadget ammo,
+  the wheel list, the damage message: `EndlessArena/docs/RECON.md` sections 1-9. Death -> `GameManagerCampaign::OnHeroDied exe+722750` -> `HeroRespawn` component (MISC_RECON section 7).
+- **Crime director**: `RandomCrimeSystem2` at `exe+707a500` (MISC_RECON section 1). **Chase system, 1,032 script nodes with pins**: MISC_RECON sections 3 and 5, `recon/script_nodes_4.0630.txt`.
+- **Lighting**: modes 0 kDay, 1 kNight, 2 kSunset, 3 kOvercast, 4 kBlackout, 5 kNightRain, 6 kOvercastRain; the switch's load screen is `DynamicLoadScreenSystem` handler `exe+710970`
+  (`ManhattanSkies/docs/RECON.md` Part 18); atmosphere fields by name: Part 19.
+- **Crash dumps**: `tools/sigtools/dumpctx.py` (real faulting registers and stack), `dumpindex.py` (one line per dump). A heap address in an object's vtable slot = the object was freed.
+
+## Input: the game's action layer, for every device (Fable session 2026-11-15; `[RE]`, read from the exe, not run)
+
+Answers FOF-A1/A2/A3/A5 (partly), EA-F3, MSC-D2/D6. The devices (`nx::Input::GamepadSce`, `GamepadXInput`, `GamepadWindowsInput`, `GamePadSteam`, `NxKeyboardDevice`,
+`NxMouseDevice`) feed **device maps** (`PadMap`, `KeyboardMap`, `MouseMap`, `TouchPadMap`; `KeyboardPriorityMask`, `MousePriorityMask`), which feed **named actions**. Game code
+never reads a button: it reads an action by name hash from the player's **input controller**.
+
+**Logical buttons.** One enum (type `0x7b87880c`, 121 values) covers every device: 0 kNoPadButton, 1-4 kUp/kDown/kLeft/kRight, 5-8 the face buttons, 9 kL1, 10 kR1, 11 kL2,
+12 kR2, **13 kL3**, 14 kR3, 15 kStart, 16 kBack, 17-22 the stick axes and strengths, 23-44 `kPadOnly*`, 45-60 `kMkbOnly*` (57 = kMkbOnlyL3), 61-62 Steam gyro, 63-66
+`kMkbLeftStick*`, 67-76 `kMkbCustom00..09`, 77-105 `kKeyboard*`, 106-120 mouse (deltas, wheel, buttons, double clicks). Keyboard and mouse bindings are expressed as these
+logical buttons, so "the keyboard equivalent of L3" is whatever the player bound to logical `kL3`: reading the *action* gets it for free. Raw keys are a second enum
+(type `0xa832eb64`, 147 values `kKeyNone`..`kKeyMouseRightDoubleClick`). Print either with `fx.py enum "^kNoPadButton$"` / `"^kKeyLeftControl$"`.
+
+**Actions.** Each input context is a map named `<X>BindingsConfig` whose actions are an enum named `<X>Control` (`fx.py enum "Control$"` lists the sets). The main ones:
+
+- `HeroControl` (58): kFire, kReload, kJump, kMelee, kMeleeAndJump, kRoll, kFallDive, kDodge, kSprint, kSwing, kWallCrawl, kWallCrawlCorner, kWallRun, kWebZip, kWebSnap,
+  kWebTunnel, kWebZipVent, kWebZipToObject1/2, kWebShooterPellets, kCombatAltFunction, kWebYankBot, kWebYankSpecial, kWebStrike, kWebStruggle, kWallPerch, kBeamAttach,
+  kSpiderTracer, kAimMode, kSpiderAssault, kActiveFinisher, kSpiderSuitAbility, kSlottedMelee, kExit, kLook, kInventory, kObjectivePing, **kWeaponWheel, kWeaponWheelAlt**,
+  kWeaponPrevious, kWeaponNext, kUseGadget, kEquipGadgetLeft/Right/Up, kHeal, kHeroTouchpadX/Y(+Pinch2), kHostageTalkdown, kHostageAgitate, kPlaceIntelTower, kQTEFire,
+  kAccessibilityShaderToggle, kTrickMode, kQTEWebShooterLeft/Right. Also `HeroControlShared` (9), `HeroExternalControl`, `HeroInventoryModeControl`, `HeroTravelMapControl`.
+- `HeroQuickSelectControlPrimary`: kWeaponWheelX, kWeaponWheelY, kWeaponWheelMouseDeltaX, kWeaponWheelMouseDeltaY (the gadget wheel's stick, on any device); `...Alt`: kAltWeaponWheelX/Y.
+- `CameraInputControl` / `CameraMoveInputControl` (kCameraInputX/Y, kCameraInputGyroX/Y, kCameraMoveX/Y, kCameraRaise/Lower, kCameraFast/Slow, kCameraZoomStick), `kMoveX`/`kMoveY`, `kInteract`.
+- `SystemControl`: kSystemPause, kSystemPause2. `ScaleformControl` (43) and `ScaleformRTTControl` (32): menu navigation (kGUIUp/Down/Left/Right, kGUISelectButton, kGUIPopupExit...).
+- `PhotomodeControls` (16), `PhotomodeCameraInputControl` (6). `GameControl` (29): kQuit, kHeroMouseToggle and the developers' **free cameras** `kFPSCam*` and `kMayaCam*`;
+  `DebugCamera*Control`, `MarketingCameraInputControl` / `MarketingCamOptionInputControl` (a "marketing camera" with 14 options): leads for a mod free camera.
+- **`PrototypeControl`** (20): kPrototypeX/Y/A/B, Up/Down/Left/Right, R1/R2/R3, L1/L2/**kPrototypeL3**, Start, Back, MoveX/Y, CameraX/Y, each with its own one-binding map
+  (`PrototypeL3BindingsConfig` descriptor `exe+7c16220`, set up at `exe+1f3050`, ...): **generic per-button actions the game ships and does not use**, i.e. a ready action for a
+  mod's "hold L3" that is device-agnostic.
+
+`recon/input_actions_4.0630.txt` lists the 118 action hashes game code reads, with the functions that read them.
+
+**Reading an action** (what the gadget wheel does at `exe+792392`):
+
+```
+ctrl = q[HeroLocal + 0x50]                      // the hero's input controller (HeroLocal type object exe+6da9d90). The HUD reaches the same kind of object as [owner+0x48]+8.
+struct ActionRef { void* ctrl; void* cached = 0; u32 generation = 0; u32 nameHash; } ref = { ctrl, 0, 0, crc32("kWeaponWheelX") };   // hash at +0x14
+a = exe+169a690(ctrl, &ref)                     // action state or null (hash map at ctrl+0x258, array [ctrl+0x250], generation ctrl+0x1f0)
+value   = a ? exe+1697fa0(ref.ctrl, a) : 0      // float: sum of the bound sources' current values (sticks -1..1, buttons 0/1, triggers 0..1)
+pressed = a && exe+1698d10(ref.ctrl, a, null)   // bool: went above the threshold this frame (threshold pointer, default float at exe+6050ec0)
+```
+
+A bound source is `{... +0x0c flags (bit 0 = suppressed), +0x10 current float, +0x14 previous float}`.
+
+**Contexts.** `exe+1695a10(ctrl, &mapDescriptor)` adds a map (it builds "Keyboard Device Map", "Mouse Device Map", "Pad Device Map", "TouchPad Device Map" for it);
+`exe+1696d20(ctrl, mapId) -> bool` = present; **`exe+169a720(ctrl, mapId, bool enable)`** switches a map on or off. The controller keeps its maps as 0x50-byte records at
+`[ctrl+0x218]` (count `+0x214`, map id at `+0x8`). A descriptor's first dword is its id (CRC-32 of the config name). The game locks the hero's input by disabling the hero map:
+`exe+83c350(HeroLocal, bool)` calls `exe+169a720(ctrl, d[exe+6da7370], enable)`. The gadget wheel adds and enables `HeroQuickSelectPrimaryBindingsConfig` (`exe+6da94c0`) or
+`...Alt...` (`exe+6da95c0`) while open; that, plus the ability lock, is how it takes the stick away from the camera. Config names in the exe: `HeroBindingsConfig`,
+`HeroBindingsConfigShared`, `GameBindingsConfig`, `SystemBindingsConfig`, `CameraInputBindingsConfig`, `ScaleformBindingsConfig`, `PhotomodeInputBindingsConfig`,
+`HeroTravelMapBindingsConfig`, `HeroInventoryModeBindingsConfig`, `HeroLockWithExitBindingsConfig`, `LoadScreenBindingsConfig`, the 20 `Prototype*BindingsConfig`, ... (62 in all).
+
+**Recipes [not run]:** (1) *Interact on every device, Steam Deck included*: read the action `kInteract` as above instead of raw buttons. (2) *A mod's hold-L3 that is a real
+action*: `exe+1695a10(ctrl, exe+7c16220)` once, then poll `kPrototypeL3`; while your UI is open, disable the hero map with `exe+169a720(ctrl, d[exe+6da7370], 0)` (and
+re-enable it on close) so the hero does not act on the same press. (3) *Wheel selection with the right stick on any device*: read `kWeaponWheelX/Y` (or `kCameraInputX/Y`).
+(4) *Editor cursor*: `kMoveX/Y`, `kCameraInputX/Y`, `kGUIMouseMoveX`.
+
+**Glyphs and device type.** Prompt icons are resolved by `IconMap*` data: `IconMapActionControl{Action}` (glyph of an action), `IconMapPadSpecific` with one child per device
+family (**X360, XOne, DualShock, DualSense, SteamDeck, SwitchPro, Generic, Mkb, Steam**; flags `UseGamepadForMkb`, `UsePhysicalGamepadForSteamInput`), `IconMapSingle{IconId}`
+(enum `IconId`, 203 glyphs), `IconMapXOSwap`, `IconMapStickSwap`, `IconMapMkbBinding{Button}`, `IconMapSteamBinding{Button, ActionSet {Active, InGame, Menus}}`. Where the active
+family is stored was not located. `OSKeyboard` (vtable `exe+3cf8518`) and a Steam `GamepadTextInputDismissed` callback exist: the game can open an on-screen keyboard (MSC-D7 lead).
+
+Not examined: the pad backends' axis storage and dead zones (FOF-A3), per-user slots in `nx::NxInputImpl` (78 methods; FOF-A4), where bindings are saved (FOF-A6).
+
+## Archives, the toc object and texture streaming (Fable session 2026-11-15; `[RE]`, not run)
+
+- **File system**: `fs = q[exe+74a6a00]` (`FileSystem::ArchiveFileSystem`, vtable `exe+3cf9920`). `fs+0x10` = toc DAT1 buffer, **`fs+0x18` = the toc object** (section pointers set by
+  `exe+16d7710`), `q[fs+0x40]` = location table (8 bytes per entry: archive index, offset), `q[fs+0x68]` = per-archive open table (0x200 archives max). No heap scan is needed.
+- **Reads are by id**: `exe+16d83e0(request, assetId, kind)` -> `fs->vtable[+0x28]` (`exe+16da4c0`) -> `exe+16d7990(toc, id, languageGroup, kind)`; `size = dword[entry+4]`,
+  `location = q[q[fs+0x40] + dword[entry+8]*8]`; the archive file is opened on demand (`exe+16da380`). Kind 0 = the asset, kind 1 = a texture's pixel stream.
+- **Textures**: `TextureManager` static `exe+621b1a0`, records 0xc0 bytes at `q[exe+621b2b0]` (`+0x34` highMipSize, `+0x84/+0x86` height/width, `+0x8e/+0x8f` mip nibbles);
+  `TextureStream` static `exe+621b4e0`, tick `exe+19b6d70`, request one texture `exe+19b5d70(stream, record, 0)`, evict one `exe+19b5e70(stream, record, idx)`, staging buffer
+  `exe+19b7f30`, finish job `exe+19b5a20`. Runtime textures from memory: `exe+19b1500` (2D), `exe+19b1280` (3D).
