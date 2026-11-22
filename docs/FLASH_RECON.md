@@ -315,3 +315,15 @@ Spawned `equipment/projectile/proj_HoloDecoy_Deployed/proj_HoloDecoy_Deployed.ac
 - **Targeting works.** With the hero out of sight, the thugs keep attacking the decoy. With the hero in view they shot both.
 - The game's decoy looks translucent and hologram-like, lived a limited time and ended in a particle burst.
 - **Design decisions (user):** our decoy is Spider-Man himself, not a hologram. Use the existing after-image `default` look with flicker on high, and flicker out when it ends instead of bursting. The deployed actor is only for targeting.
+
+### 7.y Echoes of Time: Accelerated Decoy built and confirmed in game (2026-11-21)
+
+Mod name: **Echoes of Time** (folder `EchoesOfTime/`, ABILITY row: Hyper-Sense / Accelerated Decoy, version 0.1.0, not published).
+How it works: the game's `proj_HoloDecoy_Deployed` actor is spawned where he stands and hidden (opacity 0, composite-overlay flag bit 3 of `+0x80` cleared on the model and skin parts, every game tick); an after-image ghost shows his pose in his own suit and flickers. Everything below was confirmed in game.
+- **Targeting works** with no change to Spider-Man's own target data (an attempt to clear his kHero type at `TargetData+0x4c` made enemies ignore both and put him back in stealth; removed). Enemies pick by aggro: see the aggro-by-distance reading in the answer given to the maintainer (decoy tier outranks hero at equal distance; a hero within ~7 m can still outscore a decoy 15 m away).
+- **Keep it alive:** `SpiderHoloDecoy` instance `+0x80` (MaxLifetime), `+0x84` (MaxEngageTime) and `+0x9c` (health) are set to 1e9 each tick; our own timer ends it.
+- **Voicelines:** the 22 `SPID_GEN_HOLO_DECOY_001..022` Wwise events are dropped in a `PostEvent` hook (by FNV-1 id; the game objects are pooled pointers, so dropping by object does not work).
+- **A-pose:** its first frames are an A-pose. Spawning it 1500 m up and moving it in (mi+0x30) hid the pose but enemies did not target it afterwards; zeroing the transform's orientation rows for 12 ticks (scale 0) at its real position hides it and keeps targeting. 
+- **Destruction:** sending it 1500 m up before despawning removes the blue hologram blink (and its particles).
+- **Not working / dropped:** player opacity flicker (the game overwrites it; row removed), fullscreen flash (never showed; replaced with a ~0.35 s slow-motion beat), attack cancels the decoy (dropped: time-based only), "enemies ignore me".
+- **Untested lever:** `BonusAggro` component (script node `ModifyBotAggroAction`) to raise the decoy's pull.

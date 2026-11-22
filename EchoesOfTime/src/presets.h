@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-// Presets (the same system as Manhattan Skies): one small ini per look in Documents\Marvel's Spider-Man Remastered\HyperSense\Presets\ (share one by copying the file).
+// Presets (the same system as Manhattan Skies): one small ini per look in Documents\Marvel's Spider-Man Remastered\EchoesOfTime\Presets\ (share one by copying the file).
 //   [preset]
 //   look=RED GLOW      (any row key from settings.cpp; the value is the choice's label, case-insensitive; a key that is absent means the row's default)
 // Values are labels, not indices, so a preset survives new choices being added. Unknown keys and labels are ignored. The MESSAGES row is a personal preference and is

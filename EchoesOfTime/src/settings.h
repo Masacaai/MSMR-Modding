@@ -2,16 +2,21 @@
 
 #include <string>
 
-// Hyper-Sense settings. The player changes them in the in-game MODS tab (menu.cpp, rows below); each row is a list of choices and the choice index is what is
-// saved: <Documents>\Marvel's Spider-Man Remastered\HyperSense\HyperSense.ini, section [menu]. The same file's [advanced] section holds knobs with no row
+// Echoes of Time settings (two abilities: Hyper-Sense and Accelerated Decoy). The player changes them in the in-game MODS tab (menu.cpp, rows below); each row is a list of choices and the choice index is what is
+// saved: <Documents>\Marvel's Spider-Man Remastered\EchoesOfTime\EchoesOfTime.ini, section [menu]. The same file's [advanced] section holds knobs with no row
 // (spacing, offsets, actor ...); this mod writes only [menu].
 namespace settings {
+    // Rows have a group: 0 = Hyper-Sense, 1 = Accelerated Decoy, 2 = both (the ability switch). The menu shows the common row and the rows of the chosen ability;
+    // every row is saved on its own, so switching away from an ability and back finds its settings as they were.
     enum Row {
+        kAbility,
         kHeadSlow, kSlowScale, kHeroSpeed, kMessages,
         kHeadGhost, kMode, kLook, kLife, kFadeCurve, kAlpha, kInterval, kFlicker,
         kHeadFx, kDrift, kSize, kBlur, kStreaks,
+        kHeadDecoy, kDecoyLife, kDecoyLook, kDecoyAlpha, kDecoyFlicker, kDecoyEntry, kDecoyMessages,
         kRowCount
     };
+    enum Ability { kHyperSense = 0, kAcceleratedDecoy = 1 };
 
     struct RowDef {
         const char* key;            // ini key
@@ -20,6 +25,7 @@ namespace settings {
         const char* const* labels;  // null for a heading
         int count;
         int def;                    // default choice
+        int group = 0;              // see Row
     };
     const RowDef& Def(int row);
     int Choice(int row);
@@ -31,6 +37,17 @@ namespace settings {
         float slow_scale = 0.2f;     // world time scale while on
         float hero_speed = 1.0f;     // Spider-Man's own speed multiplier while on (HeroTimeScaleManager +0x4c)
         bool messages = false;
+        int ability = 0;             // Ability
+        // Accelerated Decoy
+        float decoy_life = 8.0f;     // seconds (a huge value = until he attacks)
+        std::string decoy_look = "own";
+        float decoy_alpha = 0.9f;
+        float decoy_flicker = 0.6f;
+        int decoy_entry = 1;         // 0 off, 1 short, 2 long: the slow-motion beat when the decoy appears
+        bool decoy_messages = false;
+        bool decoy_hide_end = true;       // [advanced]: move the game's decoy out of sight just before removing it, so its destruction effect is not seen
+        bool decoy_hide_spawn = true;     // [advanced]: shrink the game's decoy to nothing for its first few ticks (its first frames are an A-pose); it never moves
+        bool decoy_show_target = false;   // [advanced]: leave the game's own (hologram) decoy visible, for testing
         // after-images
         int mode = 2;                // 0 off, 1 while fast, 2 always
         std::string effect = "own";  // look name (ghosts.cpp presets) or a .material path

@@ -9,7 +9,7 @@
 #include <atomic>
 #include <string>
 
-// The HYPER-SENSE tab of the shared mod menu (ModMenu/modmenu.cpp hosts or joins). One row per settings::Row; a choice is saved to the ini at once.
+// The ECHOES OF TIME tab of the shared mod menu (ModMenu/modmenu.cpp hosts or joins). One row per settings::Row; a choice is saved to the ini at once.
 namespace menu {
 namespace {
     constexpr int kPresetId = 100;   // the one row that is not in settings.cpp
@@ -18,15 +18,20 @@ namespace {
 
     int Rows(void*, int* ids, int max) {
         int n = 0;
-        if (n < max) ids[n++] = kPresetId;
-        for (int i = 0; i < settings::kRowCount && n < max; i++) ids[n++] = i;
+        const int ability = settings::Choice(settings::kAbility);
+        if (n < max) ids[n++] = settings::kAbility;
+        if (ability == settings::kHyperSense && n < max) ids[n++] = kPresetId;   // presets cover Hyper-Sense only
+        for (int i = 0; i < settings::kRowCount && n < max; i++) {
+            if (i == settings::kAbility) continue;
+            if (settings::Def(i).group == ability) ids[n++] = i;
+        }
         return n;
     }
     void Row(void*, int id, modmenu::Row* out) {
         *out = {};
         if (id == kPresetId) {
             out->title = "PRESET";
-            out->help = "Looks saved as files in the Presets folder (Documents, Marvel's Spider-Man Remastered, HyperSense). Share a preset by copying its file. CUSTOM means your own unsaved settings. A preset sets every row except MESSAGES.";
+            out->help = "Looks saved as files in the Presets folder (Documents, Marvel's Spider-Man Remastered, EchoesOfTime). Share a preset by copying its file. CUSTOM means your own unsaved settings. A preset sets every row except MESSAGES.";
             out->choices = presets::Names(); out->choice_count = presets::Count() + 1; return;
         }
         if (id < 0 || id >= settings::kRowCount) { out->title = ""; out->heading = 1; return; }
@@ -49,9 +54,14 @@ namespace {
         }
         g_pick_custom = false;
         settings::SetChoice(id, choice);
+        if (id == settings::kAbility) g_rebuild = true;   // the rows below the switch are the other ability's
     }
     void Reset(void*, int id) { if (id == kPresetId) return; g_pick_custom = false; if (id >= 0 && id < settings::kRowCount) settings::SetChoice(id, settings::Def(id).def); }
-    void ResetAll(void*) { g_pick_custom = false; for (int i = 0; i < settings::kRowCount; i++) if (settings::Def(i).labels) settings::SetChoice(i, settings::Def(i).def); }
+    void ResetAll(void*) {   // the shown ability's rows only (the other one keeps its settings)
+        g_pick_custom = false;
+        const int ability = settings::Choice(settings::kAbility);
+        for (int i = 0; i < settings::kRowCount; i++) if (settings::Def(i).labels && settings::Def(i).group == ability) settings::SetChoice(i, settings::Def(i).def);
+    }
     int TakeRebuild(void*) { return g_rebuild.exchange(false) ? 1 : 0; }
     void Closed(void*) { presets::Rescan(); g_rebuild = true; }
     void LogLine(const char* line) { LOG("%s", line); }
@@ -60,7 +70,7 @@ namespace {
     uint32_t Install() {
         modmenu::Mod mod{};
         mod.size = sizeof(mod);
-        mod.name = "HYPER-SENSE";
+        mod.name = "ECHOES OF TIME";
         mod.rows = &Rows;
         mod.row = &Row;
         mod.value = &Value;
@@ -72,7 +82,7 @@ namespace {
         mod.closed = &Closed;
         presets::Init();
         const uint32_t code = modmenu::Register(mod, &LogLine);
-        if (!code) LOG("menu: HYPER-SENSE tab registered");
+        if (!code) LOG("menu: ECHOES OF TIME tab registered");
         return code;
     }
 }

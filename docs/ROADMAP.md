@@ -114,7 +114,7 @@ Install state: both mods' packages in `Mods Library` and the DLLs in `scripts\` 
 4. **`fsinfo`** in the command file once in a loaded world: tells which toc object layout is right and how many archives are open (needed to add an archive entry without another Overstrike mod).
 5. Still untested from before: the colour-amount rows, the activity freeze in a real crime, the hold at a phase boundary, the extra-file swap (removed in the 2026-11-20 cleanup: `RECON.md` Part 27).
 
-## 6. Hyper-Sense (name final: Hyper-Sense (the "Quail0's" prefix was dropped 2026-11-20); built 2026-11-20, untested in game)
+## 6. Echoes of Time (formerly Hyper-Sense; renamed 2026-11-21: Hyper-Sense is now one of its two abilities, the other is Accelerated Decoy, built and confirmed in game 2026-11-21, see FLASH_RECON.md section 7; 1.0.0 prepared)
 
 **Status 2026-11-20:** `HyperSense/` exists and builds (own slow motion, ModMenu tab, looks incl. 9 colours + rainbow, decay, opacity-decay scale, drift and size experiments; lean removed). QBR was reset to slow-motion only (0.1.0 modular). S4 wired (SPEED BLUR, SPEED STREAKS rows, `speedfx.cpp`): the live `HeroSpeedFXConfig` is reached tracker (`HeroTraversalTracker`) +0x48 handle -> handle table (`exe+7a44320`/`7a44340`) -> obj+0x48 -> [+0x40] or +0x1850 -> +0x17b8 [RE from `exe+863ff0`/`923950`, untested]. Still open: `StatusEffectActorTrail` as the clone scheduler, the time-scale split beyond the speed multiplier.
 

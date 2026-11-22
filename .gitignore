@@ -1,7 +1,7 @@
 # Build output and package caches
 EndlessArena/build/
 DisableWebs/build/
-HyperSense/build/
+EchoesOfTime/build/
 EndlessArena/vcpkg_installed/
 tools/toctool/vcpkg_installed/
 *.obj

@@ -6,6 +6,7 @@
 #include "hero.h"
 #include "log.h"
 #include "memory.h"
+#include "mute.h"
 #include "scan.h"
 #include "settings.h"
 #include "spawn.h"
@@ -182,7 +183,7 @@ namespace ghosts {
         LOG("ghosts: mode %d (%s)", mode, mode == 0 ? "off" : mode == 1 ? "while fast" : "always");   // the ghost thread removes them (Update)
     }
 
-    static bool EnsureReady() {
+    static bool EnsureReady(const std::string& want) {
         const settings::S& s = settings::Get();
         if (!g_preloaded || g_preloaded_path != s.actor) {
             spawn::Preload(s.actor);
@@ -190,7 +191,6 @@ namespace ghosts {
             LOG("ghosts: preloading %s", s.actor.c_str());
         }
         if (!spawn::Ready(s.actor, 0)) return false;
-        const std::string want = settings::Get().effect;
         if (g_effect_name != want) {
             g_effect_name = want;
             g_effect_mats.clear();
@@ -297,9 +297,9 @@ namespace ghosts {
 
     static std::shared_ptr<Fx> g_last_fx;   // the Fx of the ghost SpawnAt just made (the caller stores it with the ghost)
 
-    static uintptr_t SpawnAt(const hero::Info& h, bool verbose) {
+    static uintptr_t SpawnAt(const hero::Info& h, bool verbose, const std::string& look_name, float alpha_f) {
         const settings::S& s = settings::Get();
-        if (!EnsureReady()) { if (verbose) LOG("ghosts: actor not loaded yet"); return 0; }
+        if (!EnsureReady(look_name)) { if (verbose) LOG("ghosts: actor not loaded yet"); return 0; }
         const float fl = std::sqrt(h.fwd[0] * h.fwd[0] + h.fwd[2] * h.fwd[2]);
         float fx = 0, fz = 1;
         if (fl > 0.01f) { fx = h.fwd[0] / fl; fz = h.fwd[2] / fl; }
@@ -307,7 +307,7 @@ namespace ghosts {
         spawn::Vec3 pos{ h.pos[0] - fx * s.back_offset, h.pos[1] + s.y_offset, h.pos[2] - fz * s.back_offset };
         auto ghost_fx = std::make_shared<Fx>();
         const uintptr_t look = g_effect_mats.empty() ? 0 : g_effect_mats[g_spawned % g_effect_mats.size()];
-        auto ctx = std::make_shared<Ctx>(Ctx{ look, (uint8_t)(std::min(1.0f, std::max(0.0f, s.alpha)) * 255.0f), heading, s.pose_copy, g_spawned < 3, h.actor, { pos.x, pos.y, pos.z }, s.hide_spawn, ghost_fx });
+        auto ctx = std::make_shared<Ctx>(Ctx{ look, (uint8_t)(std::min(1.0f, std::max(0.0f, alpha_f)) * 255.0f), heading, s.pose_copy, g_spawned < 3, h.actor, { pos.x, pos.y, pos.z }, s.hide_spawn, ghost_fx });
         g_last_fx = ghost_fx;
         if (s.hide_spawn) pos.y += 1500.0f;   // out of sight until ApplyGhost has set the pose and moved it back
         const double t0 = NowMs();
@@ -322,6 +322,170 @@ namespace ghosts {
             LogJoints("hero model", h.transform);
         }
         return e;
+    }
+
+    // ---- Accelerated Decoy ----
+    // The game's Holo Decoy actor is what enemies attack (its TargetData carries kDecoy, which the standard enemy targeting config ranks above the hero; confirmed in game
+    // 2026-11-21). We spawn it where the hero stands, hide it, keep it from expiring (its SpiderHoloDecoy component explodes it once +0x88 passes MinLifetime and either
+    // MaxLifetime +0x80, MaxEngageTime +0x84 or a health test +0x9c fires) and show an after-image ghost instead: the hero's exact pose in his own suit.
+    static const char* const kDecoyActor = "equipment/projectile/proj_HoloDecoy_Deployed/proj_HoloDecoy_Deployed.actor";
+    static std::atomic<bool> g_decoy_want{ false }, g_decoy_cancel{ false }, g_decoy_off{ false }, g_decoy_busy{ false };
+    static ULONGLONG g_decoy_want_since = 0;
+    static bool g_decoy_preloaded = false;
+    static unsigned g_decoy_tries = 0;
+    static std::atomic<unsigned> g_decoy_placed{ 0 };
+    struct Decoy { uintptr_t visual = 0, target = 0; ULONGLONG born = 0, end_start = 0; float end_len = 0.0f; bool live = false; float pos[3] = {}; ULONGLONG last_check = 0; int respawns = 0; };
+    static Decoy g_decoy;
+
+    void DecoyPlace() { g_decoy_want_since = GetTickCount64(); g_decoy_busy = true; g_decoy_want = true; }
+    bool DecoyBusy() { return g_decoy_busy; }
+    unsigned DecoyPlacedCount() { return g_decoy_placed; }
+    void DecoyShutdown() { if (g_decoy_busy) g_decoy_off = true; }
+
+    // The game's decoy is hidden on every game tick for as long as the context is alive (its skin parts are built over several ticks and its own code rewrites things).
+    // Hiding means: opacity 0, and the model's overlay flag (bit 3 of the flag word at +0x80, on the model and on each skin part) cleared: the blue hologram is a composite
+    // overlay (the actor's StaticCompositeMaterial) that the decoy turns on with that bit, and opacity does not touch it. Also kept from expiring (see above).
+    // With hide_spawn its transform's orientation rows are zeroed for its first kMoveInTicks ticks (a model of no size is not drawn): its first frames are an A-pose until
+    // its animation starts, and moving it 1500 m up instead (tried 2026-11-21) seems to have kept enemies from targeting it. It stays where it is.
+    struct TargetCtx { std::atomic<bool> alive{ true }; int ticks = 0; bool hide_spawn = true, hide = true, saved = false, restored = false; float rows[12] = {}; };
+    constexpr int kMoveInTicks = 12;
+    static void ClearOverlay(uintptr_t e) {
+        const uintptr_t mi = ModelInst(e);
+        if (mi) { uint32_t f = 0; if (memory::Read(mi + 0x80, f) && (f & 8u)) memory::Write<uint32_t>(mi + 0x80, f & ~8u); }
+        const uintptr_t sm = entity::FindComponent(e, "SkinManager");
+        uint32_t n = 0;
+        if (!sm || !memory::Read(sm + 0x4c, n) || n == 0 || n > 256) return;
+        for (uint32_t i = 0; i < n; i++) for (unsigned v = 0; v < 2; v++) {
+            const uintptr_t part = fnat::SkinPart_(sm, i, v);
+            uint32_t f = 0; uint8_t invalid = 1;
+            if (!part || !memory::Read(part + 0x5f, invalid) || invalid || !memory::Read(part + 0x80, f) || !(f & 8u)) continue;
+            memory::Write<uint32_t>(part + 0x80, f & ~8u);
+        }
+    }
+    static void HideLoop(std::shared_ptr<TargetCtx> c, uintptr_t e) {
+        if (!c->alive.load()) return;
+        c->ticks++;
+        if (c->hide) { WriteAlpha(e, 0); WriteAlphaParts(e, 0); ClearOverlay(e); }
+        if (c->hide_spawn && !c->restored) {
+            const uintptr_t mi = ModelInst(e);
+            if (mi) {
+                if (!c->saved) c->saved = memory::SafeRead(mi, c->rows, sizeof(c->rows));
+                if (c->saved) {
+                    if (c->ticks < kMoveInTicks) { float z[12]; for (int i = 0; i < 12; i++) z[i] = (i % 4 == 3) ? c->rows[i] : 0.0f; memory::SafeWrite(mi, z, sizeof(z)); }
+                    else { memory::SafeWrite(mi, c->rows, sizeof(c->rows)); c->restored = true; }
+                }
+            }
+        }
+        const uintptr_t comp = entity::FindComponent(e, "SpiderHoloDecoy");
+        if (comp) { memory::Write<float>(comp + 0x80, 1.0e9f); memory::Write<float>(comp + 0x84, 1.0e9f); memory::Write<float>(comp + 0x9c, 1.0e9f); }
+        gamethread::Post([c, e] { HideLoop(c, e); });
+    }
+
+    static std::shared_ptr<TargetCtx> g_target_ctx;   // the loop state of the current game decoy
+
+    static uintptr_t SpawnDecoyTarget(const float pos[3]) {
+        if (g_target_ctx) g_target_ctx->alive.store(false);
+        auto c = std::make_shared<TargetCtx>();
+        g_target_ctx = c;
+        c->hide = !settings::Get().decoy_show_target;
+        c->hide_spawn = settings::Get().decoy_hide_spawn && c->hide;
+        spawn::Vec3 p{ pos[0], pos[1], pos[2] };
+        const uintptr_t e = spawn::SpawnActor(kDecoyActor, p, 0.0f, false, [c](uintptr_t ent) { HideLoop(c, ent); });
+        if (e) {   // silence it: its voice lines are dropped by event id (mute.cpp); sounds on these objects too
+            const uint32_t hd = entity::HandleOf(e);
+            mute::SetObjects(hd, (uint64_t)hd + 1, (uint64_t)hd + 2, (uint64_t)e);
+        }
+        return e;
+    }
+
+    static void StopTarget() {
+        if (g_target_ctx) g_target_ctx->alive.store(false);
+        mute::Clear();
+    }
+
+
+    // The game's decoy plays a destruction effect (a blue hologram blink) when it goes: sent 1500 m up first so it is not seen.
+    static void DespawnTarget(uintptr_t t) {
+        if (settings::Get().decoy_hide_end) {
+            gamethread::Run([t] { const uintptr_t mi = ModelInst(t); float p[3]; if (mi && memory::SafeRead(mi + 0x30, p, sizeof(p))) { p[1] += 1500.0f; memory::SafeWrite(mi + 0x30, p, sizeof(p)); } });
+            Sleep(60);
+        }
+        spawn::DespawnActor(t);
+    }
+
+    static void DecoyKill() {
+        if (g_decoy.target) { DespawnTarget(g_decoy.target); g_decoy.target = 0; }
+        StopTarget();   // after the despawn: the hide loop must run to the end, or the hologram shows for a frame
+        if (g_decoy.visual) {
+            const uintptr_t v = g_decoy.visual;
+            gamethread::Run([v] { WriteAlpha(v, 0); WriteAlphaParts(v, 0); });
+            spawn::DespawnActor(v);
+            g_decoy.visual = 0;
+        }
+        g_decoy.live = false;
+        g_decoy_busy = g_decoy_want.load();
+    }
+
+    static void DecoyBeginEnd(ULONGLONG now, float seconds, const char* why) {
+        if (g_decoy.end_start) return;
+        g_decoy.end_start = now ? now : 1;
+        g_decoy.end_len = seconds;
+        if (g_decoy.target) { DespawnTarget(g_decoy.target); g_decoy.target = 0; }
+        StopTarget();
+        // enemies go back to him at once; the copy flickers out after
+        LOG("decoy: ending (%s)", why);
+    }
+
+    static void UpdateDecoy(const hero::Info& h, ULONGLONG now) {
+        const settings::S& s = settings::Get();
+        if (g_decoy_off.exchange(false)) {
+            g_decoy_want = false; g_decoy_cancel = false;
+            if (g_decoy.live) { LOG("decoy: removed (ability switched)"); DecoyKill(); }
+            g_decoy_busy = false;
+            return;
+        }
+        if (g_decoy_want) {
+            if (GetTickCount64() - g_decoy_want_since > 10000) { g_decoy_want = false; g_decoy_busy = g_decoy.live; LOG("decoy: gave up (the actors did not load in 10 s)"); return; }
+            if (!g_decoy_preloaded) { spawn::Preload(kDecoyActor); g_decoy_preloaded = true; }
+            if (!spawn::Ready(kDecoyActor, 0)) return;
+            if (g_decoy.live) { LOG("decoy: replacing the old one"); DecoyKill(); g_decoy_busy = true; }
+            const uintptr_t v = SpawnAt(h, g_decoy_tries++ % 25 == 0, s.decoy_look, s.decoy_alpha);
+            if (!v) return;   // the look is still loading: try again next tick
+            const uintptr_t t = SpawnDecoyTarget(h.pos);
+            g_decoy = Decoy{};
+            g_decoy.visual = v; g_decoy.target = t; g_decoy.born = now; g_decoy.live = true; g_decoy.last_check = now;
+            memcpy(g_decoy.pos, h.pos, sizeof(g_decoy.pos));
+            g_decoy_want = false;
+            LOG("decoy: placed at (%.1f, %.1f, %.1f): copy %llx, target %llx, look %s, %.1f s", h.pos[0], h.pos[1], h.pos[2], (unsigned long long)v, (unsigned long long)t, s.decoy_look.c_str(), s.decoy_life);
+            g_decoy_placed++;
+            return;
+        }
+        if (!g_decoy.live) { g_decoy_busy = false; return; }
+        // Lifetime.
+        const ULONGLONG age = now - g_decoy.born;
+        if (!g_decoy.end_start && (float)age / 1000.0f >= s.decoy_life) DecoyBeginEnd(now, 0.8f, "time is up");
+        // The game's decoy was lost (shot to pieces, or ended): put it back while the copy is up, so enemies keep a target.
+        if (!g_decoy.end_start && now - g_decoy.last_check >= 1000) {
+            g_decoy.last_check = now;
+            if ((!g_decoy.target || !spawn::FindSyncFor(g_decoy.target)) && g_decoy.respawns < 20) {
+                g_decoy.respawns++;
+                LOG("decoy: the game's decoy is gone; spawning it again (%d)", g_decoy.respawns);
+                g_decoy.target = SpawnDecoyTarget(g_decoy.pos);
+            }
+        }
+        // Opacity: flickers in over the first 0.25 s, crackles while up (the DECOY FLICKER row), flickers out over the ending.
+        const float base = std::min(1.0f, std::max(0.0f, s.decoy_alpha));
+        float a = base * (1.0f - s.decoy_flicker * ((float)(rand() % 1000) / 1000.0f));
+        const float r = (float)(rand() % 1000) / 1000.0f;
+        if (age < 250 && r > (float)age / 250.0f) a = 0.0f;
+        if (g_decoy.end_start) {
+            const float prog = (float)(now - g_decoy.end_start) / 1000.0f / g_decoy.end_len;
+            if (prog >= 1.0f) { LOG("decoy: gone"); DecoyKill(); return; }
+            if (r < prog) a = 0.0f; else a *= 1.0f - 0.5f * prog;
+        }
+        const uint8_t a8 = (uint8_t)(a * 255.0f);
+        const uintptr_t v = g_decoy.visual;
+        { const uintptr_t vis = g_decoy.visual; gamethread::Run([vis, a8] { WriteAlpha(vis, a8); WriteAlphaParts(vis, a8); }); }
     }
 
     void Update() {
@@ -364,8 +528,10 @@ namespace ghosts {
         } else {
             g_have_last = false; g_speed = 0;
             if (!g_live.empty()) RemoveAll();   // no hero (loading, menu): whatever we spawned is stale
+            if (g_decoy.live) { LOG("decoy: removed (no hero)"); DecoyKill(); }
             return;
         }
+        if (g_decoy_busy) UpdateDecoy(h, now);
 
         const int mode = g_mode;
         if (mode == 0 && !g_live.empty()) { RemoveAll(); return; }
@@ -428,7 +594,7 @@ namespace ghosts {
         }
         if (moving && since >= s.spacing && (int)g_live.size() < s.max_ghosts && now - g_last_spawn >= (ULONGLONG)(s.interval * 1000.0f)) {
             g_last_spawn = now;
-            const uintptr_t e = SpawnAt(h, false);
+            const uintptr_t e = SpawnAt(h, false, s.effect, s.alpha);
             if (e) { g_live.push_back({ e, g_game_ms, 255, g_last_fx }); memcpy(g_last_ghost_pos, h.pos, sizeof(g_last_ghost_pos)); g_have_ghost_pos = true; }
         }
     }

@@ -36,11 +36,16 @@ namespace settings {
         const float kBlurV[] = { 1.0f, 2.0f, 4.0f, 8.0f };
         const char* const kStreaksL[] = { "NORMAL", "EARLIER", "MUCH EARLIER", "ALWAYS" };
         const float kStreaksV[] = { 1.0f, 0.6f, 0.3f, 0.05f };
+        const char* const kAbilities[] = { "HYPER-SENSE", "ACCELERATED DECOY" };
+        const char* const kDecoyLifeL[] = { "3 S", "5 S", "8 S", "12 S", "20 S", "30 S", "60 S" };
+        const float kDecoyLifeV[] = { 3.0f, 5.0f, 8.0f, 12.0f, 20.0f, 30.0f, 60.0f };
+        const char* const kEntryL[] = { "OFF", "SHORT", "LONG" };
         template <size_t N> constexpr int Count(const char* const (&)[N]) { return (int)N; }
 
         const RowDef kRows[kRowCount] = {
+            { "ability", "ABILITY", "Which Spider-Man 2099 power the D-pad Right button (or T) uses. HYPER-SENSE: slow motion with a trail of after-images. ACCELERATED DECOY: leaves one copy of him where he stands; enemies shoot it while he moves on. Each ability keeps its own settings.", kAbilities, 2, 0, 2 },
             { "", "SLOW MOTION", nullptr, nullptr, 0, 0 },
-            { "slow_scale", "SLOW-MOTION STRENGTH", "How slow the world runs while slow motion is on (T, or D-pad Right). Hyper-Sense has its own slow motion: do not run it together with Quantum Break Renewed.", kScale, Count(kScale), 0 },
+            { "slow_scale", "SLOW-MOTION STRENGTH", "How slow the world runs while slow motion is on (T, or D-pad Right). Echoes of Time has its own slow motion: do not run it together with Quantum Break Renewed.", kScale, Count(kScale), 0 },
             { "hero_speed", "SPIDER-MAN SPEED", "How fast Spider-Man moves relative to the slowed world while slow motion is on. Above NORMAL he out-runs the world: the Flash effect.", kSpeed, Count(kSpeed), 0 },
             { "messages", "MESSAGES", "Shows Enabled / Disabled on screen when slow motion is toggled.", kOffOn, 2, 0 },
             { "", "AFTER-IMAGES", nullptr, nullptr, 0, 0 },
@@ -56,6 +61,13 @@ namespace settings {
             { "size", "CLONE SIZE OVER LIFE", "Copies shrink or grow as they fade. Experimental; the copy scales around its feet.", kSizeL, Count(kSizeL), 0 },
             { "blur", "SPEED BLUR", "Stronger motion blur while slow motion is on (the game's own speed-blur numbers, multiplied). Experimental: it only shows while Spider-Man is moving fast.", kBlurL, Count(kBlurL), 0 },
             { "streaks", "SPEED STREAKS", "Makes the game's speed effects (screen streaks, hand contrails) start at a lower speed while slow motion is on. Experimental.", kStreaksL, Count(kStreaksL), 0 },
+            { "", "ACCELERATED DECOY", nullptr, nullptr, 0, 0, 1 },
+            { "decoy_life", "DECOY DURATION", "How long the decoy stays. Attacking does not end it. Enemies that cannot be fooled (snipers, some bosses) keep shooting Spider-Man.", kDecoyLifeL, Count(kDecoyLifeL), 2, 1 },
+            { "decoy_look", "DECOY LOOK", "What the decoy looks like. DEFAULT is Spider-Man's own suit: he is in two places at once.", kLooks, Count(kLooks), 0, 1 },
+            { "decoy_alpha", "DECOY OPACITY", "How solid the decoy is.", kAlphaL, Count(kAlphaL), 6, 1 },
+            { "decoy_flicker", "DECOY FLICKER", "How much the decoy's opacity crackles from frame to frame. It also flickers out when it ends.", kFlickerL, Count(kFlickerL), 3, 1 },
+            { "decoy_entry", "ENTRY SLOW-MOTION", "A brief slow-motion beat when the decoy is made, so it does not pop in without notice.", kEntryL, Count(kEntryL), 1, 1 },
+            { "decoy_messages", "MESSAGES", "Shows a message on screen when the decoy is made.", kOffOn, 2, 0, 1 },
         };
 
         int g_choice[kRowCount];
@@ -65,7 +77,7 @@ namespace settings {
         std::string IniPath() {
             char docs[MAX_PATH] = {};
             if (!SUCCEEDED(SHGetFolderPathA(nullptr, CSIDL_PERSONAL, nullptr, SHGFP_TYPE_CURRENT, docs)) || !docs[0]) return "";
-            return std::string(docs) + "\\Marvel's Spider-Man Remastered\\HyperSense\\HyperSense.ini";
+            return std::string(docs) + "\\Marvel's Spider-Man Remastered\\EchoesOfTime\\EchoesOfTime.ini";
         }
 
         void Rebuild(const std::string& ini_path);
@@ -83,6 +95,13 @@ namespace settings {
             static const float speeds[] = { 1.0f, 1.5f, 2.0f, 3.0f };
             s.hero_speed = speeds[g_choice[kHeroSpeed]];
             s.messages = g_choice[kMessages] != 0;
+            s.ability = g_choice[kAbility];
+            s.decoy_life = kDecoyLifeV[g_choice[kDecoyLife]];
+            s.decoy_look = kLookNames[g_choice[kDecoyLook]];
+            s.decoy_alpha = kAlphaV[g_choice[kDecoyAlpha]];
+            s.decoy_flicker = kFlickerV[g_choice[kDecoyFlicker]];
+            s.decoy_entry = g_choice[kDecoyEntry];
+            s.decoy_messages = g_choice[kDecoyMessages] != 0;
             s.mode = g_choice[kMode];
             s.effect = kLookNames[g_choice[kLook]];
             s.life = kLifeV[g_choice[kLife]];
@@ -99,7 +118,7 @@ namespace settings {
                 auto str = [&](const char* k, const std::string& def) { char b[512]; GetPrivateProfileStringA("advanced", k, "", b, sizeof(b), ini_path.c_str()); return b[0] ? std::string(b) : def; };
                 s.min_speed = f("min_speed", s.min_speed); s.max_ghosts = (int)f("max", 0); s.y_offset = f("y_offset", 0); s.yaw_offset = f("yaw_offset", 0);
                 s.back_offset = f("back_offset", 0); s.spacing = f("spacing", 0); s.hide_spawn = f("hide_spawn", 1) != 0; s.pose_copy = f("pose_copy", 1) != 0;
-                s.only_slowmo = f("only_slowmo", 1) != 0; s.actor = str("actor", s.actor);
+                s.only_slowmo = f("only_slowmo", 1) != 0; s.decoy_show_target = f("decoy_show_target", 0) != 0; s.decoy_hide_spawn = f("decoy_hide_spawn", 1) != 0; s.decoy_hide_end = f("decoy_hide_end", 1) != 0; s.actor = str("actor", s.actor);
                 const std::string eff = str("effect", ""); if (!eff.empty()) s.effect = eff;   // a .material path overrides the LOOK row
             }
             if (s.max_ghosts <= 0) s.max_ghosts = (int)(s.life / s.interval) + 2;   // enough for the whole decay

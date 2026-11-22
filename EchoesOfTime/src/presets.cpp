@@ -33,13 +33,13 @@ namespace {
     std::filesystem::path Root() {
         char docs[MAX_PATH] = {};
         if (FAILED(SHGetFolderPathA(nullptr, CSIDL_PERSONAL, nullptr, SHGFP_TYPE_CURRENT, docs)) || !docs[0]) return {};
-        return std::filesystem::path(docs) / "Marvel's Spider-Man Remastered" / "HyperSense";
+        return std::filesystem::path(docs) / "Marvel's Spider-Man Remastered" / "EchoesOfTime";
     }
     std::filesystem::path Dir() { const auto r = Root(); return r.empty() ? r : r / "Presets"; }
     std::filesystem::path CustomPath() { const auto r = Root(); return r.empty() ? r : r / "custom.ini"; }
 
     // Rows a preset covers: every row with choices except MESSAGES (a personal preference).
-    bool InPreset(int row) { return settings::Def(row).labels && row != settings::kMessages; }
+    bool InPreset(int row) { return settings::Def(row).labels && settings::Def(row).group == 0 && row != settings::kMessages; }   // Hyper-Sense rows only: the decoy has its own
 
     // Looks that ship with the mod, written once when the Presets folder does not exist yet. A key left out means the row's default.
     // (DISTORTION and FEAR are not used: the 2026-11-20 crash happened with DISTORTION and is not understood yet.)

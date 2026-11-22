@@ -16,4 +16,11 @@ namespace ghosts {
     bool HasLive();   // ghost thread only
     void RemoveAll();
     std::string Status();
+
+    // Accelerated Decoy: one copy of the hero (an after-image ghost, exact pose) plus the game's own Holo Decoy actor, hidden, which is what enemies target.
+    // These only set flags; the ghost thread (Update) does the work. Any thread.
+    void DecoyPlace();                  // make a decoy at the hero (replaces the one that exists)
+    unsigned DecoyPlacedCount();        // how many decoys have been placed (the main loop starts the entry slow-motion when it changes)
+    bool DecoyBusy();                   // a decoy is up or about to be
+    void DecoyShutdown();               // the ability was switched away: remove it at once
 }

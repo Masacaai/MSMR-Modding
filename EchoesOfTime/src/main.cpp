@@ -1,9 +1,10 @@
-// Hyper-Sense: slow motion (T, or D-pad Right) plus a fading trail of Spider-Man after-images, for Marvel's Spider-Man Remastered (4.0630.0.0).
+// Echoes of Time: two Spider-Man 2099 (Edge of Time) powers for Marvel's Spider-Man Remastered (4.0630.0.0), chosen by the ABILITY row: Hyper-Sense (slow motion, T or D-pad Right,
+// plus a fading trail of after-images) and Accelerated Decoy (the same button leaves one copy of him that enemies shoot at; ghosts.cpp).
 // The slow-motion part is the same mechanism as nanodanc's "QuantumBreak" Script Hook mod (and QuantumBreak Renewed, the Overstrike port of it): the hero's
 // "HeroTimeScaleManager" component gets a float time scale at +0x50, a float Spider-Man speed multiplier at +0x4C and a byte "active" flag at +0x5C, rewritten every
-// 10 ms while on (found by reading that mod's imports, strings and code, not by copying it). Hyper-Sense supersedes QBR: do not install both.
+// 10 ms while on (found by reading that mod's imports, strings and code, not by copying it). Echoes of Time supersedes QBR: do not install both.
 //
-// Everything is set in the in-game HYPER-SENSE tab (menu.cpp, settings.cpp); there is no .modular. The after-images are ghosts.cpp (docs/FLASH_RECON.md).
+// Everything is set in the in-game ECHOES OF TIME tab (menu.cpp, settings.cpp); there is no .modular. The after-images are ghosts.cpp (docs/FLASH_RECON.md).
 #include "log.h"
 #include "entity.h"
 #include "fnatives.h"
@@ -63,6 +64,15 @@ namespace {
         const settings::S& s = settings::Get();
         memory::Write(c + kScaleOffset, on ? s.slow_scale : 1.0f);
         memory::Write(c + kSpeedOffset, on ? s.hero_speed : 1.0f);
+        memory::Write(c + kActiveOffset, (uint8_t)(on ? 1 : 0));
+    }
+
+    // The brief slow-motion beat when a decoy appears (Accelerated Decoy's ENTRY SLOW-MOTION row): the same component, a fixed strength.
+    void ApplyEntry(bool on) {
+        uintptr_t c = HeroTimeScaleComponent();
+        if (!c) return;
+        memory::Write(c + kScaleOffset, on ? 0.12f : 1.0f);
+        memory::Write(c + kSpeedOffset, 1.0f);
         memory::Write(c + kActiveOffset, (uint8_t)(on ? 1 : 0));
     }
 
@@ -218,7 +228,7 @@ namespace {
     // Its own thread: spawning a ghost waits for the game thread, which must not delay the slow-motion writes below.
     void GhostLoop() {
         for (;;) {
-            if (ghosts::Mode() != 0 || ghosts::HasLive()) ghosts::Update();
+            if (ghosts::Mode() != 0 || ghosts::HasLive() || ghosts::DecoyBusy()) ghosts::Update();
             Sleep(40);
         }
     }
@@ -232,8 +242,8 @@ namespace {
 
     void Main() {
         g_dll_dir = ModuleDir();
-        logging::Init(g_dll_dir + "\\HyperSense.log");
-        LOG("Hyper-Sense 1.0.0 loaded from %s", g_dll_dir.c_str());
+        logging::Init(g_dll_dir + "\\EchoesOfTime.log");
+        LOG("Echoes of Time 1.0.0 loaded from %s", g_dll_dir.c_str());
         int ok = natives::ResolveAll();
         LOG("%d/%d natives at expected addresses", ok, (int)natives::Count);
         if (!natives::Get(natives::GetActor)) { LOG("GetActor did not resolve (wrong game build?); disabled"); return; }
@@ -244,13 +254,42 @@ namespace {
         std::thread(GhostLoop).detach();
         std::thread([] { const uint32_t code = menu::Install(); if (code) LOG("menu: could not register the tab (error %u)", code); }).detach();
         int applied_mode = -1;   // the MODE row's choice last handed to the ghosts (the ghosts can switch themselves off after repeated spawn failures)
+        int applied_ability = -1;
+        unsigned seen_placed = ghosts::DecoyPlacedCount();
+        DWORD entry_until = 0;   // GetTickCount() until which the entry slow-motion runs (0 = not running)
 
         bool enabled = false, prev_down = false;
         for (;;) {
-            if (settings::Get().mode != applied_mode) { applied_mode = settings::Get().mode; SetGhostMode(applied_mode); }
+            const int ability = settings::Get().ability;
+            if (ability != applied_ability) {   // the ABILITY row changed: put the other one away
+                applied_ability = ability;
+                if (ability == settings::kAcceleratedDecoy) { if (enabled) { enabled = false; Apply(false); LOG("disabled (ability switched)"); } applied_mode = -1; }
+                else { ghosts::DecoyShutdown(); if (entry_until) { entry_until = 0; ApplyEntry(false); } }
+                LOG("ability: %s", ability == settings::kAcceleratedDecoy ? "Accelerated Decoy" : "Hyper-Sense");
+            }
+            if (ability == settings::kAcceleratedDecoy) {
+                const unsigned placed = ghosts::DecoyPlacedCount();
+                if (placed != seen_placed) {
+                    seen_placed = placed;
+                    const int e = settings::Get().decoy_entry;
+                    if (e > 0) { entry_until = GetTickCount() + (e >= 2 ? 800 : 350); LOG("decoy: entry slow-motion"); }
+                }
+                if (entry_until) {
+                    if ((LONG)(GetTickCount() - entry_until) >= 0) { entry_until = 0; ApplyEntry(false); }
+                    else ApplyEntry(true);   // the game resets the values, so keep writing them
+                }
+            }
+            const int want_mode = ability == settings::kHyperSense ? settings::Get().mode : 0;   // after-image trail: Hyper-Sense only
+            if (want_mode != applied_mode) { applied_mode = want_mode; SetGhostMode(applied_mode); }
             bool down = GameFocused() && (KeyDown() || PadRightDown());
             bool menu = InMenu() || StationMenuOpen();   // InMenu() must run every pass: it tracks the clock
-            if (down && !prev_down && !menu) {
+            if (down && !prev_down && !menu && ability == settings::kAcceleratedDecoy) {
+                if (EnsureGameThread()) {
+                    LOG("decoy: requested");
+                    ghosts::DecoyPlace();
+                    if (settings::Get().decoy_messages) ShowMessage("Accelerated Decoy!");
+                }
+            } else if (down && !prev_down && !menu) {
                 enabled = !enabled;
                 LOG("%s", enabled ? "enabled" : "disabled");
                 Apply(enabled);   // disabling restores normal time right away

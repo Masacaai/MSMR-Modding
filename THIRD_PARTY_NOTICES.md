@@ -108,5 +108,5 @@ addresses, structure layouts and hook prologues for Spider-Man.exe 4.0630.0.0 co
 
 ## nanodanc's QuantumBreak (idea)
 
-Hyper-Sense's slow motion (T / D-pad Right) writes the same three fields of the hero's time-scale component as **nanodanc's "QuantumBreak"** Script Hook mod.
+Echoes of Time's Hyper-Sense slow motion (T / D-pad Right) writes the same three fields of the hero's time-scale component as **nanodanc's "QuantumBreak"** Script Hook mod.
 That mod was read for which fields to write and how often; no code from it is copied. Thank you for the idea.
