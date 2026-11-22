@@ -12,7 +12,7 @@ mods for [Overstrike](https://www.nexusmods.com/marvelsspidermanremastered/mods/
 |---|---|---|
 | [**Endless Arena**](EndlessArena/README.md) | Waves of enemies, bosses, boons and curses on Ryker's Island, until you go down | Beta released |
 | [**Manhattan Skies**](ManhattanSkies/README.md) | Time of day, sky, sun, fog and image controls from the pause menu: 124 skies, presets, Early Morning | Alpha released |
-| [**Echoes of Time**](EchoesOfTime/README.md) | Two time-based abilities from Spider-Man: Edge of Time: Hyper-Sense (slow motion with a trail of after-images) and Accelerated Decoy (one copy of him that enemies prioritize), all in the Settings screen | 1.0.0 |
+| [**Echoes of Time**](EchoesOfTime/README.md) | Two time-based abilities from Spider-Man: Edge of Time: Hyper-Sense (slow motion with a trail of after-images) and Accelerated Decoy (one decoy that enemies prioritize), all in the Settings screen | 1.0.0 |
 | [**Disable Webs**](DisableWebs/README.md) | F7 turns off swinging, zipping, point launch, the web shooter and the web-assisted wall-run moves | 1.0.0 |
 | [**ModMenu**](ModMenu/README.md) | The shared code that puts the mods' tabs in the game's Settings screen (a library compiled into each mod) | Working |
 
