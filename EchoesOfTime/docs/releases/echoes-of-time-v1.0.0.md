@@ -6,18 +6,18 @@ Two time-based abilities from *Spider-Man: Edge of Time* for Marvel's Spider-Man
 
 ### Hyper-Sense
 
-- **Slow motion** on **T** or **D-pad Right**: three strengths from 0.2x down to 0.001x, and Spider-Man himself can run at 1x, 1.5x, 2x or 3x while the world crawls.
-- **After-images**: copies of Spider-Man in his exact current pose, left behind while slow motion is on. They fade out and vanish the moment slow motion ends.
+- **Slow motion** on **T** or **D-pad Right**: three strengths from 0.2x down to 0.001x, and Spider-Man's own speed can be set to 1x, 1.5x, 2x or 3x while the world crawls.
+- **After-images**: copies of the Spider-Man model, each in the exact pose Spider-Man had when it was made, left behind while slow motion is on. They fade out and vanish the moment slow motion ends.
 - A row for everything: mode, look (the original, hologram, scanlines, red glow, flat grey, highlight, nine colours and RAINBOW), how long the copies last, how their opacity fades, starting opacity, spacing, flicker.
 - **Presets**: a PRESET row applies one of the ini files in `Documents\Marvel's Spider-Man Remastered\EchoesOfTime\Presets\`. Eleven ship with the mod (Flash, Reverse Flash, Hologram Trail, Matrix, Shadow Clones and more). Copy a file to make or share your own.
 - **Experimental rows**: clone drift, clone size over life, speed blur and speed streaks.
 
 ### Accelerated Decoy
 
-- **D-pad Right** (or **T**) leaves **one** copy of Spider-Man where he stands, in his exact pose and suit, flickering. Enemies prioritize the decoy over Spider-Man. 
-- Rows: duration (3 to 60 seconds), look (default: his own suit), opacity, flicker (it also flickers out when it ends), entry slow-motion, messages.
+- **D-pad Right** (or **T**) leaves **one** flickering copy of Spider-Man at the player's current position, in the same pose and suit. Enemies target the decoy before Spider-Man.
+- Rows: duration (3 to 60 seconds), look (default: Spider-Man's own suit), opacity, flicker (it also flickers out when it ends), entry slow-motion, messages.
 - It uses the game's own Holo Decoy suit power actor as the thing enemies target, hidden, and shows the copy in its place: its voice lines are muted and its effects hidden.
-- Enemies go for whoever has the most aggro, so an enemy standing right next to Spider-Man can still prefer him over a decoy far away. Snipers ignore decoys, and bosses with their own targeting are not covered.
+- Enemies go for whoever has the most aggro, so an enemy standing right next to Spider-Man can still prefer Spider-Man over a decoy far away. Snipers ignore decoys, and bosses with their own targeting are not covered.
 
 ### Requirements
 
