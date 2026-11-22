@@ -4,6 +4,7 @@
 #include "fnatives.h"
 #include "gamethread.h"
 #include "hero.h"
+#include "herofade.h"
 #include "log.h"
 #include "memory.h"
 #include "mute.h"
@@ -414,6 +415,7 @@ namespace ghosts {
     }
 
     static void DecoyKill() {
+        herofade::Stop();
         if (g_decoy.target) { DespawnTarget(g_decoy.target); g_decoy.target = 0; }
         StopTarget();   // after the despawn: the hide loop must run to the end, or the hologram shows for a frame
         if (g_decoy.visual) {
@@ -432,6 +434,7 @@ namespace ghosts {
         g_decoy.end_len = seconds;
         if (g_decoy.target) { DespawnTarget(g_decoy.target); g_decoy.target = 0; }
         StopTarget();
+        herofade::Stop();   // the player's flicker marks the decoy's life: solid again as soon as it ends
         // enemies go back to him at once; the copy flickers out after
         LOG("decoy: ending (%s)", why);
     }
@@ -458,6 +461,7 @@ namespace ghosts {
             g_decoy_want = false;
             LOG("decoy: placed at (%.1f, %.1f, %.1f): copy %llx, target %llx, look %s, %.1f s", h.pos[0], h.pos[1], h.pos[2], (unsigned long long)v, (unsigned long long)t, s.decoy_look.c_str(), s.decoy_life);
             g_decoy_placed++;
+            herofade::Start(h.actor, s.decoy_player_flicker);
             return;
         }
         if (!g_decoy.live) { g_decoy_busy = false; return; }

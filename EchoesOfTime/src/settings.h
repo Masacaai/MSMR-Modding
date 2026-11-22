@@ -13,7 +13,7 @@ namespace settings {
         kHeadSlow, kSlowScale, kHeroSpeed, kMessages,
         kHeadGhost, kMode, kLook, kLife, kFadeCurve, kAlpha, kInterval, kFlicker,
         kHeadFx, kDrift, kSize, kBlur, kStreaks,
-        kHeadDecoy, kDecoyLife, kDecoyLook, kDecoyAlpha, kDecoyFlicker, kDecoyEntry, kDecoyMessages,
+        kHeadDecoy, kDecoyLife, kDecoyLook, kDecoyAlpha, kDecoyFlicker, kDecoyPlayer, kDecoyEntry, kDecoyMessages,
         kRowCount
     };
     enum Ability { kHyperSense = 0, kAcceleratedDecoy = 1 };
@@ -43,6 +43,7 @@ namespace settings {
         std::string decoy_look = "own";
         float decoy_alpha = 0.9f;
         float decoy_flicker = 0.6f;
+        float decoy_player_flicker = 0.6f;   // opacity flicker of Spider-Man's own model while the decoy is up (herofade.cpp)
         int decoy_entry = 1;         // 0 off, 1 short, 2 long: the slow-motion beat when the decoy appears
         bool decoy_messages = false;
         bool decoy_hide_end = true;       // [advanced]: move the game's decoy out of sight just before removing it, so its destruction effect is not seen

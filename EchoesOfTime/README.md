@@ -24,7 +24,7 @@ spawned out of sight to hide the A-pose frame.
 
 ## Accelerated Decoy
 
-Rows: DECOY DURATION (3 to 60 s), DECOY LOOK (default: Spider-Man's own suit), DECOY OPACITY, DECOY FLICKER (default HIGH; it also flickers out when it ends), ENTRY SLOW-MOTION (a ~0.35 s or ~0.8 s beat
+Rows: DECOY DURATION (3 to 60 s), DECOY LOOK (default: Spider-Man's own suit), DECOY OPACITY, DECOY FLICKER (default HIGH; it also flickers out when it ends), PLAYER FLICKER (default HIGH; Spider-Man's own model flickers while the decoy is up and goes solid when it ends), ENTRY SLOW-MOTION (a ~0.35 s or ~0.8 s beat
 when it appears), MESSAGES.
 
 How it works (details and the in-game findings: `../docs/FLASH_RECON.md` section 7):
@@ -32,6 +32,7 @@ How it works (details and the in-game findings: `../docs/FLASH_RECON.md` section
   hidden: opacity 0 and its hologram overlay flag cleared on every game tick, scaled to nothing for its first 12 ticks (its first frames are an A-pose), kept from expiring by raising its lifetime and health fields, its 22
   voice lines (`SPID_GEN_HOLO_DECOY_001..022`) dropped before they play, and sent out of sight just before it is removed so its destruction effect is not seen.
 - The visible copy is an after-image ghost (the Hyper-Sense machinery): exact pose, Spider-Man's own suit by default, flickering.
+- Player flicker (`herofade.cpp`): the game rewrites Spider-Man's model opacity every frame, so writing it directly has no effect. Each of those writes is followed by a call to `SetModified` (`exe+191bf60`); that call is hooked, and while a decoy is up the opacity byte (`ModelInst+0xbe`) of Spider-Man's model and skin parts is set to a random value (between 1 minus the row's strength and 1) just before the call goes through.
 - Enemies pick whoever has more aggro: a decoy beats Spider-Man at the same distance, but an enemy right next to Spider-Man can still prefer Spider-Man over a decoy far away. Snipers have no decoy tier and keep shooting Spider-Man;
   bosses with their own targeting are not covered.
 - `[advanced]`: `decoy_hide_spawn` (1 = the first-ticks scale trick), `decoy_hide_end` (1 = send the game's decoy out of sight before removal), `decoy_show_target` (1 = leave the game's decoy visible, for testing).

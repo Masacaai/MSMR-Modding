@@ -43,13 +43,13 @@ namespace settings {
         template <size_t N> constexpr int Count(const char* const (&)[N]) { return (int)N; }
 
         const RowDef kRows[kRowCount] = {
-            { "ability", "ABILITY", "Which Edge of Time ability the D-pad Right button (or T) uses. HYPER-SENSE: slow motion with a trail of after-images. ACCELERATED DECOY: leaves one copy of him where he stands; enemies shoot it while he moves on. Each ability keeps its own settings.", kAbilities, 2, 0, 2 },
+            { "ability", "ABILITY", "Which Edge of Time ability the D-pad Right button (or T) uses. HYPER-SENSE: slow motion with a trail of after-images. ACCELERATED DECOY: leaves one copy of Spider-Man at the player's position, and enemies target the copy before Spider-Man. Each ability keeps its own settings.", kAbilities, 2, 0, 2 },
             { "", "SLOW MOTION", nullptr, nullptr, 0, 0 },
             { "slow_scale", "SLOW-MOTION STRENGTH", "How slow the world runs while slow motion is on (T, or D-pad Right). Echoes of Time has its own slow motion: do not run it together with Quantum Break Renewed.", kScale, Count(kScale), 0 },
-            { "hero_speed", "SPIDER-MAN SPEED", "How fast Spider-Man moves relative to the slowed world while slow motion is on. Above NORMAL he out-runs the world: the Flash effect.", kSpeed, Count(kSpeed), 0 },
+            { "hero_speed", "SPIDER-MAN SPEED", "How fast Spider-Man moves relative to the slowed world while slow motion is on. Above NORMAL, Spider-Man out-runs the world: the Flash effect.", kSpeed, Count(kSpeed), 0 },
             { "messages", "MESSAGES", "Shows Enabled / Disabled on screen when slow motion is toggled.", kOffOn, 2, 0 },
             { "", "AFTER-IMAGES", nullptr, nullptr, 0, 0 },
-            { "mode", "MODE", "A fading trail of Spider-Man copies behind him, only while slow motion is on. WHILE FAST only adds copies while he moves quickly; ALWAYS keeps adding them, even standing still (they copy his idle animation).", kModes, Count(kModes), 2 },
+            { "mode", "MODE", "A fading trail of Spider-Man copies, left behind only while slow motion is on. WHILE FAST only adds copies while Spider-Man moves quickly; ALWAYS keeps adding them, even when Spider-Man stands still (the copies use the idle animation).", kModes, Count(kModes), 2 },
             { "look", "LOOK", "What the copies look like. DEFAULT is Spider-Man's own suit; the others replace its materials. RAINBOW gives each copy the next color. Looks that are not loaded in the current area load on demand; the first copies wait a moment for that.", kLooks, Count(kLooks), 0 },
             { "life", "CLONE DECAY", "How long a copy lasts before it is gone. Longer means a longer trail.", kLifeL, Count(kLifeL), 3 },
             { "fade_curve", "OPACITY DECAY SCALE", "How a copy's opacity falls over its life. LINEAR fades evenly; higher values keep the newest copies solid and make the older ones drop off fast; lower values keep the whole trail solid longer.", kCurve, Count(kCurve), 4 },
@@ -63,9 +63,10 @@ namespace settings {
             { "streaks", "SPEED STREAKS", "Makes the game's speed effects (screen streaks, hand contrails) start at a lower speed while slow motion is on. Experimental.", kStreaksL, Count(kStreaksL), 0 },
             { "", "ACCELERATED DECOY", nullptr, nullptr, 0, 0, 1 },
             { "decoy_life", "DECOY DURATION", "How long the decoy stays. Attacking does not end it. Enemies that cannot be fooled (snipers, some bosses) keep shooting Spider-Man.", kDecoyLifeL, Count(kDecoyLifeL), 2, 1 },
-            { "decoy_look", "DECOY LOOK", "What the decoy looks like. DEFAULT is Spider-Man's own suit: he is in two places at once.", kLooks, Count(kLooks), 0, 1 },
+            { "decoy_look", "DECOY LOOK", "What the decoy looks like. DEFAULT is Spider-Man's own suit, so Spider-Man appears in two places at once.", kLooks, Count(kLooks), 0, 1 },
             { "decoy_alpha", "DECOY OPACITY", "How solid the decoy is.", kAlphaL, Count(kAlphaL), 6, 1 },
             { "decoy_flicker", "DECOY FLICKER", "How much the decoy's opacity crackles from frame to frame. It also flickers out when it ends.", kFlickerL, Count(kFlickerL), 3, 1 },
+            { "decoy_player", "PLAYER FLICKER", "How much Spider-Man's own opacity crackles while the decoy is up. It stops the moment the decoy ends, so it shows when the decoy is gone even in the middle of a fight.", kFlickerL, Count(kFlickerL), 3, 1 },
             { "decoy_entry", "ENTRY SLOW-MOTION", "A brief slow-motion beat when the decoy is made, so it does not pop in without notice.", kEntryL, Count(kEntryL), 1, 1 },
             { "decoy_messages", "MESSAGES", "Shows a message on screen when the decoy is made.", kOffOn, 2, 0, 1 },
         };
@@ -101,6 +102,7 @@ namespace settings {
             s.decoy_alpha = kAlphaV[g_choice[kDecoyAlpha]];
             s.decoy_flicker = kFlickerV[g_choice[kDecoyFlicker]];
             s.decoy_entry = g_choice[kDecoyEntry];
+            s.decoy_player_flicker = kFlickerV[g_choice[kDecoyPlayer]];
             s.decoy_messages = g_choice[kDecoyMessages] != 0;
             s.mode = g_choice[kMode];
             s.effect = kLookNames[g_choice[kLook]];
