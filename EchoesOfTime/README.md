@@ -1,9 +1,9 @@
 # Echoes of Time 1.0.0
 
-Two Spider-Man 2099 powers from *Spider-Man: Edge of Time*, for Marvel's Spider-Man Remastered 4.0630.0.0, chosen by the **ABILITY** row at the top of the mod's tab:
+Two time-based abilities from *Spider-Man: Edge of Time*, for Marvel's Spider-Man Remastered 4.0630.0.0, chosen by the **ABILITY** row at the top of the mod's tab:
 
-- **Hyper-Sense**: slow motion (**T** / **D-pad Right**) plus a fading trail of Spider-Man after-images. Supersedes Quantum Break Renewed (do not install both: both toggle the same keys and write the same time-scale fields).
-- **Accelerated Decoy**: the same button leaves **one** copy of Spider-Man where he stands, in his exact pose and suit. Enemies shoot at it while he moves on. No slow motion in this ability, apart from a brief beat when the decoy appears.
+- **Hyper-Sense** (the Amazing Spider-Man's power in the game): slow motion (**T** / **D-pad Right**) plus a fading trail of Spider-Man after-images. Supersedes Quantum Break Renewed (do not install both: both toggle the same keys and write the same time-scale fields).
+- **Accelerated Decoy** (Spider-Man 2099's power in the game): the same button leaves **one** copy of Spider-Man where he stands, in his exact pose and suit. Enemies prioritize it over him. No slow motion in this ability, apart from a brief beat when the decoy appears.
 
 All settings are in the in-game **ECHOES OF TIME** tab of the shared mod menu (Settings screen; code in `../ModMenu`); each choice is saved at once to
 `Documents\Marvel's Spider-Man Remastered\EchoesOfTime\EchoesOfTime.ini` (`[menu]`, choice indexes). Each ability keeps its own rows, so switching away and back finds them as they were.
@@ -24,7 +24,7 @@ spawned out of sight to hide the A-pose frame.
 
 ## Accelerated Decoy
 
-Rows: DECOY DURATION (3 to 60 s; attacking does not end it), DECOY LOOK (default: his own suit), DECOY OPACITY, DECOY FLICKER (default HIGH; it also flickers out when it ends), ENTRY SLOW-MOTION (a ~0.35 s or ~0.8 s beat
+Rows: DECOY DURATION (3 to 60 s), DECOY LOOK (default: his own suit), DECOY OPACITY, DECOY FLICKER (default HIGH; it also flickers out when it ends), ENTRY SLOW-MOTION (a ~0.35 s or ~0.8 s beat
 when it appears), MESSAGES.
 
 How it works (details and the in-game findings: `../docs/FLASH_RECON.md` section 7):

@@ -43,7 +43,7 @@ namespace settings {
         template <size_t N> constexpr int Count(const char* const (&)[N]) { return (int)N; }
 
         const RowDef kRows[kRowCount] = {
-            { "ability", "ABILITY", "Which Spider-Man 2099 power the D-pad Right button (or T) uses. HYPER-SENSE: slow motion with a trail of after-images. ACCELERATED DECOY: leaves one copy of him where he stands; enemies shoot it while he moves on. Each ability keeps its own settings.", kAbilities, 2, 0, 2 },
+            { "ability", "ABILITY", "Which Edge of Time ability the D-pad Right button (or T) uses. HYPER-SENSE: slow motion with a trail of after-images. ACCELERATED DECOY: leaves one copy of him where he stands; enemies shoot it while he moves on. Each ability keeps its own settings.", kAbilities, 2, 0, 2 },
             { "", "SLOW MOTION", nullptr, nullptr, 0, 0 },
             { "slow_scale", "SLOW-MOTION STRENGTH", "How slow the world runs while slow motion is on (T, or D-pad Right). Echoes of Time has its own slow motion: do not run it together with Quantum Break Renewed.", kScale, Count(kScale), 0 },
             { "hero_speed", "SPIDER-MAN SPEED", "How fast Spider-Man moves relative to the slowed world while slow motion is on. Above NORMAL he out-runs the world: the Flash effect.", kSpeed, Count(kSpeed), 0 },
