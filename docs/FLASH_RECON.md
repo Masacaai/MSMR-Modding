@@ -263,3 +263,55 @@ gitignored folder, option module "After-images", F8 in game, optional ini `Docum
 - **2026-11-20 later:** refusing slot 132 left the pull-up working (hook confirmed active in the log), so DisableWebs 0.3.1 refuses slot 128 (WallRunJump) instead; the normal wall-run leap is slot 125.
 - **Third log:** with slot 128 refused, slot 125 (WallRunLeap) fired right after and the pull-up still happened. DisableWebs 0.3.3 refuses both 128 and 125 (the plain wall jump goes too).
 - **Confirmed in game (2026-11-20):** DisableWebs 0.3.3 refusing slots 128 and 125 removes the wall-run pull-up (it also removes the plain wall jump). The corner tether block (slot 126) was active in the log and the rooftop slingshot was reported working.
+
+## 6. Running on water in slow motion (static recon 2026-11-21, nothing run in game; SHELVED by the maintainer the same day, no probe was ever run)
+
+**Goal:** while Hyper-Sense slow motion is on, Spider-Man runs or walks on water; slow motion off puts the normal behaviour back (fall in, tread water).
+
+**What the game does today [RE]**
+- Entering water is a state transition, not a physics effect: `HeroTransitionManager` slot 161 (`exe+98aac0`) tries `HeroStateSwim` when the hero's water info says he is deep enough, slot 162 (`exe+98abc0`) does it when riding a moving surface. Both end in `[stateMachine+0x50](HeroStateSwim, params)` like every other transition, so they can be refused the way DisableWebs refuses slots 125/126/128.
+- Slot 161's test: a hero component reference at `hero+0x78c` resolves to an object; at `+0x2a4` of it there is a water block with floats at `+0x184` and `+0x188` and a flag byte at `+0x19c`. The test is `[+0x184] - [+0x188] > 1.4` (the constant at `exe+5d9f878`), unless `[+0x188] > 0`, or the flag is set and the caller asked for it. Also refused when a `NoSwimVolume` is hit (`exe+98f9a0`). What the two floats mean (water depth under the feet, surface height?) is **[?]** until read live.
+- While swimming the hero uses `MoveProcessorWaterStandard` (vtable `exe+4f70e90`); it issues its own water raycasts (`SubmitRequest`, `exe+1fd7e90`).
+- Water is something rays can hit: the collision profiles include `kWater` and `kGroundAndWater` (enum `cd43dfed`), `WaterCollideChecker` issues water tests, and many events carry `HitWater` / `IsUnderwater`. The hero's own ground checks use profiles such as `kHeroGround`, so the water surface is probably not ground for him. **[I]**
+- The sea itself is a rendered FFT simulation (IGWater) with a read-back; whether the physics water surface is flat is **[?]**.
+
+**Ways to do it, cheapest first [I]**
+1. **Refuse the swim transition (slots 161, 162) while slow motion is on and give him something to stand on.** Refusing alone only makes him fall through the water, so it needs a floor.
+2. **The floor:** a large, thin, invisible static collider kept at the water surface under him (EndlessArena already spawns actors; a flat prop with collision would do), moved with him each tick and removed when slow motion ends. He then runs on ordinary ground with ordinary animation and footsteps, and removing the collider puts him back into the normal fall-and-tread behaviour. Needs: a prop actor that is flat and solid, hiding it, and the surface height (from the water block above, or a downward water-profile raycast).
+3. **Alternative, no collider:** each tick, if he is over water and slow motion is on, clamp his Y to the surface and zero his vertical velocity. Cheaper, but the game will think he is airborne (fall animation), so it probably looks wrong.
+4. **Alternative, data:** make the hero's ground raycast use `kGroundAndWater`. Found as a profile enum only; where the hero's ground check picks its profile is not found yet.
+
+**Next step (needs one in-game probe, no code risk):** a log-only build that prints the hero's water block (`+0x184`, `+0x188`, `+0x19c`) and position each second, and logs when slots 161/162 succeed, while the player stands on a pier, wades and swims. That fixes what the floats mean and what height to put the floor at. Then build option 1+2.
+
+## 7. Accelerated Decoy (recon 2026-11-21, static only, nothing run in game)
+
+Mod name decided 2026-11-21: **Split Second** (was Hyper-Sense; nobody had installed 1.0.0, so no migration of old settings is needed). It will have a top row that switches between **Hyper-Sense** (slow motion + after-images, as now) and **Accelerated Decoy** (Spider-Man 2099, Edge of Time): one decoy of him at his position and pose, enemies shoot it, it vanishes when he re-enters combat.
+
+**The game already has this ability [RE]: the Holo Decoy suit power, and enemies are built to prefer it.**
+- Standard enemy targeting (`configs/StandardEnemyTargetingConfig/StandardEnemyTargetingConfig.config`, a `TieredAggroTargetingGamePrius`, used by 213 of the 287 enemy actors read: thugs, grenadiers, riflemen, whip/electric thugs, prison thugs and the rest): **tier 1 is `TargetTypes: Bit9` = `kDecoy` (0x200)**, range 500 m, aggro at range 20/40/100, `ProximityAggroRate 200`; tier 2 is `kHero`; tier 3 is `kBot`/`kAlly`. So any target carrying the kDecoy bit is attacked before the hero. `StartAggro 15`, `SwitchAggro 5`: an enemy already shooting at him switches once the decoy's aggro beats his by 5. The Shocker's config is `Bit9 | kHero`.
+- **Sniper config has no decoy tier** (`kHero | kBot+kAlly`): snipers keep shooting Spider-Man. Electro, Black Cat and Taskmaster configs have no tier list of their own (different structure, not read). Unknown for the other bosses.
+- The decoy actor `equipment/projectile/proj_HoloDecoy_Deployed/proj_HoloDecoy_Deployed.actor` has `TargetData` with kDecoy and `kBlueTeam`, so no new data is needed for targeting. Its `SpiderHoloDecoy` component (update `exe+d31820`, vtable `exe+39083f0`) each frame: plays `HoloDecoy_Pose` once, takes the **owner's allegiance** (`exe+2114d70` of the ref at `+0x4c`, falling back to its own actor) and writes it into `TargetData` (`exe+2117e00`, plus `exe+2117f10` with `[+0x98]`), and ends via `exe+d315d0` (explosion: `DamageRadius`, knockdown, electric damage) when elapsed (`+0x88`) passes `MinLifetime` (`+0x7c`) and either `MaxLifetime` (`+0x80`), `MaxEngageTime` (`+0x84`) or a health test says so. Config fields (`SpiderHoloDecoyPrius`): MinLifetime, MaxLifetime, MaxEngageTime, Health, DamageRadius, DamageType, DamageAmount, StatusAmount, KnockbackAmount, KnockbackLevel, **MaxTargeters**. The instance offsets of Health and MaxTargeters are not read yet.
+
+**Design [I]**
+1. **Targetable part:** spawn the game's own deployed decoy actor at Spider-Man's position (the spawn path of EndlessArena/Hyper-Sense already does this). It is the thing enemies shoot at. Its own model can be made invisible with the alpha path the ghosts use, or left alone if its look is acceptable.
+2. **Visible part:** the existing after-image ghost (exact pose copy, hologram look as the default) at the same spot, so the decoy shows his real pose rather than the fixed `HoloDecoy_Pose` clip (the decoy's own animation controller would overwrite a pose copy; the ghost has none).
+3. **Lifetime:** our own timer (the new knob). When it runs out, or when combat is re-entered, despawn both actors ourselves, which also avoids the end-of-life explosion. Before that, raise `MaxLifetime`/`MaxEngageTime`/`Health` on the instance (offsets to read) so the component does not blow it up first when enemies shoot it.
+4. **"Re-enters combat" trigger:** watch the event stream (`events::StartTracking` already hooks `SendEvent`, exe+16d5e80) for the hero's attacks: `HeroCombatActionEvent` (an attack was chosen, senders `exe+b873c0`, `exe+b87540`), `HeroComboUpdateEvent` (`exe+919330`, fires as the combo count changes) and `DamageDealtEvent` with `Damager` = the hero. Web and gadget damage are not combo hits, so `DamageDealtEvent` by the hero is the broadest. Which one fires on a plain landed hit is **[?]**: log it first.
+5. **Fullscreen signal [?]:** ready-made pieces: the decoy's own spawn effects (`prog_suitpower_holodecoy_intro`, `..._flare`), the screen fade messages (`FadeOutMsg`/`FadeInMsg` through `MsgSend`, as EndlessArena uses; a very short out-and-in is a flash), the speed-streak screen FX (`HeroScreenSpeedFXOnEvent`), and the hologram post material `hero_perk_holodecoy_post.material`. Not tried; the fade pulse is the cheapest, the post material the nicest.
+6. **No slow motion in this mode:** the mode switch just keeps `HeroTimeScaleManager` untouched and routes D-pad Right to "place decoy".
+
+**Unknowns, in order (each is one in-game look)**
+1. **P1 (no code, EndlessArena's `spawn` command):** `spawn equipment/projectile/proj_HoloDecoy_Deployed/proj_HoloDecoy_Deployed.actor` next to a group of ordinary thugs: do they switch to it, is it translucent, does it wear the suit, how long does it live, what ends it? This settles the whole idea; if it works, the rest is plumbing.
+2. Instance offsets of `Health` and `MaxTargeters` (read `exe+d315d0` and the component's init `exe+d31360`/`exe+d311c0` offline).
+3. Whether a decoy placed in combat is shot by enemies already mid-attack (switch rule above says yes after the aggro difference).
+4. The right event to detect "he hit someone" (log probe).
+5. Snipers and bosses keep targeting him (known for snipers). Say so in the knob's help text rather than fix it.
+
+**Mod structure [I]:** a top row `MODE` (Hyper-Sense / Accelerated Decoy) ahead of PRESET; each mode keeps its own saved rows (separate ini sections, as the preset system already stores labels), and the rows below the mode row are the mode's own list (ModMenu already supports a rebuild via `take_rebuild`). Presets stay per mode. New decoy knobs: DURATION, LOOK (default HOLOGRAM), and the fullscreen effect choice.
+
+### 7.x P1 result (in game, 2026-11-21)
+
+Spawned `equipment/projectile/proj_HoloDecoy_Deployed/proj_HoloDecoy_Deployed.actor` (EndlessArena `spawn`, 6 to 10 m from the hero) with three engaged `enm_pistolthug`.
+- **Targeting works.** With the hero out of sight, the thugs keep attacking the decoy. With the hero in view they shot both.
+- The game's decoy looks translucent and hologram-like, lived a limited time and ended in a particle burst.
+- **Design decisions (user):** our decoy is Spider-Man himself, not a hologram. Use the existing after-image `default` look with flicker on high, and flicker out when it ends instead of bursting. The deployed actor is only for targeting.
