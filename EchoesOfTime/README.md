@@ -3,7 +3,7 @@
 Two time-based abilities from *Spider-Man: Edge of Time*, for Marvel's Spider-Man Remastered 4.0630.0.0, chosen by the **ABILITY** row at the top of the mod's tab:
 
 - **Hyper-Sense** (the Amazing Spider-Man's power in the game): slow motion (**T** / **D-pad Right**) plus a fading trail of Spider-Man after-images. Supersedes Quantum Break Renewed (do not install both: both toggle the same keys and write the same time-scale fields).
-- **Accelerated Decoy** (Spider-Man 2099's power in the game): the same button leaves **one** copy of Spider-Man where he stands, in his exact pose and suit. Enemies prioritize it over him. No slow motion in this ability, apart from a brief beat when the decoy appears.
+- **Accelerated Decoy** (Spider-Man 2099's power in the game): the same button leaves **one** copy of Spider-Man at the player's current position, in the same pose and suit. Enemies target the decoy before Spider-Man. No slow motion in this ability, apart from a brief beat when the decoy appears.
 
 All settings are in the in-game **ECHOES OF TIME** tab of the shared mod menu (Settings screen; code in `../ModMenu`); each choice is saved at once to
 `Documents\Marvel's Spider-Man Remastered\EchoesOfTime\EchoesOfTime.ini` (`[menu]`, choice indexes). Each ability keeps its own rows, so switching away and back finds them as they were.
@@ -19,20 +19,20 @@ unsaved settings (kept in `custom.ini`). To make a preset, copy an existing file
 Rows: slow-motion strength, Spider-Man speed (1x/1.5x/2x/3x, the hero-vs-world split), messages; after-images mode / look (the original, hologram, scanlines, red glow, flat grey, distortion, fear, highlight, plain
 colours and RAINBOW) / clone decay / opacity decay scale / starting opacity / clone spacing / flicker; experimental: clone drift, clone size over life, speed blur, speed streaks.
 
-Behaviour carried over from QBR 0.3.0: clones only while slow motion is on, keep spawning while standing still, copy his current pose, held still in pause/photo mode, all removed the moment slow motion ends,
+Behaviour carried over from QBR 0.3.0: clones only while slow motion is on, keep spawning while standing still, copy Spider-Man's current pose, held still in pause/photo mode, all removed the moment slow motion ends,
 spawned out of sight to hide the A-pose frame.
 
 ## Accelerated Decoy
 
-Rows: DECOY DURATION (3 to 60 s), DECOY LOOK (default: his own suit), DECOY OPACITY, DECOY FLICKER (default HIGH; it also flickers out when it ends), ENTRY SLOW-MOTION (a ~0.35 s or ~0.8 s beat
+Rows: DECOY DURATION (3 to 60 s), DECOY LOOK (default: Spider-Man's own suit), DECOY OPACITY, DECOY FLICKER (default HIGH; it also flickers out when it ends), ENTRY SLOW-MOTION (a ~0.35 s or ~0.8 s beat
 when it appears), MESSAGES.
 
 How it works (details and the in-game findings: `../docs/FLASH_RECON.md` section 7):
-- The game's own Holo Decoy actor (`proj_HoloDecoy_Deployed`) is what enemies attack: its TargetData carries the decoy flag, which the standard enemy targeting config ranks above the hero. It is spawned where he stands and
+- The game's own Holo Decoy actor (`proj_HoloDecoy_Deployed`) is what enemies attack: its TargetData carries the decoy flag, which the standard enemy targeting config ranks above the hero. It is spawned at Spider-Man's position and
   hidden: opacity 0 and its hologram overlay flag cleared on every game tick, scaled to nothing for its first 12 ticks (its first frames are an A-pose), kept from expiring by raising its lifetime and health fields, its 22
   voice lines (`SPID_GEN_HOLO_DECOY_001..022`) dropped before they play, and sent out of sight just before it is removed so its destruction effect is not seen.
-- The visible copy is an after-image ghost (the Hyper-Sense machinery): exact pose, his own suit by default, flickering.
-- Enemies pick whoever has more aggro: a decoy beats Spider-Man at the same distance, but an enemy right next to him can still prefer him over a decoy far away. Snipers have no decoy tier and keep shooting him;
+- The visible copy is an after-image ghost (the Hyper-Sense machinery): exact pose, Spider-Man's own suit by default, flickering.
+- Enemies pick whoever has more aggro: a decoy beats Spider-Man at the same distance, but an enemy right next to Spider-Man can still prefer Spider-Man over a decoy far away. Snipers have no decoy tier and keep shooting Spider-Man;
   bosses with their own targeting are not covered.
 - `[advanced]`: `decoy_hide_spawn` (1 = the first-ticks scale trick), `decoy_hide_end` (1 = send the game's decoy out of sight before removal), `decoy_show_target` (1 = leave the game's decoy visible, for testing).
 
