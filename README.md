@@ -29,7 +29,7 @@ mods for [Overstrike](https://www.nexusmods.com/marvelsspidermanremastered/mods/
 
 Anything extracted from the game (catalogs, memory dumps, screenshots) stays in git-ignored local folders and is never committed.
 
-## Requirements (all mods)
+## Requirements
 
 1. Game build **4.0630.0.0** exactly. The mods find game functions by signature and check each one against an expected address, so on any
    other build they refuse to call into the game instead of crashing it.
