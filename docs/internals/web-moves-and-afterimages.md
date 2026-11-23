@@ -4,7 +4,7 @@ Game build **4.0630.0.0 only**; addresses are `exe+RVA`. Tags: **[V]** verified 
 was run in game unless marked **[V]**), **[I]** inference, **[?]** unknown. Tools: `tools/sigtools/fx.py` (disassembly, DDL, enums), `tools/assets/extract.py`,
 `tools/sigtools/actor2json.py`. Extracted assets were read from scratch folders and are **not** in the repository.
 
-The Flash overhaul wants five things; three are solved by existing mods (lightning FX, super speed, Quantum Break Renewed's bullet time). This file covers the two
+The Flash overhaul wants five things; three are solved by existing mods (lightning FX, super speed, bullet time). This file covers the two
 that do not exist: **disabled webs** and **after-images** (hypersense).
 
 | Item | Verdict |
@@ -201,7 +201,7 @@ What its development history says about doing it ourselves:
   Negative-energy trail material, `blackcat_trail_distortion_infinite`, `hero_suitpower_fearitself_trail`, chromatic-aberration Wraith material. MSMR has its own: the Holo Decoy
   material, the spidey-sense highlight, and a Black Cat distortion trail (`ADB8DE9086364A24` lists `hero_melee_punch_distortion_trail`); the MSM2 paths themselves were not looked up in the MSMR archive.
 - **"Hypersense" is three layers in that mod**: the afterimage trail; a **time-scale split** (`HeroTimeScaleManager`, "world X, hero Y", applied through `Actor::SetTimeScale`, the same lever
-  QuantumBreak Renewed uses); and a **pushed animset** (`HeroAnimsetPusherSystem.AddAnimset/RemoveAnimset`, e.g. a boss-style moveset while active). The animset pusher answers open question 3 of
+  other slow-motion mods use); and a **pushed animset** (`HeroAnimsetPusherSystem.AddAnimset/RemoveAnimset`, e.g. a boss-style moveset while active). The animset pusher answers open question 3 of
   section 2.3 for MSM2 (a ghost's or the hero's moveset can be swapped at runtime); `HeroAnimsetPusherSystem` was not found by name in the MSMR exe, so the MSMR route is **[?]**.
 - **Trigger and plumbing**: double-tap Circle (via `HeroButtonCache`, with a quiet-start rule so finishers and dodges do not trip it) or F8; settings through ModSettings; a log and an ini written to
   `Downloads`; text paste from the clipboard for material/animset paths (the `OpenClipboard`/`GetClipboardData` imports are that feature, nothing else in the strings suggests more).
@@ -212,8 +212,7 @@ validated by a shipped mod, and the main hazard (aliased animation/morph buffers
 
 ## 4. Built from this recon (2026-11-19)
 
-Two mods came out of it: **`DisableWebs/`** (section 1; README there) and the **After-images option of QuantumBreak Renewed** (a first version of S1; QBR lives in its own,
-gitignored folder, option module "After-images", F8 in game, optional ini `Documents\...\QuantumBreakRenewed\QuantumBreakRenewed.ini`). Neither has been played yet. Facts they rely on, read later the same day **[RE]**:
+Two mods came out of it: **`DisableWebs/`** (section 1; README there) and an **after-images prototype** (a first version of S1, kept local). Neither has been played yet. Facts they rely on, read later the same day **[RE]**:
 
 - **Combat lock is a bitmask.** `HeroCombatActionLocker` vtable `+0x60` (`exe+1e89a50`) is `[this+0xe8] |= mask`, `+0x68` (`exe+1e89a60`) is `[this+0xe8] &= ~mask`
   (the class derives from `GeneralStateLockComponent`; its query at `+0x70` ORs the persistent mask with the timed ones). No other state to keep.
@@ -236,7 +235,7 @@ gitignored folder, option module "After-images", F8 in game, optional ini `Docum
 ### 4.2 Second play test (2026-11-20): the log answered the pose question
 
 - **The ghost and the hero share one skeleton [verified in the log]:** the first ghost logs `model=...e4c0 joints=237 joint mats=...` for both the ghost and the hero (`[mi+0x88]` is the same pointer, 237 joints, each with its own joint-matrix array). The A-pose is simply the bind pose `exe+1773210` fills in at creation; nothing rewrites the ghost's matrices afterwards.
-- So **pose tracking by copying** is the next test: at spawn, copy the hero's `[mi+0xd8]` array (237 x 64 bytes) onto the ghost's and copy the transform's three orientation rows (the position stays at the spawn point). Built into QuantumBreakRenewed (`pose_copy`, on by default; the lean is only the fallback). Unknowns: whether the renderer re-reads the array after the write (we call SetModified), whether the matrices are model-space (expected) or world-space, and tearing, since the hero's array is read while the game may be updating it. The ghost is only the primary model of the memory-pose actor; the hero is also made of skin-part model instances (`OverrideAllMaterialsAction` loops them with `exe+20c9f20(SkinManager, index, 0)`), which the ghost does not have.
+- So **pose tracking by copying** is the next test: at spawn, copy the hero's `[mi+0xd8]` array (237 x 64 bytes) onto the ghost's and copy the transform's three orientation rows (the position stays at the spawn point). Built into the prototype (`pose_copy`, on by default; the lean is only the fallback). Unknowns: whether the renderer re-reads the array after the write (we call SetModified), whether the matrices are model-space (expected) or world-space, and tearing, since the hero's array is read while the game may be updating it. The ghost is only the primary model of the memory-pose actor; the hero is also made of skin-part model instances (`OverrideAllMaterialsAction` loops them with `exe+20c9f20(SkinManager, index, 0)`), which the ghost does not have.
 - **Effects:** `enm_electrified_status_post_red` is not loaded in free roam; the holo and shield materials are, but layered with override flag 2 they showed nothing. `OverrideAllMaterialsAction` always passes flag 0. The look is now chosen as the *base* material instead (F10 cycles highlight / holo / shield / electric / own); whether the "post" materials render as a base override is the open question. `StaticCompositeMaterial` (the decoy's hologram) only stores data (path at `+0x48`, alpha `+0x148`, pre flag `+0x14a`); the code that applies it was not found.
 
 ### 4.3 Why the looks never changed (2026-11-20)

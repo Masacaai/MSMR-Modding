@@ -41,4 +41,4 @@ Everything above is verified in game (2026-11-09): the rows, 124 looks, live edi
 - Which of the paired lighting modes (Night/Night variant, Overcast/Overcast variant) is the rainy one is not settled.
 
 ## Credits
-The Settings-tab method is SpidyVR's (IlyaMezerowsky, https://github.com/IlyaMez/SpidyVR, GPL-3.0), via Endless Arena's re-implementation and `common/modmenu/`. The log/memory/scan/gamethread layers come from Uncontained/Endless Arena. ALERT (Tkachov, GPL-3.0) documents the asset formats used by the catalog tools.
+The Settings-tab method is SpidyVR's (IlyaMezerowsky, https://github.com/IlyaMez/SpidyVR, GPL-3.0), via Endless Arena's re-implementation and `common/modmenu/`. The log/memory/scan/gamethread layers come from Endless Arena. ALERT (Tkachov, GPL-3.0) documents the asset formats used by the catalog tools.

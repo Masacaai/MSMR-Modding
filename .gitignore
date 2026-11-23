@@ -51,8 +51,6 @@ tools/roster/enemies.json
 EndlessArena/data/*.config
 EndlessArena/data/*.config.json
 
-# QuantumBreakRenewed is a separate mod (a port of nanodanc's QuantumBreak) kept out of this repository entirely
-QuantumBreakRenewed/
 
 # Third-party clone used for reference only
 SpidyVR/
@@ -61,17 +59,12 @@ SpidyVR/
 EndlessArena/src/SECRET.md
 
 
-# Manhattan Streets (the street-level companion to Manhattan Skies; was Uncontained): not ready for publishing, local only (game-derived recon inside;
-# never commit). Only mods that are ready for release come out of here.
-ManhattanStreets/
 
 # Manhattan Skies: source, tools and docs are published; its recon/ folder holds game-derived material (extracted assets, catalogs,
 # memory dumps, screenshots): NEVER commit it.
 ManhattanSkies/recon/
 ManhattanSkies/build/
 
-# Friend or Foe (companion allies): unreleased, local only; holds game-derived addresses and recon. Comes out of here when it is ready for release.
-FriendOrFoe/
 .fxcache/
 
 # Local-only working notes: session logs, request lists, play-test checklists, drafts. Session-specific back-and-forth never goes in the repository
@@ -83,3 +76,6 @@ wiki-out/
 
 # Shared MinHook install (vcpkg manifest: vcpkg.json at the root; see common/build/setup.cmd)
 vcpkg_installed/
+
+# Unreleased mods are NOT listed here (that would publish their names): each lives in a local-only folder listed in .git/info/exclude.
+# See docs/MAINTAINING_DOCS.md ("Adding a mod").

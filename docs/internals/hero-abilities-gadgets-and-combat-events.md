@@ -336,7 +336,7 @@ an item is listed when `dword [item+0x88] == 3` (the gadget category) and `exe+b
   it yourself with `force = 1` on the game thread is the supported way to push a changed list (`force = 1` forces the resend).
 - **Ammo for the HUD** comes from the weapon object itself (vtable `+0x188` current, `+0x190` max), which in turn reflects section 6.
 
-For Friend or Foe (custom entries): the Flash movie only ever sees what `SetQuickSelect` carries, and the native list is built from inventory items, so a native ally
+For custom wheel entries (such as allies): the Flash movie only ever sees what `SetQuickSelect` carries, and the native list is built from inventory items, so a native ally
 entry needs a real `GameWeaponItem` in the inventory (wheel position, icon, name come from its item config). Without one, keep intercepting `SetQuickSelect` (the entry
 shape above is exactly the array element the movie expects) and treat `HandleWheelInput(index)` (`exe+793da0`) plus the close (`vtable +0x08`) as the selection signal.
 
@@ -390,7 +390,7 @@ immediately before every call, and re-check the vtable equals `exe+38b59b8` (che
 
 Other dumps, for the record (from `dumpindex.py`): `exe+15f9bc9` read 2 (three times: the released-model crash), `exe+319b6a9` (GFx teardown), `exe+31e8dcc` / `exe+31e9582`
 read `0x90` (three times: the Settings-screen crash of Manhattan Skies: `Rcx = 0x90`, i.e. a null object's field), `exe+33005d` write `0xe4` with
-`Rdx = type BotCommandQueueGame` (2026-11-14: Friend or Foe's missing-`BotCommandQueueGame` crash), `exe+1cbbd80` write 0 (twice), `exe+1fe51b5` read `0x12c` (twice: the
+`Rdx = type BotCommandQueueGame` (2026-11-14: a missing-`BotCommandQueueGame` crash when spawning allies), `exe+1cbbd80` write 0 (twice), `exe+1fe51b5` read `0x12c` (twice: the
 heavies' null mover), `exe+18046ea` read `0x340` (twice), `exe+214251b` write 1 inside `MsgSend` (twice: a message sent with a bad type index), `exe+43fc24` (the grenadier
 stack overflow).
 

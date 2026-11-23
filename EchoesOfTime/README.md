@@ -2,7 +2,7 @@
 
 Two time-based abilities from *Spider-Man: Edge of Time*, for Marvel's Spider-Man Remastered 4.0630.0.0, chosen by the **ABILITY** row at the top of the mod's tab:
 
-- **Hyper-Sense** (the Amazing Spider-Man's power in the game): slow motion (**T** / **D-pad Right**) plus a fading trail of Spider-Man after-images. Supersedes Quantum Break Renewed (do not install both: both toggle the same keys and write the same time-scale fields).
+- **Hyper-Sense** (the Amazing Spider-Man's power in the game): slow motion (**T** / **D-pad Right**) plus a fading trail of Spider-Man after-images. Do not run it together with another slow-motion mod such as nanodanc's QuantumBreak: both toggle the same keys and write the same time-scale fields.
 - **Accelerated Decoy** (Spider-Man 2099's power in the game): the same button leaves **one** copy of Spider-Man at the player's current position, in the same pose and suit. Enemies target the decoy before Spider-Man. No slow motion in this ability, apart from a brief beat when the decoy appears.
 
 All settings are in the in-game **ECHOES OF TIME** tab of the shared mod menu (Settings screen; code in `../ModMenu`); each choice is saved at once to
@@ -19,7 +19,7 @@ unsaved settings (kept in `custom.ini`). To make a preset, copy an existing file
 Rows: slow-motion strength, Spider-Man speed (1x/1.5x/2x/3x, the hero-vs-world split), messages; after-images mode / look (the original, hologram, scanlines, red glow, flat grey, distortion, fear, highlight, plain
 colours and RAINBOW) / clone decay / opacity decay scale / starting opacity / clone spacing / flicker; experimental: clone drift, clone size over life, speed blur, speed streaks.
 
-Behaviour carried over from QBR 0.3.0: clones only while slow motion is on, keep spawning while standing still, copy Spider-Man's current pose, held still in pause/photo mode, all removed the moment slow motion ends,
+Behaviour: clones only while slow motion is on, keep spawning while standing still, copy Spider-Man's current pose, held still in pause/photo mode, all removed the moment slow motion ends,
 spawned out of sight to hide the A-pose frame.
 
 ## Accelerated Decoy

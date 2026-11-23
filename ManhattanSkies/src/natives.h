@@ -5,7 +5,7 @@
 
 // Game functions on Spider-Man.exe 4.0630.0.0, found by signature at runtime. Expected RVAs come from static analysis
 // (docs/internals/atmosphere-and-menu-recon-log.md); a mismatch means the signature landed somewhere new and the native must not be used.
-// The scan/memory/log layers are copies of Uncontained's (Manhattan Skies is a separate mod).
+// The scan/memory/log layers are the shared ones in common/.
 namespace natives {
     enum Id {
         GameThreadTick,     // exe+1f745f0: per-frame function (same as ScriptHookSMPC and Endless Arena); hooked lazily to run jobs on the game thread

@@ -53,7 +53,7 @@ namespace ghosts {
     static std::vector<uintptr_t> g_effect_mats;   // loaded materials of the current look (one, or several for RAINBOW)
     static std::string g_effect_name;          // what g_effect_mat was looked up for
     static int g_look_tries = 0;
-    static std::atomic<bool> g_slowmo{ false };   // QuantumBreak slow motion is on (new ghosts only spawn then, when only_slowmo is set)
+    static std::atomic<bool> g_slowmo{ false };   // slow motion is on (new ghosts only spawn then, when only_slowmo is set)
 
     // Effect presets: materials the game itself layers on a character as a post-composite overlay (flag 2). Which of them are loaded in a given
     // level is logged the first time ghosts are ready; one that is not loaded is skipped.

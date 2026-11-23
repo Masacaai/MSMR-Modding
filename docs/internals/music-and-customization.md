@@ -68,7 +68,7 @@ How a cue is actually posted (event vs state vs switch), how it fades, and what 
 | 1 | **MSM2-style injection into the system menu**: hook the item builder, append our own rows (a MODS / ENDLESS ARENA submenu with toggles, lists, sliders), hook the toggle / slider / update events for our rows | Native look and controller navigation, same as MSM2 mods | Needs the runtime menu object layout and a safe way to add rows; the most reverse-engineering | High |
 | 2 | **An in-game overlay** (ImGui over the D3D12 swap chain) | Full control of the UI; Script Hook for MSMR exposed `AddImGuiMenu`, so it was done before | Not native; gamepad use is clunky; D3D12 hooks can clash with ReShade (installed here) | Medium |
 | 3 | **Our own screens built from game panels** (the dock circle panel, notification box, choice buttons like the boon picks) | Uses code we already have; no new RE | Cramped; fine for a handful of toggles, poor for long faction lists | Low |
-| 4 | **EndlessArena as a `.modular` file** (options in Overstrike, as in QuantumBreak Renewed) | Reliable, no RE | Customization lives outside the game; least wanted | Low |
+| 4 | **EndlessArena as a `.modular` file** (options in Overstrike, as in other Overstrike mods) | Reliable, no RE | Customization lives outside the game; least wanted | Low |
 
 ### Next steps for 1
 1. Record the system menu with the existing `uilog` (`uilog on`, open Pause > System/Options, walk through a few settings and sliders): shows the exact

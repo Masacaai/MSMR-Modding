@@ -1,8 +1,8 @@
 // Echoes of Time: two time-based abilities from Spider-Man: Edge of Time for Marvel's Spider-Man Remastered (4.0630.0.0), chosen by the ABILITY row: Hyper-Sense (slow motion, T or D-pad Right,
 // plus a fading trail of after-images) and Accelerated Decoy (the same button leaves one copy of him that enemies shoot at; ghosts.cpp).
-// The slow-motion part is the same mechanism as nanodanc's "QuantumBreak" Script Hook mod (and QuantumBreak Renewed, the Overstrike port of it): the hero's
+// The slow-motion part is the same mechanism as nanodanc's "QuantumBreak" Script Hook mod: the hero's
 // "HeroTimeScaleManager" component gets a float time scale at +0x50, a float Spider-Man speed multiplier at +0x4C and a byte "active" flag at +0x5C, rewritten every
-// 10 ms while on (found by reading that mod's imports, strings and code, not by copying it). Echoes of Time supersedes QBR: do not install both.
+// 10 ms while on (found by reading that mod's imports, strings and code, not by copying it). Do not run it together with another slow-motion mod.
 //
 // Everything is set in the in-game ECHOES OF TIME tab (menu.cpp, settings.cpp); there is no .modular. The after-images are ghosts.cpp (docs/internals/web-moves-and-afterimages.md).
 #include "log.h"

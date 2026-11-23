@@ -120,7 +120,7 @@ of a level that is not the current one needs the level id of its own `.level`.
 Reading of the model [I]: **the route is a curve** (`Curve`/`Path` pins: a spline actor in the zone) or a chain of `ChaseNode`s whose verb says how to leave it (run, jump, grapple,
 slide, vault); the target's speed is set from the hero's distance (max/min speed radii); the hero wins inside `CatchRadius` once `CatchableAfterPercentOfPath` of the path is done
 and loses beyond `FailureRadius`/`FailDistance`. So **an arbitrary mod-made route is plausible for the curve form** (spawn or reuse a curve actor and call the follow-curve
-start with it) and needs authored jump/grapple data for the node form. That `BotCommandChaseRunTo` "glides and never finishes" for Friend or Foe fits: it is one verb of this
+start with it) and needs authored jump/grapple data for the node form. That `BotCommandChaseRunTo` "glides and never finishes" for spawned allies fits: it is one verb of this
 system and expects a `ChaseController`/chase state around it.
 
 The cut co-op chase (`CHK_COOP_CHASE_DEMO`, `enm_coopchase_enemy_movement`) and which story chases use the curve or the node form need the assets (not opened this session) [?].
@@ -159,7 +159,7 @@ Calling a node's logic from a mod: usually skip the node and call what its `Exec
 `.nodegraph` asset (`NodeGraphAssetManager`, vtable `exe+3d07d08`), building a graph in memory, and a graph-to-text dumper.
 
 ## 6. State predicates and hero state for race rules
-- **Mission states** [V]: `ManhattanStreets/docs/RECON.md` Part 28 (kept local) has the two query paths; in short `state = exe+201f800(q[exe+7c4bbb0], &handle)` after
+- **Mission states** [V]: there are two query paths; in short `state = exe+201f800(q[exe+7c4bbb0], &handle)` after
   `exe+201f640(mgr, &handle, crc32(missionName))`, or `exe+1fa74f0(q[exe+7c3ef70], name, 0)`; **0 Inactive, 1 Available, 2 Active, 3 Cleanup, 4 Complete, 5 Failed**;
   number of active missions `exe+1fa5f90(q[exe+7c3ef70])`.
 - **Loading**: `dword [world+0xe3cb0]` in 0x17..0x19 while the world loads (`world = exe+1f707e0()`) [V from the overlay natives' guard].

@@ -15,7 +15,7 @@
 
 ## Input: the game's action layer, for every device (2026-11-15; `[RE]`, read from the exe, not run)
 
-Answers FOF-A1/A2/A3/A5 (partly), EA-F3, MSC-D2/D6. The devices (`nx::Input::GamepadSce`, `GamepadXInput`, `GamepadWindowsInput`, `GamePadSteam`, `NxKeyboardDevice`,
+The devices (`nx::Input::GamepadSce`, `GamepadXInput`, `GamepadWindowsInput`, `GamePadSteam`, `NxKeyboardDevice`,
 `NxMouseDevice`) feed **device maps** (`PadMap`, `KeyboardMap`, `MouseMap`, `TouchPadMap`; `KeyboardPriorityMask`, `MousePriorityMask`), which feed **named actions**. Game code
 never reads a button: it reads an action by name hash from the player's **input controller**.
 
@@ -73,5 +73,5 @@ family (**X360, XOne, DualShock, DualSense, SteamDeck, SwitchPro, Generic, Mkb, 
 (enum `IconId`, 203 glyphs), `IconMapXOSwap`, `IconMapStickSwap`, `IconMapMkbBinding{Button}`, `IconMapSteamBinding{Button, ActionSet {Active, InGame, Menus}}`. Where the active
 family is stored was not located. `OSKeyboard` (vtable `exe+3cf8518`) and a Steam `GamepadTextInputDismissed` callback exist: the game can open an on-screen keyboard.
 
-Not examined: the pad backends' axis storage and dead zones, per-user slots in `nx::NxInputImpl` (78 methods; FOF-A4), where bindings are saved.
+Not examined: the pad backends' axis storage and dead zones, per-user slots in `nx::NxInputImpl` (78 methods), where bindings are saved.
 

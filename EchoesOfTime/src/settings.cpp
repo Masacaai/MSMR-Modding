@@ -45,7 +45,7 @@ namespace settings {
         const RowDef kRows[kRowCount] = {
             { "ability", "ABILITY", "Which Edge of Time ability the D-pad Right button (or T) uses. HYPER-SENSE: slow motion with a trail of after-images. ACCELERATED DECOY: leaves one copy of Spider-Man at the player's position, and enemies target the copy before Spider-Man. Each ability keeps its own settings.", kAbilities, 2, 0, 2 },
             { "", "SLOW MOTION", nullptr, nullptr, 0, 0 },
-            { "slow_scale", "SLOW-MOTION STRENGTH", "How slow the world runs while slow motion is on (T, or D-pad Right). Echoes of Time has its own slow motion: do not run it together with Quantum Break Renewed.", kScale, Count(kScale), 0 },
+            { "slow_scale", "SLOW-MOTION STRENGTH", "How slow the world runs while slow motion is on (T, or D-pad Right). Echoes of Time has its own slow motion: do not run it together with another slow-motion mod.", kScale, Count(kScale), 0 },
             { "hero_speed", "SPIDER-MAN SPEED", "How fast Spider-Man moves relative to the slowed world while slow motion is on. Above NORMAL, Spider-Man out-runs the world: the Flash effect.", kSpeed, Count(kSpeed), 0 },
             { "messages", "MESSAGES", "Shows Enabled / Disabled on screen when slow motion is toggled.", kOffOn, 2, 0 },
             { "", "AFTER-IMAGES", nullptr, nullptr, 0, 0 },

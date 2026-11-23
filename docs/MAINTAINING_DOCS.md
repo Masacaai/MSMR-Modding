@@ -103,7 +103,7 @@ repository settings and save any first page; the workflow takes over.
 
 ## Adding a mod
 
-1. `<Mod>/` with `README.md`, `mod.json`, `build.cmd` (copy a sibling), `src/`, `docs/` (and `docs/releases/`). A mod that is not ready for release is added to `.gitignore` until it is.
+1. `<Mod>/` with `README.md`, `mod.json`, `build.cmd` (copy a sibling), `src/`, `docs/` (and `docs/releases/`). A mod that is not ready for release stays out of git: add its folder to `.git/info/exclude` (local to your clone), **not** to `.gitignore`, so its name is not published. Its name appears in no tracked file until release.
 2. Add it to the table in the root `README.md` and to `docs/README.md`.
 3. Put anything you learn about the game on the internals pages, not in the mod's docs.
 

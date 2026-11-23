@@ -6,7 +6,7 @@ Tags: [V] verified (disassembly or in game), [I] inferred, [?] unknown. Addresse
 
 # Part 1: starting point (2026-11-08)
 
-Most of this came from Uncontained (`Uncontained/docs/RECON.md` Parts 7, 15-19), where it was found for Act 3 weather. Nothing here has been tested for time of day yet.
+Most of this came from an earlier, unreleased weather prototype (its notes are not in the repository), where it was found for Act 3 weather. Nothing here has been tested for time of day yet.
 
 ## Lighting modes (weather lives here)
 - Seven modes in the level data: `kDay`, `kSunset`, `kOvercast`, `kOvercastRain`, `kNight`, `kNightRain`, `kBlackout`. [V names from level data]
@@ -18,7 +18,7 @@ Most of this came from Uncontained (`Uncontained/docs/RECON.md` Parts 7, 15-19),
 
 ## Atmospheres (looks without a lighting mode: Early Morning, extra environment sets)
 - `AtmosphereManager` (vtable `exe+3cf1f18`): slot count `+0x70`, **pointer** to the slot array at `+0x110` (stride `0x8c0`), pointer to a 4-int counter array at `+0x120` (16 bytes per slot). [V]
-- **Correction to Uncontained Part 7:** `exe+162f020(mgr, slot, delta, mask, min, max)` is not "activate with a blend time". It finds the slot index, adds `delta` to each of the slot's counters 0-2 selected by mask bits 0-2 and to counter 3 when bit 1 of the shifted mask is set, clamps each to `[min, max]`, then calls `exe+162ff10(mgr)` (recompute). `ActivateAtmosphereAction` passes delta 500, min 0, max 0x7fffffff, so it acts like a weighted reference count; removing the look presumably passes a negative delta. 26 callers. [V disassembly, I meaning]
+- **Correction to the earlier prototype's notes:** `exe+162f020(mgr, slot, delta, mask, min, max)` is not "activate with a blend time". It finds the slot index, adds `delta` to each of the slot's counters 0-2 selected by mask bits 0-2 and to counter 3 when bit 1 of the shifted mask is set, clamps each to `[min, max]`, then calls `exe+162ff10(mgr)` (recompute). `ActivateAtmosphereAction` passes delta 500, min 0, max 0x7fffffff, so it acts like a weighted reference count; removing the look presumably passes a negative delta. 26 callers. [V disassembly, I meaning]
 - Known atmosphere assets: `atmosphere/atm_ibl_lighting/atm_corrupt_truck_chase*.atmosphere`, `atm_nyc_map_2017.atmosphere` (map screen). ALERT parses an `.atmosphere` header with `time_of_day`, sun RGBA/rotation/elevation/radius, ambient RGBA; 133 such assets in MSMR. [V]
 
 ## Settings tab
@@ -60,7 +60,7 @@ So a "look" is essentially **one atmosphere asset (header + baked IBL, about 0.5
 
 # Part 3: S0 in game, the Settings time-of-day option (2026-11-08)
 
-Log: `recon/s0_menu_tod_day_sunset_night.log`. 3/3 natives OK, both hooks on, ran beside Endless Arena, QuantumBreakRenewed, TrueSwing, WebUpSelection, MainMenuSuits. [V]
+Log: `recon/s0_menu_tod_day_sunset_night.log`. 3/3 natives OK, both hooks on, ran beside Endless Arena, TrueSwing, WebUpSelection, MainMenuSuits. [V]
 
 ## Lighting-mode index [V in game + disassembly]
 | Index | Mode | Evidence |
@@ -80,7 +80,7 @@ Log: `recon/s0_menu_tod_day_sunset_night.log`. 3/3 natives OK, both hooks on, ra
 - Weights seen: 2 (local volumes), 50 (exe+1669af1, during load), 1000 (map; exe+7140d6 during load). So a full-screen look like the map uses 1000; an Early Morning overlay would likely need a slot with a similar weight [I].
 
 ## S1 build (2026-11-08, not yet run)
-`sky <n>` calls the setter on the game thread (lazy GameThreadTick hook, same function Endless Arena hooks: two MinHook copies on one function, worked for Uncontained [?]); `at:`/`atm` now print each slot's asset id; `peek <addr|exe+rva> [len]`.
+`sky <n>` calls the setter on the game thread (lazy GameThreadTick hook, same function Endless Arena hooks: two MinHook copies on one function, worked in the earlier prototype [?]); `at:`/`atm` now print each slot's asset id; `peek <addr|exe+rva> [len]`.
 Plan: `sky 1`, `sky 3`, `sky 4`, `sky 6` one at a time, user describes each (rain? overcast? blackout?), then back to `sky 5`.
 
 ---
@@ -495,7 +495,7 @@ index, high dword offset), the per-archive open table at `q[fs+0x68]`, capacity 
 pointers across requests: repointing the tables is safe between requests, and `toclocate` can be replaced by reading `q[exe+74a6a00]`.
 Texture pixel streams: `TextureStream` static `exe+621b4e0`; `exe+19b5e70(stream, record, 0)` evicts one texture's high mips and `exe+19b5d70(stream, record, 0)` requests them;
 records are 0xc0 bytes at `q[exe+621b2b0]`. The stream is read into a mapped staging buffer (`exe+19b7f30`) and copied later by `exe+19b5a20`, which is a place to substitute
-pixels with no archive at all. Details, the field table and the caveats are in `ManhattanStreets/docs/RECON.md` Part 33 (local); the same text is summarised in
+pixels with no archive at all. Details, the field table and the caveats are summarised in
 `docs/internals/`.
 
 ## Part 24. The Settings-screen crash at `exe+31e9582`: what the faulting code is
