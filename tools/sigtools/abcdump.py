@@ -2,7 +2,7 @@
 # Disassembles the ActionScript 3 (ABC) inside a Scaleform .gfx / .swf (as extracted by tools/assets/extract.py from
 # ui/export/HUD/*.gfx). With no filter it lists every class and its methods; with filters it prints the bytecode of every method
 # whose "Class.method" name contains one of them. Used to read how the game's HUD panels decide what to show
-# (docs/GAME_INTERNALS.md, "UI (Scaleform)"). Output is a plain opcode listing, not decompiled source.
+# (docs/internals/, "UI (Scaleform)"). Output is a plain opcode listing, not decompiled source.
 import struct
 import sys
 import zlib

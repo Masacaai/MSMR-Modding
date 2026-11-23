@@ -1,6 +1,6 @@
 # buildslot.py <mod.smpcmod> <mod atmosphere id hex> <carrier atmosphere file suffix> <out dir>
 # Builds the loose files for one "slot": a mod's atmosphere plus the textures it ships, mapped onto an unused game atmosphere (the carrier) and onto
-# texture assets that ONLY that carrier atmosphere references (docs/RECON.md Part 17). In the mod's atmosphere bytes each texture id the mod ships is
+# texture assets that ONLY that carrier atmosphere references (docs/internals/atmosphere-and-menu-recon-log.md Part 17). In the mod's atmosphere bytes each texture id the mod ships is
 # replaced by one of those carrier texture ids, so two mods never fight over the same texture id.
 # Output: <out>/atmosphere.bin (the carrier atmosphere id gets these bytes), <out>/tex_<carrier texture id>.bin, <out>/commands.txt (the `carrier` lines
 # to send, with ARCH to replace by an open raw mod archive index) and a report. Needs tools/ALERT and the game's current toc.

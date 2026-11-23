@@ -1,5 +1,5 @@
 # buildslot2.py <mod.smpcmod> <mod atmosphere id hex> <first new id hex> <out dir>
-# Splits one atmosphere .smpcmod into loose files for the "new assets" method (docs/RECON.md Part 17): the mod's atmosphere and every texture it ships and
+# Splits one atmosphere .smpcmod into loose files for the "new assets" method (docs/internals/atmosphere-and-menu-recon-log.md Part 17): the mod's atmosphere and every texture it ships and
 # references get brand-new asset ids (ascending from <first new id>), and the references inside the atmosphere bytes are rewritten to the new texture
 # ids. Nothing of the game is replaced. Files the atmosphere does not reference (shared helper assets other mods also ship) are ignored.
 # Output: <out>/<id>.bin per asset and <out>/commands.txt (`addasset` lines in ascending id order; ARCH = an open raw mod archive index).

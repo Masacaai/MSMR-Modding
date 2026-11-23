@@ -3,12 +3,12 @@
 #include "log.h"
 #include "settings.h"
 
-#include "../../ModMenu/modmenu.h"
+#include "../../common/modmenu/modmenu.h"
 
 #include <atomic>
 #include <vector>
 
-// The ENDLESS ARENA tab lives in the shared MODS menu (ModMenu/modmenu.cpp): pause menu > MODS > ENDLESS ARENA. This file only hands the
+// The ENDLESS ARENA tab lives in the shared MODS menu (common/modmenu/modmenu.cpp): pause menu > MODS > ENDLESS ARENA. This file only hands the
 // rows of settings.h and their callbacks to it. The tab-building code that used to be here (SpidyVR's method) moved into ModMenu, so other
 // scripts (Manhattan Skies) can share one menu and one set of hooks.
 namespace menu {

@@ -3,7 +3,7 @@
 Time of day, sky, sun and fog control for Marvel's Spider-Man Remastered (Steam, `Spider-Man.exe` 4.0630.0.0 only). A native `.script` for Overstrike's script support. Part of the [MSMR-Modding](../README.md) repository; its `recon/` folder (game-derived catalogs, dumps, screenshots) is git-ignored and never committed.
 
 ## What it does
-A **MANHATTAN SKIES** tab in the game's **pause menu > SETTINGS** (added by `../ModMenu/`, which Endless Arena uses too):
+A **MANHATTAN SKIES** tab in the game's **pause menu > SETTINGS** (added by `../common/modmenu/`, which Endless Arena uses too):
 
 | Row | What it does |
 |---|---|
@@ -19,11 +19,11 @@ A **MANHATTAN SKIES** tab in the game's **pause menu > SETTINGS** (added by `../
 Y (reset all) resets the sky rows to AUTO; X resets one row. Settings are saved to `Documents\Marvel's Spider-Man Remastered\ManhattanSkies\ManhattanSkies.ini` and applied again when a world loads. "AUTO" always means the game's own value.
 
 ## Layout
-- `mod/`: source. `mod\build.cmd` builds `mod\build\ManhattanSkies.dll` and `.script`; it installs nothing. MinHook comes from `EndlessArena\vcpkg_installed` (build Endless Arena once first). `log`, `memory`, `scan`, `gamethread`, `watchpoint` come from the shared [`../common/`](../common/README.md).
+- `src/`: source. `build.cmd` builds `build\ManhattanSkies.dll` and `.script`; it installs nothing into the game (the package goes to Overstrike's Mods Library). `log`, `memory`, `scan`, `gamethread`, `watchpoint` and the Settings tab (`modmenu`) come from the shared [`../common/`](../common/README.md).
   - `sky.cpp`: the settings, the look tables, the override logic (load an atmosphere, swap weights, swallow the game's own base activation, release it again), sun and fog edits.
   - `menu.cpp`: the tab's rows. `recorder.cpp`: hooks, slot access, dev tools. `looks_extra.inc`: generated look table.
-- `docs/RECON.md`: what is known, with [V] verified / [I] inferred / [?] unknown tags (Parts 1-12).
-- `docs/SKY_LOOKS.md`: every look, its label (an educated guess from the file name) and its real file.
+- [`../docs/internals/atmosphere-and-menu-recon-log.md`](../docs/internals/atmosphere-and-menu-recon-log.md): what is known, with [V] verified / [I] inferred / [?] unknown tags (Parts 1-12).
+- [`docs/SKY_LOOKS.md`](docs/SKY_LOOKS.md): every look, its label (an educated guess from the file name) and its real file.
 - `recon/`: catalogs and logs copied out of the game. `tools/`: Python helpers (atmosphere catalog, label table, sweep).
 
 ## Dev control
@@ -41,4 +41,4 @@ Everything above is verified in game (2026-11-09): the rows, 124 looks, live edi
 - Which of the paired lighting modes (Night/Night variant, Overcast/Overcast variant) is the rainy one is not settled.
 
 ## Credits
-The Settings-tab method is SpidyVR's (IlyaMezerowsky, https://github.com/IlyaMez/SpidyVR, GPL-3.0), via Endless Arena's re-implementation and `ModMenu/`. The log/memory/scan/gamethread layers come from Uncontained/Endless Arena. ALERT (Tkachov, GPL-3.0) documents the asset formats used by the catalog tools.
+The Settings-tab method is SpidyVR's (IlyaMezerowsky, https://github.com/IlyaMez/SpidyVR, GPL-3.0), via Endless Arena's re-implementation and `common/modmenu/`. The log/memory/scan/gamethread layers come from Uncontained/Endless Arena. ALERT (Tkachov, GPL-3.0) documents the asset formats used by the catalog tools.

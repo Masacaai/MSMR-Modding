@@ -7,7 +7,7 @@
 #include <vector>
 
 // Building Scaleform (GFx) data objects from code, so we can drive the game's own panels the way it does
-// (docs/UI_HUNT.md, recordings 2026-10-14): fill an object field by field, then pass it to one method
+// (docs/internals/ui-recordings.md, recordings 2026-10-14): fill an object field by field, then pass it to one method
 // (e.g. Refresh(obj) on the activity panel, AddNewMessage(obj) on the medium message).
 //
 // Static RE (4.0630, 2026-10-15):

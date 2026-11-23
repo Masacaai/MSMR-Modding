@@ -1,5 +1,5 @@
 # Component/type objects of Spider-Man.exe 4.0630.0.0: <type object exe+RVA> <name> <function pointers the registration stores (first is usually the factory)>
-# The type object is what FindComponent (exe+16799a0 / exe+167ab40) takes. Regenerate: see docs/GAME_INTERNALS.md (fx.py).
+# The type object is what FindComponent (exe+16799a0 / exe+167ab40) takes. Related: docs/internals/reflection-tables.md (fx.py).
 6c65e50 HeroAccessibilityHighlightComponent 2bf4e0 2bf420
 6c65f50 BadLedgeFlockIdentifier 2bf730
 6c66050 Bird 2bfe00 2bfdc0 2bfda0 2bfdb0 2bfeb0 2bff60 2bfd30 2bfcb0

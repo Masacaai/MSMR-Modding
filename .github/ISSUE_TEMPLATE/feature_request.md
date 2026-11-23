@@ -8,6 +8,6 @@ labels: feature
 
 **Why it fits** (read the design rules in `EndlessArena/docs/LEDGER.md` first: no health sponges, boons never touch skills, every curse has an upside)
 
-**Does the game already have the pieces?** (a UI panel, an item, an actor; link to anything in `docs/GAME_INTERNALS.md` or `docs/UI_HUNT.md`)
+**Does the game already have the pieces?** (a UI panel, an item, an actor; link to anything in `docs/internals/` or `docs/internals/ui-recordings.md`)
 
 **Are you willing to build it?**

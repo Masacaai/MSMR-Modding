@@ -8,7 +8,7 @@
 #include <vector>
 
 // Our use of the game's activity panel (HUD element 0x1C0, object +0x6E8: the Taskmaster challenge panel, recorded
-// 2026-10-14, docs/UI_HUNT.md) for Horde: a live score panel during the run, and the expanded results panel that
+// 2026-10-14, docs/internals/ui-recordings.md) for Horde: a live score panel during the run, and the expanded results panel that
 // stays on screen until the player dismisses it (the game's own "Continue").
 namespace panels {
     // Live score on the left. Cheap to call every tick: only sent when the score/rank changed, at most once a second.

@@ -1,5 +1,5 @@
 # genpresets.py [--write]: the presets that ship with Manhattan Skies (base-game skies only, no atmosphere mods). Checks every value against the row labels in
-# mod/src/sky.cpp, menu.cpp and looks_extra.inc, then prints the C++ lines for presets.cpp's kShipped table; with --write also writes the files into the player's
+# src/sky.cpp, menu.cpp and looks_extra.inc, then prints the C++ lines for presets.cpp's kShipped table; with --write also writes the files into the player's
 # Presets folder (Documents\Marvel's Spider-Man Remastered\ManhattanSkies\Presets).
 import os
 import re

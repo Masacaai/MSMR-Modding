@@ -10,7 +10,7 @@
 ## Checklist
 
 - [ ] No game assets, extracted game data, dumps or saves are included (`git status` checked)
-- [ ] New game addresses/layouts are documented in `docs/GAME_INTERNALS.md` with a confidence tag and how they were found
-- [ ] New native calls go through `natives.cpp` with an expected RVA and run on the game thread
+- [ ] New game addresses/layouts are documented in `docs/internals/` with a confidence tag and how they were found
+- [ ] New native calls go through `common/game/natives.cpp` with an expected RVA and run on the game thread
 - [ ] Docs updated where this change makes them wrong
 - [ ] Prompts use `input::Glyph`, not hard-coded button names

@@ -14,7 +14,7 @@
 #include <memory>
 #include <set>
 
-// Gadgets as a run's rewards (docs/REWARD_DESIGN.md, docs/RECON.md sections 5-7, 9).
+// Gadgets as a run's rewards (docs/REWARD_DESIGN.md, docs/internals/hero-abilities-gadgets-and-combat-events.md sections 5-7, 9).
 //
 // What the 2026-11-15 recon changed (read from the exe, nothing here ran in game yet):
 //  - exe+2162300 is `WeaponManagerBase::Equip(this, id, slot, force, sendEquippedEvent)`: FIVE arguments (the old hook had four, so every
@@ -35,7 +35,7 @@ namespace gadgets {
     static std::set<uint32_t> g_allowed;
 
     constexpr uintptr_t kHeroMgrVtableRva = 0x38B59B8;   // HeroWeaponManagerLocal
-    constexpr int kSlots = 7;                            // 40-byte slot records from +0x6c: room for 7 (docs/RECON.md section 5)
+    constexpr int kSlots = 7;                            // 40-byte slot records from +0x6c: room for 7 (docs/internals/hero-abilities-gadgets-and-combat-events.md section 5)
     static const uint32_t kWebShooter = 0x9C89;
 
     static bool IsGadgetId(uint32_t id) { return id >= 0x9C82 && id <= 0x9C89; }

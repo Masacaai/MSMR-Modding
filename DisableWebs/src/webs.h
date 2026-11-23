@@ -2,7 +2,7 @@
 
 #include <string>
 
-// No webs: locks the hero's web abilities through the game's own lock components (docs/FLASH_RECON.md section 1).
+// No webs: locks the hero's web abilities through the game's own lock components (docs/internals/web-moves-and-afterimages.md section 1).
 namespace webs {
     void SetEnabled(bool on);
     bool Enabled();

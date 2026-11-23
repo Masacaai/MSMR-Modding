@@ -54,7 +54,7 @@ No prior art: no PC mod found that grants or stacks suit powers at runtime.
 3. Focus and gadget levers, then more boons.
 4. Balance passes using run telemetry.
 
-## Research log (2026-10-13, static RE; details in recon/M1_natives_4.0630.md)
+## Research log (2026-10-13, static RE; details in docs/internals/natives-first-pass.md)
 - **Granting and removing items (perks included) is mapped:** the game's own `AddToInventoryAction` calls the hero's inventory component `vfunc[16](inv, &result, asset_id, count)`, after a `vfunc[45]` can-add check. `RemoveFromInventoryAction` uses a MultiInventoryRemove builder. All 119 perk asset ids are known, so in principle any perk can be given or taken for a run.
 - **Open:** owning a perk vs **equipping** it (suit mods sit in slots, one suit power at a time). Leads: `ProgUpgradeEquipEvent` / `ProgUpgradeUnequipEvent`, `ProgressionUpgradesAction` (a mission action that drives upgrades, possibly the game's own "lock or strip upgrades for a mission" control), `EquipManager`, `SpiderSkillEquipItem`, `PerkEquipItem`, `HeroLoadoutCloner`.
 - Saves backed up to backups/saves_20261013_pre_perks before any live test.

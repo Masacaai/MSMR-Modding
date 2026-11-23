@@ -581,7 +581,7 @@ namespace boons {
 
     void Debug(const std::string& args) { std::thread([args] { DebugRun(args); }).detach(); }
 
-    // ---- the two curses that need engine levers (docs/RECON.md sections 1, 3, 8; never run in game) ----
+    // ---- the two curses that need engine levers (docs/internals/hero-abilities-gadgets-and-combat-events.md sections 1, 3, 8; never run in game) ----
 
     // Out of Web Fluid: timed locks on HeroAbilityLock (Lock(this, ability, layer, seconds) = vtable +0x50; with seconds > 0 the lock expires
     // by itself, so nothing needs undoing after a crash, a death or the run's end). Re-armed every 500 ms for 1.2 s.

@@ -2,7 +2,7 @@
 
 #include <string>
 
-// After-image prototype "S1" (docs/FLASH_RECON.md section 2.2): every `interval` seconds, while the hero is fast, a static Spider-Man pose model is
+// After-image prototype "S1" (docs/internals/web-moves-and-afterimages.md section 2.2): every `interval` seconds, while the hero is fast, a static Spider-Man pose model is
 // spawned where he is, given a ghost material, and faded out over `life` seconds. Not an exact pose copy: one fixed pose.
 namespace ghosts {
     // 0 off, 1 while fast, 2 always. Switching to 0 removes every ghost.

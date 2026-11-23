@@ -1,7 +1,7 @@
 # Disable Webs 1.0.0
 
 An Overstrike `.script` for Marvel's Spider-Man Remastered (`Spider-Man.exe` 4.0630.0.0 only): Spider-Man cannot swing, web-zip, point-launch or shoot webs, and the web-assisted wall-run moves are gone too. Part of the [MSMR-Modding](../README.md) repository.
-How it was found: [../docs/FLASH_RECON.md](../docs/FLASH_RECON.md) section 1.
+How it was found: [docs/internals/web-moves-and-afterimages.md](../docs/internals/web-moves-and-afterimages.md) section 1.
 
 ## Use
 

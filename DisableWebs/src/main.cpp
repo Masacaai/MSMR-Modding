@@ -1,5 +1,5 @@
 ﻿// Disable Webs: Spider-Man cannot swing, zip, point-launch or shoot webs. Marvel's Spider-Man Remastered, Spider-Man.exe 4.0630.0.0.
-// Loaded by Overstrike's scripts proxy (LoadLibrary from scripts\, then script_enable()). How and why: docs/FLASH_RECON.md section 1.
+// Loaded by Overstrike's scripts proxy (LoadLibrary from scripts\, then script_enable()). How and why: docs/internals/web-moves-and-afterimages.md section 1.
 //
 // The lock starts OFF; F7 (game window focused) turns it on and off. Log: scripts\DisableWebs.log. Nothing is written anywhere else.
 #include "gamethread.h"

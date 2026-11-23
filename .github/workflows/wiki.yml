@@ -1,0 +1,18 @@
+# Rebuilds the GitHub Wiki (a generated mirror of docs/internals/ and two guides) whenever those sources change on main.
+# Needs: the repository's Wiki enabled, with a first page saved once by hand. Uses the built-in token; no secrets to add.
+name: wiki
+on:
+  push:
+    branches: [main]
+    paths: ['docs/internals/**', 'docs/GETTING_STARTED.md', 'docs/REVERSE_ENGINEERING.md', 'tools/wiki/**']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tools/wiki/sync.py --push
+        env:
+          WIKI_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,7 +1,7 @@
 # Horde scoring and style ranks (design, 2026-10-14)
 
 User request: Devil May Cry style rankings at the end of Horde runs, with our own scoring system and Spidey-themed ranks.
-Presented with the game's own Taskmaster challenge UI (docs/UI_HUNT.md): the live score panel on the left during the
+Presented with the game's own Taskmaster challenge UI (docs/internals/ui-recordings.md): the live score panel on the left during the
 run, and the expanded results panel (score breakdown, total, best) that stays until the player presses Continue.
 
 ## Live style meter (DMC-like)

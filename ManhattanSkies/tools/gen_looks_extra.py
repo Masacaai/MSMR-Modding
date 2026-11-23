@@ -1,4 +1,4 @@
-# gen_looks_extra.py: writes mod/src/looks_extra.inc, a SKY VARIANT entry for every atmosphere in recon/atmosphere_catalog.txt that is not already one of the
+# gen_looks_extra.py: writes src/looks_extra.inc, a SKY VARIANT entry for every atmosphere in recon/atmosphere_catalog.txt that is not already one of the
 # hand-labelled looks in sky.cpp. Style is guessed from the sky texture; the label is the real file name, tidied.
 import collections
 import os

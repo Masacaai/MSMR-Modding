@@ -56,7 +56,7 @@ The roster is generated: `tools/roster/gen_roster.py` -> `src/roster_data.inc`. 
    ```
    (each script's first lines say what it takes; requires `tools/ALERT`, a clone of Tkachov/ALERT)
 3. **Regenerate dependencies** (weapons, jetpacks, heads the actor creates at runtime), or the new enemy shows white cubes:
-   `python tools\assets\deps.py EndlessArena\src\roster_data.inc EndlessArena\src\preload_deps.inc`
+   `python tools\assets\deps.py EndlessArena\src\roster_data.inc common\game\preload_deps.inc`
 4. Test the enemy alone first: `spawn <path>` in the command file; watch the log for the `spawn: [1]..[8]` steps and
    `MoverStandard present at spawn`. Test a boss with `boss <name>`.
 5. Check the memory budget: factions with many unit types eat the per-run type budget (`plan::UnitTypes`).
@@ -64,7 +64,7 @@ The roster is generated: `tools/roster/gen_roster.py` -> `src/roster_data.inc`. 
 
 ## Tune settings without code (the ini)
 
-The run settings (difficulty, enemy mix, factions, bosses, rewards) are also in the game: **pause menu > SETTINGS > ENDLESS ARENA** (the last tabs). Our mods add their tabs to the game's Settings through `ModMenu/` (Manhattan Skies uses it too); the rows below are the ones the ini holds.
+The run settings (difficulty, enemy mix, factions, bosses, rewards) are also in the game: **pause menu > SETTINGS > ENDLESS ARENA** (the last tabs). Our mods add their tabs to the game's Settings through `common/modmenu/` (Manhattan Skies uses it too); the rows below are the ones the ini holds.
 
 `EndlessMode.ini` is in `Documents\Marvel's Spider-Man Remastered\EndlessMode\` (your Documents folder) and is written with defaults on first launch. It is outside the game folder on purpose: Overstrike wipes `scripts\` on every Install mods.
 
@@ -96,7 +96,7 @@ Campaign's summary is `score::CampaignEnd` (10 per enemy, 100 per wave reached, 
 - **Results / live score**: `panels.cpp` (`Results`, `LiveScore`), the challenge panel (activity 1). Rows are `{label, value}` pairs.
   The title is cut off at about 30 characters.
 - Panels animate on game time: don't freeze the world until they have faded in (`panels::Tick` waits 3 s).
-- Anything you can show must exist in the game's UI; see [UI_HUNT.md](../../docs/UI_HUNT.md) for what each panel accepts. Add a quick test
+- Anything you can show must exist in the game's UI; see [ui-recordings.md](../../docs/internals/ui-recordings.md) for what each panel accepts. Add a quick test
   command in `main.cpp` (`gfx panel ...`) before wiring a new panel into a mode.
 
 ## Show a message, banner or pop-up
@@ -143,11 +143,11 @@ Log the result (`LOG`); commands have no other output. Read-only commands are sa
 ## Call a new game function
 
 1. Find it ([REVERSE_ENGINEERING.md](../../docs/REVERSE_ENGINEERING.md)) and make a unique signature.
-2. Add an enum value in `natives.h`, a table entry in `natives.cpp` (name, pattern, rel32 offset or `kDirect`, **expected RVA**).
+2. Add an enum value in `natives.h`, a table entry in `common/game/natives.cpp` (name, pattern, rel32 offset or `kDirect`, **expected RVA**).
 3. `tests\run_offline.cmd`: it must say the new native resolved at the expected RVA with 1 hit.
 4. Wrap the call in a small function with a typed signature, call it only through `gamethread::Run/Post`, and handle failure
    (`natives::Get(id)` returns 0 if it didn't resolve).
-5. Write what you learned (arguments, side effects) in GAME_INTERNALS.md with a confidence tag.
+5. Write what you learned (arguments, side effects) in docs/internals/ with a confidence tag.
 
 ## Add an arena, or change spawn points
 
@@ -191,5 +191,5 @@ Turn it on with the command `debug on` (or `[debug] arena=1` in `EndlessMode.ini
 
 Gifts survive a `run` started in debug mode. Gadgets: the existing `inv`, `equip`, `unequip` commands.
 
-### Gadget and recon dev commands (2026-11-19; untested in game, see NEXT_SESSION_TESTS.md)
+### Gadget and recon dev commands (2026-11-19; untested in game)
 `gadget slots` (hero manager, equipped slots, table), `gadget hide|show <id|all>`, `gadget begin|end|grant <id>` (a run's flow by hand), `gadget create <id>` (weapon actor), `gadget refresh` (wheel list), `gadget equip <id> <slot>`, `gadget watch on|off`, `gadget lock on|off`, `gadget allow <id>`; `autosave on|off|status`. Ids: 9C82 Electric Web, 9C83 Impact Web, 9C84 Web Bomb, 9C85 Trip Mine, 9C86 Concussive Blast, 9C87 Spider Drone, 9C88 Suspension Matrix, 9C89 Web Shooter. Work-in-progress curses: `dbg curse Out of Web Fluid`, `dbg curse Street Brawler`.

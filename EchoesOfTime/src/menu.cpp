@@ -4,12 +4,12 @@
 #include "presets.h"
 #include "settings.h"
 
-#include "../../ModMenu/modmenu.h"
+#include "../../common/modmenu/modmenu.h"
 
 #include <atomic>
 #include <string>
 
-// The ECHOES OF TIME tab of the shared mod menu (ModMenu/modmenu.cpp hosts or joins). One row per settings::Row; a choice is saved to the ini at once.
+// The ECHOES OF TIME tab of the shared mod menu (common/modmenu/modmenu.cpp hosts or joins). One row per settings::Row; a choice is saved to the ini at once.
 namespace menu {
 namespace {
     constexpr int kPresetId = 100;   // the one row that is not in settings.cpp

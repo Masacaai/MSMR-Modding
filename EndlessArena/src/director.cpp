@@ -354,7 +354,7 @@ namespace director {
         return true;
     }
 
-    // Finishing a boss. The old way writes 0 health (verified on Taskmaster, Sable, Hammerhead); the recon (docs/RECON.md section 10) says the real
+    // Finishing a boss. The old way writes 0 health (verified on Taskmaster, Sable, Hammerhead); the recon (docs/internals/hero-abilities-gadgets-and-combat-events.md section 10) says the real
     // death is Health::Kill (a force-kill DamageRequest: death state, animation or ragdoll, DeathEvent), so [boss] "REAL KILL" (default off, untested)
     // calls that instead, which should also end the frozen-pose bodies. Game thread.
     static void FinishBoss(uintptr_t e) {
@@ -584,7 +584,7 @@ namespace director {
                         const char* nm = en.boss->name;
                         gamethread::Post([e, nm] { LOG("director: %s health components: %s", nm, entity::DescribeHealth(e).c_str()); });
                     }
-                    // Only Kingpin for now: the others are proven with their floor-and-finisher handling (docs/GAME_INTERNALS.md (boss phases));
+                    // Only Kingpin for now: the others are proven with their floor-and-finisher handling (docs/internals/ (boss phases));
                     // [secret] phase_all=1 in the ini lets every boss take the phase steps.
                     static const bool phase_all = GetPrivateProfileIntA("secret", "phase_all", 0, (DataDir() + "\EndlessMode.ini").c_str()) != 0;
                     if ((phase_all || !strcmp(en.boss->name, "Kingpin")) && now - en.phase_check > 1000) {

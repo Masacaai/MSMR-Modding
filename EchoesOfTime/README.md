@@ -27,7 +27,7 @@ spawned out of sight to hide the A-pose frame.
 Rows: DECOY DURATION (3 to 60 s), DECOY LOOK (default: HOLOGRAM; the DEFAULT look is Spider-Man's own suit), DECOY OPACITY, DECOY FLICKER (default HIGH; it also flickers out when it ends), PLAYER FLICKER (default HIGH; Spider-Man's own model flickers while the decoy is up and goes solid when it ends), ENTRY SLOW-MOTION (a ~0.35 s or ~0.8 s beat
 when it appears), MESSAGES.
 
-How it works (details and the in-game findings: `../docs/FLASH_RECON.md` section 7):
+How it works (details and the in-game findings: `docs/internals/web-moves-and-afterimages.md` section 7):
 - The game's own Holo Decoy actor (`proj_HoloDecoy_Deployed`) is what enemies attack: its TargetData carries the decoy flag, which the standard enemy targeting config ranks above the hero. It is spawned at Spider-Man's position and
   hidden: opacity 0 and its hologram overlay flag cleared on every game tick, scaled to nothing for its first 12 ticks (its first frames are an A-pose), kept from expiring by raising its lifetime and health fields, its 22
   voice lines (`SPID_GEN_HOLO_DECOY_001..022`) dropped before they play, and sent out of sight just before it is removed so its destruction effect is not seen.
@@ -43,5 +43,5 @@ Slow motion is switched off (and nothing is written to the time scale any more),
 
 ## Build
 
-`build.cmd` (shares `../EndlessArena/src`, `../common`, `../ModMenu`) packs `build/EchoesOfTime.script` and copies it to Overstrike's Mods Library.
-Notes: `../docs/FLASH_RECON.md`, plan in `../docs/ROADMAP.md` section 6. Author: Quail0. GPL-3.0-or-later.
+`build.cmd` (shares `../common`: engine layer, `game/`, `modmenu/`, `build/`) packs `build/EchoesOfTime.script` and copies it to Overstrike's Mods Library.
+Notes: [`../docs/internals/web-moves-and-afterimages.md`](../docs/internals/web-moves-and-afterimages.md). Author: Quail0. GPL-3.0-or-later.

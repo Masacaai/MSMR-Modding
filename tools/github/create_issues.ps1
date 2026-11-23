@@ -9,7 +9,7 @@
 param([switch]$DryRun)
 
 $ErrorActionPreference = 'Stop'
-$dir = Join-Path $PSScriptRoot '..\..\docs\issues'
+$dir = Join-Path $PSScriptRoot '..\..\EndlessArena\docs\issues'
 $files = Get-ChildItem $dir -Filter '*.md' | Where-Object { $_.Name -match '^\d\d-' } | Sort-Object Name
 
 $colors = @{

@@ -4,7 +4,7 @@
 // "HeroTimeScaleManager" component gets a float time scale at +0x50, a float Spider-Man speed multiplier at +0x4C and a byte "active" flag at +0x5C, rewritten every
 // 10 ms while on (found by reading that mod's imports, strings and code, not by copying it). Echoes of Time supersedes QBR: do not install both.
 //
-// Everything is set in the in-game ECHOES OF TIME tab (menu.cpp, settings.cpp); there is no .modular. The after-images are ghosts.cpp (docs/FLASH_RECON.md).
+// Everything is set in the in-game ECHOES OF TIME tab (menu.cpp, settings.cpp); there is no .modular. The after-images are ghosts.cpp (docs/internals/web-moves-and-afterimages.md).
 #include "log.h"
 #include "entity.h"
 #include "fnatives.h"

@@ -63,7 +63,7 @@ None of the bosses is verified yet. The director has a **boss watchdog**: if a b
 
 ## Aggro (why spawned enemies fight)
 
-Every spawn sets `BotData.SpawnEngagedWithHero` (Bot component +0x168) right after `SpawnRaw` and before activation. This is the same flag the game sets per spawn on hideout waves. Verified in game on 2026-10-12. Details are in `recon/M1_natives_4.0630.md`.
+Every spawn sets `BotData.SpawnEngagedWithHero` (Bot component +0x168) right after `SpawnRaw` and before activation. This is the same flag the game sets per spawn on hideout waves. Verified in game on 2026-10-12. Details are in `docs/internals/natives-first-pass.md`.
 
 ## Telemetry
 

@@ -1,25 +1,26 @@
-# Shared documentation
+# Documentation
 
-Knowledge that applies to every mod in this repository. Each mod keeps its own design notes, ledger and bug list in its own folder:
-[Endless Arena](../EndlessArena/docs/) and [Manhattan Skies](../ManhattanSkies/docs/).
+Two kinds of documentation, kept apart:
 
-If you are new, read these in order:
+- **The game reference ("bible")**: [internals/](internals/README.md), how Spider-Man Remastered works inside, by system. Shared by every mod; also mirrored to the GitHub Wiki.
+- **Mod documentation**: in each mod's own `docs/` (design, ledger, bugs, release notes). See [Per mod](#per-mod).
+
+## Start here
 
 1. **[GETTING_STARTED.md](GETTING_STARTED.md)**: install the tools, build, install into the game, the command-file dev loop.
-2. **[GAME_INTERNALS.md](GAME_INTERNALS.md)**: the knowledge base about the game itself (addresses, structures, UI, crashes).
-3. **[REVERSE_ENGINEERING.md](REVERSE_ENGINEERING.md)**: how that knowledge was found, with the tools in `tools/`; how to port to a new build.
+2. **[internals/](internals/README.md)**: the knowledge base about the game itself (addresses, structures, UI, crashes). The index is by system.
+3. **[REVERSE_ENGINEERING.md](REVERSE_ENGINEERING.md)**: how that knowledge was found, with the tools in [`../tools/`](../tools/README.md); how to port to a new build.
 
-## Reference
+## Guides and repository-wide pages
 
 | Doc | What it holds |
 |---|---|
-| [UI_HUNT.md](UI_HUNT.md) | The chronology of finding and driving the game's HUD and menus: every recording, what each panel accepts |
-| [FLASH_RECON.md](FLASH_RECON.md) | Flash overhaul recon: locking the web moves, and after-images (the Holo Decoy ghost actor, trail scheduler, skinning data) |
-| [E3_START_RECON.md](E3_START_RECON.md) | Bringing back the 2018 demo's "Spidey on his phone, press X" start screen: the leftover demo title-screen config, scene assets and mission-graph nodes |
+| [MAINTAINING_DOCS.md](MAINTAINING_DOCS.md) | **Where everything goes**, the local-only notes rule, how to extend the bible, the checklist before a commit. Read before editing docs or moving code |
 | [RELEASING.md](RELEASING.md) | How to cut a release |
-| [ROADMAP.md](ROADMAP.md) | Ideas and plans across the repository: shareable presets, the shared `common/` layer |
-| [`../recon/M1_natives_4.0630.md`](../recon/M1_natives_4.0630.md) | The first reverse-engineering pass: how the natives were decoded |
-| [`../ModMenu/README.md`](../ModMenu/README.md) | The shared code that adds each mod's tab to Settings |
+| [ROADMAP.md](ROADMAP.md) | Ideas that span several mods (shareable presets, the Settings-tab library) |
+| [`../recon/README.md`](../recon/README.md) | Generated reflection dumps of the game (types, enums, events, messages) |
+| [`../tools/README.md`](../tools/README.md) | The scripts and programs, by purpose |
+| [`../common/README.md`](../common/README.md) | The shared C++ code every mod compiles in |
 | [`../AGENTS.md`](../AGENTS.md) | Rules and commands for AI coding agents |
 
 ## Per mod
@@ -27,11 +28,13 @@ If you are new, read these in order:
 | Mod | Docs |
 |---|---|
 | Endless Arena | [ARCHITECTURE](../EndlessArena/docs/ARCHITECTURE.md), [HOW_TO](../EndlessArena/docs/HOW_TO.md), [LEDGER](../EndlessArena/docs/LEDGER.md) (design decisions and backlog), [BUGS](../EndlessArena/docs/BUGS.md), [ROGUELIKE](../EndlessArena/docs/ROGUELIKE.md), [SCORING](../EndlessArena/docs/SCORING.md), [REWARD_DESIGN](../EndlessArena/docs/REWARD_DESIGN.md), [ENDLESS_MODE](../EndlessArena/docs/ENDLESS_MODE.md), release notes in [releases/](../EndlessArena/docs/releases/), drafted [issues/](../EndlessArena/docs/issues/) |
-| Manhattan Skies | [RECON](../ManhattanSkies/docs/RECON.md), [SKY_LOOKS](../ManhattanSkies/docs/SKY_LOOKS.md) |
+| Manhattan Skies | [ROADMAP](../ManhattanSkies/docs/ROADMAP.md), [SKY_LOOKS](../ManhattanSkies/docs/SKY_LOOKS.md), release notes in [releases/](../ManhattanSkies/docs/releases/) |
+| Echoes of Time | [README](../EchoesOfTime/README.md), release notes in [releases/](../EchoesOfTime/docs/releases/) |
+| Disable Webs | [README](../DisableWebs/README.md), release notes in [releases/](../DisableWebs/docs/releases/) |
 
 ## Conventions in these docs
 
 - **Dates** are the day something was found or decided (`2026-10-15`).
-- **Confidence tags** in GAME_INTERNALS: `[verified]` tested in game, `[RE]` read from disassembly only, `[?]` unknown or a guess.
+- **Confidence tags**: `[verified]` / `[V]` tested in game, `[RE]` read from disassembly only, `[I]` inferred, `[?]` unknown or a guess.
 - Addresses are `exe+RVA` for `Spider-Man.exe` **4.0630.0.0**.
 - "User" in older docs means the project's owner, who did all the in-game testing.

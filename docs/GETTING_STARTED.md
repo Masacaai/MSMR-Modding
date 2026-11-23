@@ -1,6 +1,6 @@
 # Getting started: build, install, test, repeat
 
-This is the whole loop for changing a mod yourself. The steps use Endless Arena; the other mods work the same way: build **Endless Arena first** (its `build.cmd` installs MinHook through vcpkg, which the others borrow), then run `ManhattanSkies\mod\build.cmd`. Each mod compiles in `common/` (shared `log`, `memory`, `scan`, `gamethread`, `watchpoint`) and `ModMenu/`; the command file and log are named after the mod (`ManhattanSkies.cmd`, `ManhattanSkies.log`).
+This is the whole loop for changing a mod yourself. The steps use Endless Arena; the other mods work the same way: run any mod's `build.cmd` (`EndlessArena\build.cmd`, `ManhattanSkies\build.cmd`, ...). The first build installs MinHook once for all mods (vcpkg manifest `vcpkg.json` at the repository root, output `vcpkg_installed\`, see `common/build/setup.cmd`). Each mod compiles in `common/` (`log`, `memory`, `scan`, `gamethread`, `watchpoint`), `common/modmenu/` (the Settings tab) and, if it needs them, `common/game/` (natives, entity, spawn, psinput); the command file and log are named after the mod (`ManhattanSkies.cmd`, `ManhattanSkies.log`).
 
 This is the whole loop. Plan on about 30 minutes the first time, then edits take a minute.
 
@@ -10,7 +10,7 @@ This is the whole loop. Plan on about 30 minutes the first time, then edits take
 |---|---|
 | Marvel's Spider-Man Remastered (developed on Steam; the mod checks the exe version, not the store, other stores untested) | `Spider-Man.exe` file version **4.0630.0.0** exactly (right-click the exe, Properties, Details). The mod refuses to run on another build. Turn off automatic updates for the game, or an update will shift every address. |
 | Windows 10/11 | The game and all tools are Windows-only |
-| Visual Studio 2022 | Community is fine; install the **Desktop development with C++** workload. `build.cmd` expects it at `C:\Program Files\Microsoft Visual Studio\2022\Community` (edit the `VS=` line in `EndlessArena\build.cmd` if yours differs) |
+| Visual Studio 2022 | Community is fine; install the **Desktop development with C++** workload. `build.cmd` expects it at `C:\Program Files\Microsoft Visual Studio\2022\Community` (edit the `VS=` line in `common\build\setup.cmd` if yours differs) |
 | [Overstrike](https://www.nexusmods.com/marvelsspidermanremastered/mods/4199) 1.8.1 | The mod manager that loads `.script` mods. Needs the .NET 7 Desktop Runtime |
 | Python 3.12 | Only for the tools in `tools/` (optional for plain mod changes) |
 | Git | obviously |
@@ -29,7 +29,7 @@ EndlessArena\build.cmd
 Output:
 
 - `EndlessArena\build\EndlessArena.dll`: the mod itself (static CRT and static MinHook; imports only KERNEL32, USER32, SHELL32 and the HID/SetupAPI libraries)
-- `EndlessArena\build\EndlessArena.script`: the same DLL zipped with an `info.json`, the format Overstrike installs (made by `pack.ps1`)
+- `EndlessArena\build\EndlessArena.script`: the same DLL zipped with an `info.json`, the format Overstrike installs (made by `common/build/pack.ps1` from the mod's `mod.json`)
 
 It prints `BUILD OK` at the end. A full build takes under a minute. If it fails with a compiler error, that is real;
 read the message. Don't build while the game is running and you intend to install: the game locks the DLL.
@@ -100,7 +100,7 @@ Useful commands (all of them are in `src/main.cpp`; search for `cmd == "`):
 | `plan [from] [to]` | print the planned waves without spawning anything |
 | `spawn <roster# or path>` / `despawn all` | spawn one enemy next to you / remove everything |
 | `stress step=10 max=200` | find how many enemies the game tolerates |
-| `gfx selftest` / `gfx caps` / `gfx panel results` | test the UI panel code (see [GAME_INTERNALS.md](GAME_INTERNALS.md#ui-scaleform)) |
+| `gfx selftest` / `gfx caps` / `gfx panel results` | test the UI panel code (see [game internals](internals/ui.md#ui-scaleform)) |
 | `hud <text>`, `banner <text>`, `toast` | test HUD output |
 | `timescale <t> [rate]` | set the world speed (0.25 is slow motion) |
 | `tp x y z` | teleport |
@@ -131,6 +131,6 @@ More recipes: [HOW_TO.md](../EndlessArena/docs/HOW_TO.md). How the code is laid 
 | Game crashes at launch | `EndlessMode.log` (last lines), and `%USERPROFILE%\Documents\Marvel's Spider-Man Remastered\*.mdmp`. Wrong build, or a changed native |
 | Crash during a run | The `.mdmp` next to the log time. [REVERSE_ENGINEERING.md](REVERSE_ENGINEERING.md#4-reading-a-crash-dump) shows how to find the faulting function |
 | Game freezes | [REVERSE_ENGINEERING.md](REVERSE_ENGINEERING.md#5-diagnosing-a-hang). Take two thread snapshots before closing the game |
-| Enemies invisible, white cubes, floating heads | Model memory limit; see [GAME_INTERNALS.md](GAME_INTERNALS.md#model-capacity-and-asset-lifetime). Lower `max_types` in the ini |
+| Enemies invisible, white cubes, floating heads | Model memory limit; see [game internals](internals/assets-and-archives.md#model-capacity-and-asset-lifetime). Lower `max_types` in the ini |
 | Nothing happens at the circles | Check `[portal] enabled=1` and that the circle positions in the ini exist (`dock_set=1`) |
 | Mod does nothing at all | The proxy isn't loading it: check Overstrike's settings and that the game was launched with `-scripts` (we launch through Steam) |

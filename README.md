@@ -14,19 +14,20 @@ mods for [Overstrike](https://www.nexusmods.com/marvelsspidermanremastered/mods/
 | [**Manhattan Skies**](ManhattanSkies/README.md) | Time of day, sky, sun, fog and image controls from the pause menu: 124 skies, presets, Early Morning | Alpha released |
 | [**Echoes of Time**](EchoesOfTime/README.md) | Two time-based abilities from Spider-Man: Edge of Time: Hyper-Sense (slow motion with a trail of after-images) and Accelerated Decoy (one decoy that enemies prioritize), all in the Settings screen | 1.0.0 |
 | [**Disable Webs**](DisableWebs/README.md) | F7 turns off swinging, zipping, point launch, the web shooter and the web-assisted wall-run moves | 1.0.0 |
-| [**ModMenu**](ModMenu/README.md) | The shared code that puts the mods' tabs in the game's Settings screen (a library compiled into each mod) | Working |
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `EndlessArena/`, `ManhattanSkies/`, `EchoesOfTime/`, `DisableWebs/` | One folder per mod: source (`src/` or `mod/src/`), its own `docs/`, and its own tools |
-| `ModMenu/` | Shared Settings-tab library |
-| `docs/` | **Shared knowledge**: [getting started](docs/GETTING_STARTED.md), [game internals](docs/GAME_INTERNALS.md), [reverse-engineering method](docs/REVERSE_ENGINEERING.md), [UI notes](docs/UI_HUNT.md), [releasing](docs/RELEASING.md), [roadmap](docs/ROADMAP.md). Start at [docs/README.md](docs/README.md) |
-| `recon/`, `tools/` | Reverse-engineering notes and the Python/C++ helpers (crash dumps, signatures, asset extraction) |
+| `EndlessArena/`, `ManhattanSkies/`, `EchoesOfTime/`, `DisableWebs/` | One folder per mod, holding only what is specific to it: `src/`, `docs/` (design, bugs, release notes), `mod.json`, `build.cmd` |
+| [`common/`](common/README.md) | Code every mod compiles in: engine layer, `game/` (natives, spawning), `modmenu/` (the Settings tabs), `build/` (toolchain, packing) |
+| [`docs/internals/`](docs/internals/README.md) | **How the game works inside**: the reverse-engineering reference, organized by system (also on the Wiki) |
+| [`docs/`](docs/README.md) | Guides: [getting started](docs/GETTING_STARTED.md), [reverse-engineering method](docs/REVERSE_ENGINEERING.md), [releasing](docs/RELEASING.md), [roadmap](docs/ROADMAP.md), [maintaining the docs](docs/MAINTAINING_DOCS.md) |
+| [`recon/`](recon/README.md) | Generated dumps of the game's reflection data (types, enums, events, messages) |
+| [`tools/`](tools/README.md) | The Python/C++ helpers (crash dumps, signatures, asset extraction) |
 | `AGENTS.md`, `CONTRIBUTING.md`, `THIRD_PARTY_NOTICES.md` | Agent rules, how to contribute, credits and licenses |
 
-Anything extracted from the game (catalogs, memory dumps, screenshots) stays in each mod's git-ignored `recon/` folder and is never committed.
+Anything extracted from the game (catalogs, memory dumps, screenshots) stays in git-ignored local folders and is never committed.
 
 ## Requirements (all mods)
 
@@ -37,8 +38,8 @@ Anything extracted from the game (catalogs, memory dumps, screenshots) stays in 
 
 ## Building
 
-Each mod has a `build.cmd` (Visual Studio 2022 C++ workload). Build **Endless Arena first**: it installs MinHook through vcpkg, and the other
-mods borrow that copy. Details in [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
+Each mod has a `build.cmd` (Visual Studio 2022 C++ workload). The first build installs MinHook through vcpkg for all mods. Details in
+[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
 
 ## Legal
 

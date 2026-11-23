@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-// The game's Scaleform UI from code (UI hunt, docs/UI_HUNT.md). Static RE 2026-10-13:
+// The game's Scaleform UI from code (UI hunt, docs/internals/ui-recordings.md). Static RE 2026-10-13:
 //  - HUD root for player i: qword [exe+7c2b5a0 + i*8] (exe+1f063a0 / exe+75e680 return it).
 //  - Elements hang off the root; the generic flat message is [root+0x1A0]. An element keeps its movie at +0x10, its
 //    ActionScript object (a GFx value) at +0x320 and visibility flags at +0x338 (seen on the message element).

@@ -2,7 +2,6 @@
 EndlessArena/build/
 DisableWebs/build/
 EchoesOfTime/build/
-EndlessArena/vcpkg_installed/
 tools/toctool/vcpkg_installed/
 *.obj
 *.exp
@@ -69,8 +68,18 @@ ManhattanStreets/
 # Manhattan Skies: source, tools and docs are published; its recon/ folder holds game-derived material (extracted assets, catalogs,
 # memory dumps, screenshots): NEVER commit it.
 ManhattanSkies/recon/
-ManhattanSkies/mod/build/
+ManhattanSkies/build/
 
 # Friend or Foe (companion allies): unreleased, local only; holds game-derived addresses and recon. Comes out of here when it is ready for release.
 FriendOrFoe/
 .fxcache/
+
+# Local-only working notes: session logs, request lists, play-test checklists, drafts. Session-specific back-and-forth never goes in the repository
+# (see docs/MAINTAINING_DOCS.md). Distilled, durable findings go to docs/internals/ and the mod's docs/ instead.
+notes/
+
+# Generated wiki output (tools/wiki/sync.py)
+wiki-out/
+
+# Shared MinHook install (vcpkg manifest: vcpkg.json at the root; see common/build/setup.cmd)
+vcpkg_installed/

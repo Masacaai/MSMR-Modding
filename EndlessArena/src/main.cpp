@@ -487,7 +487,7 @@ static void RunCommand(const std::string& line) {
         LOG("vsearch: %d hits", hits);
     } else if (cmd == "poke") {
         // poke <addr|exe+rva> <u8|u32|f32|u64> <value>   (game thread)
-        // u8 exists for the boolean globals (docs/E3_START_RECON.md: exe+73cf03a), where a u32 write would clobber the neighbouring bytes.
+        // u8 exists for the boolean globals (docs/internals/start-screen.md: exe+73cf03a), where a u32 write would clobber the neighbouring bytes.
         std::string a, type, v;
         in >> a >> type >> v;
         uintptr_t addr = ParseAddr(a);
@@ -1069,7 +1069,7 @@ static void RunCommand(const std::string& line) {
         else if (sub == "slots" || sub == "dump") gadgets::Dump();
         else LOG("gadget: watch on|off | lock on|off | allow <id> | clear | begin | end | grant <id> | hide|show <id|all> | equip <id> <slot> | create <id> | refresh | slots");
     } else if (cmd == "autosave") {
-        // autosave on|off|status: the game's own autosave switch (docs/RECON.md section 11, read from the exe, never run): the game-state sync
+        // autosave on|off|status: the game's own autosave switch (docs/internals/hero-abilities-gadgets-and-combat-events.md section 11, read from the exe, never run): the game-state sync
         // object X = exe+1f03570(), the switch exe+1f05520(X, bool), the current value is the byte at X+0x1168. Dev only: nothing calls it in a run yet.
         std::string v;
         in >> v;
@@ -1196,7 +1196,7 @@ static void RunCommand(const std::string& line) {
         LOG("points: hero at (%.1f, %.1f, %.1f); %zu spawn point(s) within %.0f m", h.pos[0], h.pos[1], h.pos[2], close_pts.size(), radius);
         for (auto& [d, i] : close_pts) LOG("points:   #%zu at (%.1f, %.1f, %.1f), %.1f m away", i, a->points[i].x, a->points[i].y, a->points[i].z, d);
     } else if (cmd == "mission") {
-        missions::Log();   // the save's state of the known story missions (docs/GAME_INTERNALS.md, missions)
+        missions::Log();   // the save's state of the known story missions (docs/internals/, missions)
     } else if (cmd == "audio") {
         // audio on | off | mark <text> | post <event> [obj] | state <group> <state> | switch <group> <switch> [obj] | rtpc <name> <value> [obj]
         // Records the game's Wwise calls to <data folder>\EndlessMode_audio.txt, or makes one (see audio.h).
@@ -1233,7 +1233,7 @@ static void RunCommand(const std::string& line) {
         uilog::Enable(mode != "off");
     } else if (cmd == "gfx") {
         // gfx selftest | wave <cur> <max> [icon] | complete "label" | panel preview|score|results [score] | hide [activity]
-        // Drives the game's own panels with built data objects (UI hunt, 2026-10-15; docs/UI_HUNT.md recordings).
+        // Drives the game's own panels with built data objects (UI hunt, 2026-10-15; docs/internals/ui-recordings.md recordings).
         using gfx::Node;
         std::string sub;
         in >> sub;

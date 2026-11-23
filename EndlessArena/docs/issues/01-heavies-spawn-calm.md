@@ -5,7 +5,7 @@ labels: bug, ai, help wanted
 
 Players report heavies (miniguns and other `SlayerBot`/`SlayerRangedBot` units) standing around without ever noticing Spider-Man, in both modes.
 
-**Context.** Enemies fight because we set `BotData.SpawnEngagedWithHero` right after `SpawnRaw` (see GAME_INTERNALS, "Enemy AI and aggro"). Units whose bot
+**Context.** Enemies fight because we set `BotData.SpawnEngagedWithHero` right after `SpawnRaw` (see docs/internals/, "Enemy AI and aggro"). Units whose bot
 class is in `CALM_CLASSES` (`tools/roster/gen_roster.py`: `SlayerBot`, `SlayerRangedBot`) are deliberately spawned *without* the flag: a workaround for crashes
 (`exe+1fe51b5`, null `MoverStandard`) seen on 2026-10-13. A later investigation found that crash class was really caused by **dependency assets not being loaded**
 (heads, weapons), which `spawn::Preload` now handles (BUGS.md, "Boss round 2 results"). The calm workaround may no longer be needed.

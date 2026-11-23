@@ -1,8 +1,8 @@
 // Offline check: maps Spider-Man.exe as a read-only image (no code runs) and resolves all natives
 // with the same code the script uses in-game. Usage: resolve_offline.exe <path to Spider-Man.exe> <log>
-#include "../src/log.h"
-#include "../src/natives.h"
-#include "../src/scan.h"
+#include "../../common/log.h"
+#include "../../common/game/natives.h"
+#include "../../common/scan.h"
 
 #include <Windows.h>
 #include <cstdio>

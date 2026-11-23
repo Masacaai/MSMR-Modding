@@ -1,6 +1,6 @@
 import os
 # make_sky_looks_doc.py: writes docs/SKY_LOOKS.md, the table of SKY STYLE / SKY VARIANT labels next to the real atmosphere files they load.
-# Reads the look table out of mod/src/sky.cpp and the numbers from recon/atmosphere_catalog.txt.
+# Reads the look table out of src/sky.cpp and the numbers from recon/atmosphere_catalog.txt.
 import re
 
 root = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))

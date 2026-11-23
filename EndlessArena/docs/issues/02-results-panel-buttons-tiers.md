@@ -7,7 +7,7 @@ In Horde, a run that reached the first score tier (about 15,000 points) showed t
 and all three tier labels read "500". Runs below the first tier (and Campaign runs) showed the buttons.
 
 **Context.** The panel is the game's challenge results panel (activity 1, panelType 2) driven by `panels::Results`. The real game also sends
-`awardedRewards` and `taskMasterCurrentValue/MaxValue/Delta`, and sends scores as unsigned ints (`UI_HUNT.md`, "Taskmaster combat challenge recording").
+`awardedRewards` and `taskMasterCurrentValue/MaxValue/Delta`, and sends scores as unsigned ints (`docs/internals/ui-recordings.md`, "Taskmaster combat challenge recording").
 We currently send tier thresholds as doubles and `awardedRewards` listing the reached tiers (the latest guess, **untested when this was written**), and no Taskmaster fields.
 
 **Try.**
@@ -18,4 +18,4 @@ We currently send tier thresholds as doubles and `awardedRewards` listing the re
 **Done when** the results panel always shows Continue and Retry and the three tiers show our thresholds.
 
 
-**Resolved 2026-10-16.** Root cause: `rewards` must be an array of arrays (the panel reads `rewards[tier][0].value`); see GAME_INTERNALS, "Results panel data shape".
+**Resolved 2026-10-16.** Root cause: `rewards` must be an array of arrays (the panel reads `rewards[tier][0].value`); see docs/internals/, "Results panel data shape".

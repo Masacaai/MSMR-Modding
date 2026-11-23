@@ -10,7 +10,7 @@
 #include <atomic>
 #include <cstdio>
 
-// How the lock works (all [RE], docs/FLASH_RECON.md section 1):
+// How the lock works (all [RE], docs/internals/web-moves-and-afterimages.md section 1):
 //  - HeroAbilityLock (vtable exe+38aa530): Lock(this, ability, layer, seconds) at vtable +0x50 = exe+1e8a490, Unlock(this, ability, layer) at +0x58 = exe+1e8a640.
 //    Layer 0 is a boolean layer (mission "toggle hero moves"); counters are bytes at comp+0x1c8 + layer*0x80 + ability.
 //  - HeroCombatActionLocker (vtable exe+38ae8f0): +0x60 = exe+1e89a50 does `[this+0xe8] |= mask`, +0x68 = exe+1e89a60 does `[this+0xe8] &= ~mask`.

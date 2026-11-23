@@ -10,8 +10,8 @@ more than usual.
    (an address, an offset, a field name, an asset *path*) belong in the docs; the bytes do not.
 2. **One game build.** Everything targets `Spider-Man.exe` 4.0630.0.0. Addresses are written as `exe+RVA`. If you add one,
    say how you found it (see [docs/REVERSE_ENGINEERING.md](docs/REVERSE_ENGINEERING.md)) and record it in
-   [docs/GAME_INTERNALS.md](docs/GAME_INTERNALS.md) or `recon/`.
-3. **Native calls are guarded.** New game functions go in the mod's `src/natives.cpp` with a signature *and* an expected RVA; the mod
+   [docs/internals/](docs/internals/README.md) or `recon/`.
+3. **Native calls are guarded.** New game functions go in `common/game/natives.cpp` (or the mod's own `src/natives.cpp` if it keeps one) with a signature *and* an expected RVA; the mod
    refuses to call anything that doesn't resolve exactly where expected. Reads of game memory go through `common/memory.h`
    (an access violation returns false instead of crashing).
 4. **Game state is touched on the game thread.** Use `gamethread::Run`/`Post`; never block the game thread, never call game
@@ -38,10 +38,10 @@ diff, built it, and tested what can be tested. Do not paste code you can't licen
    tested and how (the dev command, the steps, what the log showed).
 3. Keep changes focused and match the surrounding code: comment density, naming, idiom. Comments explain *why*, with the
    evidence (a log line, an address, a date) when the reason isn't obvious.
-4. Run `EndlessArena\tests\run_offline.cmd` if you touched a `natives.cpp` or `common/scan.cpp`, and `plan_offline` if you touched
+4. Run `EndlessArena\tests\run_offline.cmd` if you touched `common/game/natives.cpp` or `common/scan.cpp`, and `plan_offline` if you touched
    `plan.cpp` (see [EndlessArena/docs/HOW_TO.md](EndlessArena/docs/HOW_TO.md)).
 5. Update any docs your change makes wrong. If you learned something about the game, add it to
-   `docs/GAME_INTERNALS.md`.
+   `docs/internals/`.
 6. Open the PR using the template.
 
 ## Style

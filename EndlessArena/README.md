@@ -62,11 +62,12 @@ This mod lives in `EndlessArena/` of the [MSMR-Modding](../README.md) repository
 |---|---|
 | `src/` | The mod (C++20, about 8,000 lines). Module-by-module tour in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | `tests/` | Offline checks: signature resolution and the wave planner |
-| `data/` | Source for an optional Overstrike `.stage` (spawner config) |
+| `data/` | Source for an optional Overstrike `.stage` (spawner config), and `data/recon/` recorded paths |
 | `docs/` | This mod's design, ledger, bugs and release notes |
-| `../ModMenu/` | The shared code that puts this mod's tab in the game's Settings |
+| `../common/` | Shared code: `modmenu/` (this mod's Settings tab), `game/` (natives, entity, spawn, psinput), `build/` (toolchain, packing) |
 | [`../docs/`](../docs/README.md) | Shared knowledge: game internals, reverse-engineering method, getting started |
-| `../recon/` | Reverse-engineering notes and recorded paths (addresses are build-specific) |
+| `data/recon/` | Walk paths and portal points recorded in game at Ryker's |
+| [`../recon/`](../recon/README.md) | Generated reflection dumps of the game (types, enums, events); addresses are build-specific |
 | `../tools/sigtools/` | Python/C++ helpers for crash dumps, signatures, vtables, call sites |
 | `../tools/roster/` | Mines the game's enemy actor files into the mod's roster |
 | `../tools/assets/` | Extracts item/dependency data from the game's archives (run locally; output is never committed) |

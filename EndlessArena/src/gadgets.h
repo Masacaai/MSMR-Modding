@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-// Gadgets (Impact Web, Web Bomb, ...) live in the hero's weapon manager and the hero's inventory (docs/RECON.md sections 5-7).
+// Gadgets (Impact Web, Web Bomb, ...) live in the hero's weapon manager and the hero's inventory (docs/internals/hero-abilities-gadgets-and-combat-events.md sections 5-7).
 // exe+2162300 is WeaponManagerBase::Equip(this, id, slot, force, sendEquippedEvent): five arguments, shared by the hero and every enemy's
 // weapon manager. We hook it to log the hero's equips and, with the lock on, to refuse gadget ids (0x9C82-0x9C89) that were not allowed
 // (the roguelike runs hand gadgets out as rewards). The hero's manager is resolved fresh on every use and never cached.

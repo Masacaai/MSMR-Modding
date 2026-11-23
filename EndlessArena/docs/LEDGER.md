@@ -78,14 +78,14 @@ Started 2026-10-13.
 
 - [ ] **Run-records circle at Ryker's dock (user, 2026-10-14).** A third blue circle. Standing on it prompts 'Run records'; interact shows the next run's mode (from the dock last used), best campaign (most waves cleared), best horde (highest level) and the last 3 runs, read from `EndlessMode_runs/runs.csv` (runs under 20 s with no kills skipped). Placed in game with `portal setboard`. Shown in the HUD notification box for now; move it to a proper screen after the UI hunt. Built, untested.
 
-- [ ] **Run banners use the game's medium message (2026-10-14).** Wave titles, wave cleared, Horde levels, chapters, boss down and run over show at the top of the screen in the level-up style (exe+77db70 type 7, see docs/UI_HUNT.md). Built, untested in a run.
+- [ ] **Run banners use the game's medium message (2026-10-14).** Wave titles, wave cleared, Horde levels, chapters, boss down and run over show at the top of the screen in the level-up style (exe+77db70 type 7, see docs/internals/ui-recordings.md). Built, untested in a run.
 
 - [ ] **HUD widgets wired (user, 2026-10-14).** Prompts and the loadout-locked message stay in the notification box. Both modes: the big "Get Ready" countdown at run start. Campaign also gets it for the last 5 s before each wave, plus the hideout-style ENEMIES counter (left in the wave out of its total), hidden between waves. Horde: countdown only. Built, untested.
 - [x] Faction renamed: **Taskmaster's Mercs** (was Drills) (user, 2026-10-14).
 - [ ] **UI variety (user, 2026-10-14):** don't put everything on one HUD object. Candidates so far: medium message (top banner), notification box (prompts), big countdown, ENEMIES counter, and the crime notification pop-up (to record; e.g. boss arrivals or curse warnings). Decide per message once the recordings are in.
 - [ ] **UI recorder:** `uilog on|off` logs every ActionScript call and typed message the game makes to `scripts/EndlessMode_uilog.txt`. Next: record a hideout and a Taskmaster combat challenge with the user, and copy how the game drives their HUD.
 
-- [ ] **Dismissable panels (user, 2026-10-14):** some panels (e.g. run over / results) should stay until the player presses a button, like the hideout's Completed! panel (activity panel, panelType 2, Continue). Needs GFx object building (docs/UI_HUNT.md, hideout recording).
+- [ ] **Dismissable panels (user, 2026-10-14):** some panels (e.g. run over / results) should stay until the player presses a button, like the hideout's Completed! panel (activity panel, panelType 2, Continue). Needs GFx object building (docs/internals/ui-recordings.md, hideout recording).
 - [ ] **Next UI step:** build GFx objects and arrays from code, then use the real wave banner (message type 21), the activity panel (preview at the dock circle, in-run side panel, results with Continue) and ShowMissionObjective.
 
 - [ ] **Horde scoring and DMC-style ranks (user, 2026-10-14).** Our own scoring with a live style meter and Spidey-themed ranks (D Puny Parker, C Human Spider, B Wall-Crawler, A Amazing, S Spectacular, SS Sensational, SSS Superior), the live score on the left like Taskmaster challenges, and a results panel with a breakdown that stays until Continue. Design: EndlessArena/docs/SCORING.md. Blocked on building GFx objects from code.
@@ -130,9 +130,9 @@ Started 2026-10-13.
 
 - [ ] **Horde faction-join lines use the notification box too (user, 2026-10-15), for consistency with the opening line. Code only; goes in the next build.**
 
-- [ ] **Offline work while the user was away (2026-10-15, code compiled but NOT installed):** (1) curated reward pools: powers and mods that do nothing in the arena or need gadgets are filtered out by their in-game display names (Equalizer, Quips, Sound Of Silence, Blur Projector, Combat Analyzer, Proximity Sensor, Long Range Scanner, Silent Step, Bio Scanner, Resupply, Battle Tech, Scavenger, Metabolic Converter); the log says `boons: curated pools: a -> b ...`. (2) Map icon research done as far as offline goes (docs/UI_HUNT.md): icons come from mission/challenge templates, a static world POI table and UIMinimapConfig (type -> icon), not from UI calls; cheapest next step is tracing the custom-waypoint set (exe+81ed90).
+- [ ] **Offline work while the user was away (2026-10-15, code compiled but NOT installed):** (1) curated reward pools: powers and mods that do nothing in the arena or need gadgets are filtered out by their in-game display names (Equalizer, Quips, Sound Of Silence, Blur Projector, Combat Analyzer, Proximity Sensor, Long Range Scanner, Silent Step, Bio Scanner, Resupply, Battle Tech, Scavenger, Metabolic Converter); the log says `boons: curated pools: a -> b ...`. (2) Map icon research done as far as offline goes (docs/internals/ui-recordings.md): icons come from mission/challenge templates, a static world POI table and UIMinimapConfig (type -> icon), not from UI calls; cheapest next step is tracing the custom-waypoint set (exe+81ed90).
 
-- [x] **Map icons: abandoned (user, 2026-10-15).** The blue circles are good enough; no map icons or waypoints for the docks. (Research kept in docs/UI_HUNT.md in case it's wanted later.)
+- [x] **Map icons: abandoned (user, 2026-10-15).** The blue circles are good enough; no map icons or waypoints for the docks. (Research kept in docs/internals/ui-recordings.md in case it's wanted later.)
 - [ ] **Pool curation: left for the end (user, 2026-10-15), everything is included for now.** The code has the blocklist but `kCuratePools = false` in `boons.cpp`. Candidates to discuss with the user at the end (all from the suit menu texts, tools/assets/perk_text.json): do nothing / not combat: Quips, Sound Of Silence, Blur Projector, Combat Analyzer, Proximity Sensor, Long Range Scanner, Silent Step, Bio Scanner; need gadgets (locked in runs): Resupply, Battle Tech, Scavenger, Metabolic Converter; special case: Equalizer ("Everyone goes down in one hit, including you"). The user decides.
 
 ### Runs
@@ -198,7 +198,7 @@ Alongside some bugfixing:
 
 1. **Dynamic music in EndlessArena, using the game's own tracks** (user, 2026-10-18). The user can play through a crime or hideout with music on so the music calls (start, fade in/out, intensity changes) can be recorded and copied. Specific music for bosses. The few seconds between waves don't need their own music. Recon: the game uses Wwise (post-event / set-state / set-RTPC / set-switch in the exe) plus its own music-intensity system (`MusicIntensityIncreasedEvent`, `SetMusicIntensityOverrideAction`, `MusicConfig`, `HeroMusicConfig`, `MusicVolume`, `MusicCueListenerAction`). Plan: build an audio recorder (hook those calls, log with timestamps), record a crime and a hideout, then drive the same calls from the director (intensity per wave, boss themes, results sting).
 2. **User customization** (user, 2026-10-18): let players blacklist factions, set their own faction order, choose their bosses, "as much control as we can squeeze in". First task: explore options for **in-game** mod control. MSM2 has "ModSettings" (an Overstrike script, `modsettings.script`, that other scripts depend on; it injects Toggle / Slider / Option / Button / submenu rows into the game's own pause and lobby menus). No MSMR equivalent was found online. Least desirable fallback: make EndlessArena a `.modular` file and do the customization in Overstrike.
-   - Findings so far: [NEXT_RELEASE_RECON.md](NEXT_RELEASE_RECON.md) (music + customization recon, 2026-10-18).
+   - Findings so far: [docs/internals/music-and-customization.md](../../docs/internals/music-and-customization.md) (music + customization recon, 2026-10-18).
 
 ### 2026-10-19 - settings tab built (customization, step 1)
 - Found SpidyVR (same game build, GPL-3.0): a working in-game Settings tab. Re-implemented for the Arena: `menu.cpp` (tab injection), `settings.cpp`
@@ -213,7 +213,7 @@ Alongside some bugfixing:
 
 ### 2026-10-19 (evening plan)
 - Built, not yet run in game: settings tab with presets, boon/curse/reward customization, damage and wave-heal settings, boss phase stepping (Kingpin), Wwise recorder
-  (`audio`), allegiance experiments (`alleg`). See EndlessArena/docs/NEXT_RELEASE_RECON.md section 4.
+  (`audio`), allegiance experiments (`alleg`). See docs/internals/music-and-customization.md section 4.
 - To try first: open Settings, see the ENDLESS ARENA tab; then `audio on` while in a crime/hideout; then `alleg set kBlueTeam` with enemies up.
 
 ### 2026-10-25 - arena locked during story missions; mission-36 gate pending
@@ -240,6 +240,6 @@ Alongside some bugfixing:
 Dropped Ryker's spawn point (1252.3, 2.0, -782.6) at the user's request (2026-11-07); 138 points left. Built, installs when the game is closed.
 
 ### 2026-11-08 - shared MODS menu (built, not yet run)
-- The ENDLESS ARENA tab moves from the game's Settings into a shared **pause menu > MODS** screen (one tab per script mod), hosted by whichever participating script starts first. Library: `ModMenu/` (GPL-3.0, credit SpidyVR). `src/menu.cpp` is now an adapter that registers the rows of settings.h. Rows, sections and presets are unchanged.
+- The ENDLESS ARENA tab moves from the game's Settings into a shared **pause menu > MODS** screen (one tab per script mod), hosted by whichever participating script starts first. Library: `common/modmenu/` (GPL-3.0, credit SpidyVR). `src/menu.cpp` is now an adapter that registers the rows of settings.h. Rows, sections and presets are unchanged.
 - Needs a release (beta.2). An old beta.1 next to a new participant keeps its own tab in SETTINGS (the host chains on its hooks).
-- (2026-11-19, built, not installed, nothing run) From the Fable recon: gadget hook fixed (five arguments, hero's manager only, fresh each time, slot unequipped before hide); `gadget slots|create|refresh` dev commands; curses Out of Web Fluid and Street Brawler (off by default, `wip_curses`); REAL BOSS KILL setting (`Health::Kill`); INPUT: IGNORE WINDOW FOCUS setting and focus diagnostic (Steam Deck report); `autosave` dev command. Test plan: NEXT_SESSION_TESTS.md.
+- (2026-11-19, built, not installed, nothing run) From the static recon: gadget hook fixed (five arguments, hero's manager only, fresh each time, slot unequipped before hide); `gadget slots|create|refresh` dev commands; curses Out of Web Fluid and Street Brawler (off by default, `wip_curses`); REAL BOSS KILL setting (`Health::Kill`); INPUT: IGNORE WINDOW FOCUS setting and focus diagnostic (Steam Deck report); `autosave` dev command..

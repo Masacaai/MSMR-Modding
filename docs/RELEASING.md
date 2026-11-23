@@ -1,6 +1,6 @@
 # Releasing
 
-Releases are GitHub Releases with one asset per mod: `EndlessArena.script` or `ManhattanSkies.script` (the Overstrike package built by the mod's `pack.ps1`). Alphas and betas are marked **pre-release**. The commands below use Endless Arena; Manhattan Skies is the same with its own paths (`ManhattanSkies/mod/build.cmd`, `ManhattanSkies/mod/pack.ps1`, `ManhattanSkies/docs/releases/`).
+Releases are GitHub Releases with one asset per mod: `EndlessArena.script` or `ManhattanSkies.script` (the Overstrike package built by `common/build/pack.ps1` from the mod's `mod.json`, which holds its version). Alphas and betas are marked **pre-release**. The commands below use Endless Arena; Manhattan Skies is the same with its own paths (`ManhattanSkies/mod/build.cmd`, `ManhattanSkies/mod/pack.ps1`, `ManhattanSkies/docs/releases/`).
 
 ## Checklist
 
@@ -8,7 +8,7 @@ Releases are GitHub Releases with one asset per mod: `EndlessArena.script` or `M
 2. `EndlessArena\build.cmd` prints `BUILD OK`. The `.script` must be built from the commit you tag: check that no file in `src/` is newer than
    `build\EndlessArena.dll`.
 3. Test the exact `.script` you will upload: install it with Overstrike into the game and play one Campaign and one Horde run.
-4. Update the version in `EndlessArena/pack.ps1` (`info.json` inside the package) if it changed. Keep it plain `x.y.z`; Overstrike compares versions.
+4. Update the version in the mod's `mod.json` (it becomes the package's `info.json`) if it changed. Keep it plain `x.y.z`; Overstrike compares versions.
 5. Write the notes in `EndlessArena/docs/releases/<tag>.md` (what's in it, known issues with issue numbers, what is untested). Leave the line `SHA-256 of ...: __SHA256__` as is.
 6. Create the release as a **draft** first, review it on GitHub, then publish:
 

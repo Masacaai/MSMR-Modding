@@ -1,6 +1,6 @@
 # Reverse-engineering guide: how we found things, and how you can too
 
-This is the method behind [GAME_INTERNALS.md](GAME_INTERNALS.md). You don't need to be an expert; every address in the mod
+This is the method behind [game internals](internals/README.md). You don't need to be an expert; every address in the mod
 was found with the small toolbox below. Work on a **copy of the game folder** when you experiment, never your only copy.
 
 > **Rules:** don't use leaked Insomniac material (the ALERT glossary mentions a 2023 leak; it's not needed and not allowed here).
@@ -50,7 +50,7 @@ The cheapest route is from something that *names* itself:
 3. **A call site you already know.** `tools/sigtools/asinvokes.py` lists all 167 ActionScript `Invoke` calls with method names;
    each is a way into a UI feature (that is how `ShowCounter`'s arguments were found).
 4. **Community maps.** Script Hook (old mod loader) stored byte-pattern signatures for ~25 natives. We decoded them from its disassembly
-   (`tools/sigtools/decode_sh.ps1`, method in `recon/M1_natives_4.0630.md`) and checked each against the exe. Its names told us what to look for.
+   (`tools/sigtools/decode_sh.ps1`, method in `docs/internals/natives-first-pass.md`) and checked each against the exe. Its names told us what to look for.
 
 ### Turn an address into a robust signature
 
@@ -59,7 +59,7 @@ A signature is a byte pattern with wildcards that matches exactly once in `.text
 1. Disassemble the function (`disasm.py`). Pick 16-30 bytes that include fixed instructions, wildcarding (`??`) any rip-relative
    displacements and immediates that vary.
 2. Put it in a patterns file (`name rel32_offset hexbytes`) and run `sigscan`. You want **1 hit**. If 2, lengthen the pattern.
-3. Add it to `src/natives.cpp` with the **expected RVA**. The runtime resolver only accepts a match that lands on that RVA; that is what
+3. Add it to `common/game/natives.cpp` with the **expected RVA**. The runtime resolver only accepts a match that lands on that RVA; that is what
    protects players on other builds.
 4. `tests\run_offline.cmd` resolves all natives against the exe on disk, no game needed.
 
@@ -68,7 +68,7 @@ A signature is a byte pattern with wildcards that matches exactly once in `.text
 1. Find code that reads the field (`findimm` for a constant offset like `0x168`; a watchpoint for "who writes this").
 2. Dump the object live: dev commands `peek <addr|exe+rva> <len>` and `deref <addr> <off>...` follow pointer chains; `comps <entity>` lists components.
 3. Change a value and see what happens (`poke`). One at a time, and note it.
-4. Write the layout down immediately, with a confidence tag, in GAME_INTERNALS.md.
+4. Write the layout down immediately, with a confidence tag, in docs/internals/.
 
 **Hardware watchpoint** (`wp set <addr>`, `wp dump`): arms a debug register on every game thread and records the code that
 writes an address. This is how the suit-mod equip function was found: arm the loadout block, equip a mod in the menu, `wp dump`.
@@ -81,7 +81,7 @@ game normally (a hideout, a crime) and read what the *game itself* does; then co
 The HUD is Scaleform. Method: turn on `uilog on`, do the thing in game (open the map, start a hideout, finish a challenge), then read
 `EndlessMode_uilog.txt`. It records every ActionScript method call (`invoke Refresh(<obj type 8>) at 1c0:6e8`) and, through the
 `SetMember` hook, every field set on the data objects (`set obj=... score = 68702u`). Replicate the same calls with `gfx::Node`.
-[UI_HUNT.md](UI_HUNT.md) walks through every recording and what we did with it.
+[ui-recordings.md](internals/ui-recordings.md) walks through every recording and what we did with it.
 
 ## 4. Reading a crash dump
 
@@ -138,7 +138,7 @@ A game update moves code. The mod is built so this fails loudly, not silently:
 3. Re-verify the data layouts that matter (entity components, handle layout, Health `+0x88`, BotData flag, GFx value layout, HUD
    element offsets). If the SDK (`Tkachov/MSMR-Scripting`) has been updated for the new build, its hardcoded values (`HeroSystem`, `GetActor`)
    are a free cross-check.
-4. Everything marked **[RE]** in GAME_INTERNALS is the likeliest to be wrong.
+4. Everything marked **[RE]** in docs/internals/ is the likeliest to be wrong.
 5. Change the version check (`4.0630.0.0`) only after the above.
 
 ## Credit and prior art
