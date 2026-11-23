@@ -11,12 +11,14 @@ Two time-based abilities from *Spider-Man: Edge of Time* for Marvel's Spider-Man
 - A row for everything: mode, look (the original, hologram, scanlines, red glow, flat grey, highlight, nine colours and RAINBOW), how long the copies last, how their opacity fades, starting opacity, spacing, flicker.
 - **Presets**: a PRESET row applies one of the ini files in `Documents\Marvel's Spider-Man Remastered\EchoesOfTime\Presets\`. Eleven ship with the mod (Flash, Reverse Flash, Hologram Trail, Matrix, Shadow Clones and more). Copy a file to make or share your own.
 - **Experimental rows**: clone drift, clone size over life, speed blur and speed streaks.
+- Slow motion switches off on death, respawn, mission restart, checkpoint or level load, and quit to the main menu.
 
 ### Accelerated Decoy
 
 - **D-pad Right** (or **T**) leaves **one** flickering copy of Spider-Man at the player's current position, in the same pose and suit. Enemies target the decoy before Spider-Man.
-- Rows: duration (3 to 60 seconds), look (default: Spider-Man's own suit), opacity, flicker (it also flickers out when it ends), entry slow-motion, messages.
+- Rows: duration (3 to 60 seconds), look (default: hologram), opacity, flicker (it also flickers out when it ends), player flicker (Spider-Man's own model flickers while the decoy is up), entry slow-motion, messages.
 - It uses the game's own Holo Decoy suit power actor as the thing enemies target, hidden, and shows the copy in its place: its voice lines are muted and its effects hidden.
+- The decoy is removed on death, respawn, mission restart, checkpoint or level load, and quit to the main menu.
 - Enemies go for whoever has the most aggro, so an enemy standing right next to Spider-Man can still prefer Spider-Man over a decoy far away. Snipers ignore decoys, and bosses with their own targeting are not covered.
 
 ### Requirements
