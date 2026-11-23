@@ -63,7 +63,7 @@ namespace settings {
             { "streaks", "SPEED STREAKS", "Makes the game's speed effects (screen streaks, hand contrails) start at a lower speed while slow motion is on. Experimental.", kStreaksL, Count(kStreaksL), 0 },
             { "", "ACCELERATED DECOY", nullptr, nullptr, 0, 0, 1 },
             { "decoy_life", "DECOY DURATION", "How long the decoy stays. Attacking does not end it. Enemies that cannot be fooled (snipers, some bosses) keep shooting Spider-Man.", kDecoyLifeL, Count(kDecoyLifeL), 2, 1 },
-            { "decoy_look", "DECOY LOOK", "What the decoy looks like. DEFAULT is Spider-Man's own suit, so Spider-Man appears in two places at once.", kLooks, Count(kLooks), 0, 1 },
+            { "decoy_look", "DECOY LOOK", "What the decoy looks like. HOLOGRAM is the default; DEFAULT is Spider-Man's own suit, so Spider-Man appears in two places at once.", kLooks, Count(kLooks), 1, 1 },
             { "decoy_alpha", "DECOY OPACITY", "How solid the decoy is.", kAlphaL, Count(kAlphaL), 6, 1 },
             { "decoy_flicker", "DECOY FLICKER", "How much the decoy's opacity crackles from frame to frame. It also flickers out when it ends.", kFlickerL, Count(kFlickerL), 3, 1 },
             { "decoy_player", "PLAYER FLICKER", "How much Spider-Man's own opacity crackles while the decoy is up. It stops the moment the decoy ends, so it shows when the decoy is gone even in the middle of a fight.", kFlickerL, Count(kFlickerL), 3, 1 },

@@ -40,7 +40,7 @@ namespace settings {
         int ability = 0;             // Ability
         // Accelerated Decoy
         float decoy_life = 8.0f;     // seconds (a huge value = until he attacks)
-        std::string decoy_look = "own";
+        std::string decoy_look = "hologram";
         float decoy_alpha = 0.9f;
         float decoy_flicker = 0.6f;
         float decoy_player_flicker = 0.6f;   // opacity flicker of Spider-Man's own model while the decoy is up (herofade.cpp)

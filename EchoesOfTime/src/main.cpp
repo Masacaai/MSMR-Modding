@@ -10,6 +10,7 @@
 #include "fnatives.h"
 #include "gamethread.h"
 #include "ghosts.h"
+#include "hero.h"
 #include "menu.h"
 #include "memory.h"
 #include "natives.h"
@@ -176,12 +177,29 @@ namespace {
     constexpr DWORD kStationFailsafeMs = 600000;           // if the closing event is ever missed, stop treating the menu as open after 10 minutes
     std::atomic<DWORD> g_station_until{ 0 };               // GetTickCount() until which the time-of-day menu counts as open (0 = closed)
 
+    // Events after which the slow motion and the decoy must be gone: the player died or respawns, a checkpoint (mission restart, load) or a level was loaded.
+    // Left on, the slow motion keeps being written into the next hero and the load runs at the slowed rate. recon/events_4.0630.txt.
+    std::atomic<uint32_t> g_reset_event{ 0 };
+    bool IsResetEvent(uint32_t type) {
+        switch (type) {
+        case 0x123b6f37:   // PlayerDeathEvent
+        case 0xc61d6131:   // HeroStartScriptedDeathEvent
+        case 0x655e56da:   // HeroBeginRespawnEvent
+        case 0x0b3b8b30:   // HeroRequestRespawnEvent
+        case 0x414ad37a:   // CheckpointLoadedEvent
+        case 0xfbe1b646:   // LevelLoadedEvent
+            return true;
+        default: return false;
+        }
+    }
+
     uintptr_t SendEventDetour(uintptr_t sys, uint32_t type, uint32_t target, const uint32_t* source, int32_t a5, uint8_t a6, uint64_t a7,
                               uint32_t a8, uint8_t a9, float f1, float f2, const void* payload, uint64_t payload_size) {
         if (type == kChangeOfDayAccept || type == kChangeOfDayDecline) {
             g_station_until = 0;
             LOG("station: time-of-day menu closed (%s)", type == kChangeOfDayAccept ? "accepted" : "declined");
         }
+        if (IsResetEvent(type)) g_reset_event = type;
         return g_send_original(sys, type, target, source, a5, a6, a7, a8, a9, f1, f2, payload, payload_size);
     }
 
@@ -259,7 +277,20 @@ namespace {
         DWORD entry_until = 0;   // GetTickCount() until which the entry slow-motion runs (0 = not running)
 
         bool enabled = false, prev_down = false;
+        int hero_missing = 0;   // consecutive 100 ms polls without a hero (loading, main menu)
+        DWORD last_hero_poll = 0;
         for (;;) {
+            // Death, restart, load, quit to the menu: slow motion off (nothing is written any more) and no decoy.
+            const char* reset_why = nullptr;
+            char reset_buf[48];
+            if (const uint32_t ev = g_reset_event.exchange(0)) { snprintf(reset_buf, sizeof(reset_buf), "event %08x", ev); reset_why = reset_buf; }
+            { const DWORD t = GetTickCount(); if (t - last_hero_poll >= 100) { last_hero_poll = t; hero_missing = hero::Read().ok ? 0 : hero_missing + 1; if (hero_missing == 3) reset_why = "no hero"; } }
+            if (reset_why) {
+                if (enabled || entry_until || ghosts::DecoyBusy()) LOG("reset (%s): slow motion off, decoy removed", reset_why);
+                if (enabled) { enabled = false; Apply(false); }
+                if (entry_until) { entry_until = 0; ApplyEntry(false); }
+                ghosts::DecoyShutdown();
+            }
             const int ability = settings::Get().ability;
             if (ability != applied_ability) {   // the ABILITY row changed: put the other one away
                 applied_ability = ability;
