@@ -22,6 +22,7 @@ Raw, regenerable dumps (types, enums, events, messages, component types, script 
 | Disabling web moves; after-images and decoys (Echoes of Time, Disable Webs) | [web-moves-and-afterimages](web-moves-and-afterimages.md) |
 | Inventory, perks, suit powers and mods | [inventory-and-perks](inventory-and-perks.md) |
 | UI: Scaleform movies, the HUD, pause menu, Settings tabs, panels and what each accepts | [ui](ui.md), [ui-recordings](ui-recordings.md) |
+| Restyling the interface with asset packages: movies, fonts, maps, icons, world markers, the activity circle | [hud-assets](hud-assets.md) |
 | Time, camera, input (every device, the action layer) | [camera-time-and-input](camera-time-and-input.md) |
 | Lighting modes, atmospheres, sky, sun, fog, weather (Manhattan Skies) | [lighting-and-atmosphere](lighting-and-atmosphere.md), [atmosphere-and-menu-recon-log](atmosphere-and-menu-recon-log.md) |
 | Levels, zones, mission and checkpoint loading, the script-graph runtime, the crime director, chases | [world-and-levels](world-and-levels.md), [crime-director-chases-and-script-nodes](crime-director-chases-and-script-nodes.md) |
@@ -138,6 +139,18 @@ The block below is generated (`python tools/docs/gen_internals_index.py`); do no
 - [11. Saving: what records a checkpoint, and the game's own autosave switch](hero-abilities-gadgets-and-combat-events.md#11-saving-what-records-a-checkpoint-and-the-games-own-autosave-switch)
 - [12. Input for the dock and exit circles on every device](hero-abilities-gadgets-and-combat-events.md#12-input-for-the-dock-and-exit-circles-on-every-device)
 - [13. Spawning out of view, deleting, engagement: leads from the node catalogue](hero-abilities-gadgets-and-combat-events.md#13-spawning-out-of-view-deleting-engagement-leads-from-the-node-catalogue)
+
+### [HUD and interface assets: changing how the interface looks](hud-assets.md)
+- [Packaging and source files](hud-assets.md#packaging-and-source-files)
+- [Fonts](hud-assets.md#fonts)
+- [Editing a movie's ActionScript](hud-assets.md#editing-a-movies-actionscript)
+- [Rendering behaviour of the movies](hud-assets.md#rendering-behaviour-of-the-movies)
+- [Corner map](hud-assets.md#corner-map)
+- [Pause map colours](hud-assets.md#pause-map-colours)
+- [Map icons](hud-assets.md#map-icons)
+- [World markers](hud-assets.md#world-markers)
+- [Phone call panel](hud-assets.md#phone-call-panel)
+- [Activity start circle](hud-assets.md#activity-start-circle)
 
 ### [Inventory, suit powers and mods](inventory-and-perks.md)
 - [Inventory, suit powers and mods](inventory-and-perks.md#inventory-suit-powers-and-mods)

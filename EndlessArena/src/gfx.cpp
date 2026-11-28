@@ -134,7 +134,8 @@ namespace gfx {
         if (g_state) return g_state == 1;
         auto result = std::make_shared<std::atomic<int>>(0);
         gamethread::Run([result] { *result = Check() ? 1 : 2; }, 3000);
-        g_state = *result == 1 ? 1 : 2;
+        if (!*result) return false;     // the game thread did not get to it (loading, paused): ask again next time
+        g_state = result->load();
         return g_state == 1;
     }
 

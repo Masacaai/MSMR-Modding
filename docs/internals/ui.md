@@ -3,14 +3,16 @@
 ## UI (Scaleform)
 
 The HUD is a Scaleform (Flash/ActionScript) movie. We drive it from code the way the game's own script actions do.
-Full chronology, with every recording: [ui-recordings.md](ui-recordings.md). Summary of what works:
+Full chronology, with every recording: [ui-recordings.md](ui-recordings.md). Changing how the interface looks with asset packages:
+[hud-assets.md](hud-assets.md). Summary of what works:
 
 ### HUD root and elements
 - Root for player i: `qword [exe+7c2b5a0 + i*8]` (a static `GUI::PlayerHUD`). Elements hang off it at fixed offsets:
   `0x188 Ammo, 0x190 Weapon, 0x198 Reticule, 0x1a0 Message, 0x1a8 POI, 0x1b0 ProgressBar, 0x1b8 QuickSelect, 0x1c0 Health (hosts the activity panel), 0x1d8 InteractButton, 0x1e0 SuitPower, 0x1e8 Activities (don't call blind), 0x208 CountDown, 0x210 Mission, 0x218 Counter, 0x240 Communicator`.
 - Calling ActionScript: `exe+1d1cee0 Invoke(movie, &as_object, "Method", result, args, count)`. We address a method as
   "root offset : AS object offset" (e.g. `1c0:6e8` Refresh). `ui::Call` / `gfx::Invoke`.
-- The movie wrapper is `[[root+0x1A0]+0x300]+8`; `+0x18` of that is the GFx Movie. `gfx::Ready()` self-checks before any call.
+- The movie wrapper is `[[root+0x1A0]+0x300]+8`; `+0x18` of that is the GFx Movie. `gfx::Ready()` self-checks before any call. The game thread may not
+  run the check in time while a level loads; `Ready()` then asks again on the next call instead of remembering a failure. **[verified]**
 
 ### Building GFx values from code (`gfx.cpp`)
 - A value is 0x30 bytes: `+0x00/+0x08` links of the movie's list of live managed values (the game initialises them to all-ones),
